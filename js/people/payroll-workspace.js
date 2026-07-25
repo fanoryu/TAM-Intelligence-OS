@@ -233,12 +233,12 @@ function payrollWorksheetRowHTML(p, sel){
     <td class="num"><b${payrollIsNegative(p)?' style="color:var(--brick);"':''}>${fmtIDR(computePayrollPlanned(p))}</b></td>
     <td>${payrollStagePill(p)}</td>
     <td>${hrActionsMenu('prow', p.id, [
-      ['detail','View Detail'],
-      canReview?['review','Mark Reviewed']:null,
-      canApprove?['ready','Approve']:null,
-      canDraft?['draft','Return to Draft']:null,
-      posted?['exec','Open in Execution Center']:null,
-      !posted?['cancel','Cancel Row']:null,
+      ['prow-detail','View Detail'],
+      canReview?['prow-review','Mark Reviewed']:null,
+      canApprove?['prow-ready','Approve']:null,
+      canDraft?['prow-draft','Return to Draft']:null,
+      posted?['prow-exec','Open in Execution Center']:null,
+      !posted?['prow-cancel','Cancel Row']:null,
     ])}</td>
   </tr>`;
 }

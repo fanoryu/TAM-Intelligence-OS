@@ -28,7 +28,7 @@ $html = $html.Replace($cssLinkBlock,$cssInline).Replace($jsTagBlock,$jsInline)
 
 $outDir = Join-Path $root 'dist'
 if(!(Test-Path $outDir)){ New-Item -ItemType Directory -Path $outDir | Out-Null }
-$outPath = Join-Path $outDir 'tam-intelligence-os-v2.6.3a.html'
+$outPath = Join-Path $outDir 'tam-intelligence-os-v2.6.3b.html'
 [System.IO.File]::WriteAllText($outPath, $html, $utf8NoBom)
 $bytes = ([System.Text.Encoding]::UTF8.GetByteCount($html))
-Write-Host ("Built dist/tam-intelligence-os-v2.6.3a.html ({0} bytes)" -f $bytes) -ForegroundColor Green
+Write-Host ("Built dist/tam-intelligence-os-v2.6.3b.html ({0} bytes)" -f $bytes) -ForegroundColor Green

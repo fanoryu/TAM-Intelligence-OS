@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TAM Intelligence OS v2.6.3a</title>
+<title>TAM Intelligence OS v2.6.3b</title>
 <meta name="theme-color" content="#0E1420">
 <meta name="color-scheme" content="dark light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -206,8 +206,9 @@ td.num, th.num{text-align:right;font-family:var(--mono);}
 
 .actions-menu{position:relative;display:inline-block;}
 .actions-dropdown{position:absolute;right:0;top:calc(100% + 4px);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:20;min-width:170px;box-shadow:0 8px 28px rgba(0,0,0,.45);}
-/* v2.6.3a — opens upward when there isn't enough room below the row (auto-flip). */
-.actions-dropdown.up{top:auto;bottom:calc(100% + 4px);}
+/* v2.6.3b — floating layer: portaled to #menu-root and positioned with position:fixed
+   via JS (getBoundingClientRect), so it is never clipped by a table's overflow. */
+.actions-dropdown.floating{position:fixed;right:auto;z-index:990;}
 .actions-item{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);font-size:12.5px;padding:7px 10px;border-radius:6px;cursor:pointer;}
 .actions-item:hover{background:var(--surface-3);}
 .actions-item.danger{color:var(--brick);}
@@ -322,6 +323,7 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
 <div id="app"></div>
 <div id="toast-root"></div>
 <div id="modal-root"></div>
+<div id="menu-root"></div>
 
 <script id="seed-data" type="application/json">[]</script>
 
@@ -356,8 +358,8 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.6.3a';
-const APP_RELEASE_NAME = 'Payroll Workspace Hotfix';
+const APP_VERSION = '2.6.3b';
+const APP_RELEASE_NAME = 'Floating Actions Menu Fix';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
@@ -1772,22 +1774,66 @@ function detectDuplicates(batch){
 /* ============================================================
    RENDER — app shell
    ============================================================ */
-/* v2.6.3a — shared auto-flip for Actions dropdowns (finance + HR menus).
-   Opens the menu upward when there isn't enough room below the toggle within
-   the viewport / nearest scroll container, so items are never hidden. Call it
-   AFTER the menu is made visible (it measures the rendered height). */
-function positionActionsMenu(btn, menu){
-  if(!btn || !menu) return;
-  menu.classList.remove('up');
-  const bRect = btn.getBoundingClientRect();
-  const menuH = menu.offsetHeight || 0;
-  const scroller = btn.closest('.table-wrap');
-  const viewBottom = window.innerHeight || document.documentElement.clientHeight;
-  const bottomLimit = scroller ? Math.min(scroller.getBoundingClientRect().bottom, viewBottom) : viewBottom;
-  const topLimit = scroller ? Math.max(scroller.getBoundingClientRect().top, 0) : 0;
-  const spaceBelow = bottomLimit - bRect.bottom;
-  const spaceAbove = bRect.top - topLimit;
-  if(spaceBelow < menuH + 8 && spaceAbove > spaceBelow) menu.classList.add('up');
+/* v2.6.3b — shared FLOATING Actions menu (finance + HR menus).
+   The dropdown is portaled out of the scrolling table container into #menu-root
+   and positioned with position:fixed via getBoundingClientRect(), so it is never
+   clipped by a table's overflow. It auto-flips up/down, closes on outside click
+   and Escape, and repositions on window resize/scroll. One menu is open at a time.
+   Both bindHRActions and bindActionMenus use openFloatingMenu/closeFloatingMenu. */
+let __floatMenu = null; // { menu, placeholder, toggle, onDoc, onKey, onReposition, onItem }
+function isFloatingMenuOpenFor(toggle){ return !!(__floatMenu && __floatMenu.toggle===toggle); }
+function positionFloatingMenu(toggle, menu){
+  const b = toggle.getBoundingClientRect();
+  const mh = menu.offsetHeight || 0, mw = menu.offsetWidth || 0;
+  const vh = window.innerHeight || document.documentElement.clientHeight;
+  const vw = window.innerWidth || document.documentElement.clientWidth;
+  const spaceBelow = vh - b.bottom;
+  const flipUp = spaceBelow < mh + 8 && b.top > spaceBelow; // not enough room below and more room above
+  let top = flipUp ? (b.top - mh - 4) : (b.bottom + 4);
+  top = Math.max(8, Math.min(top, vh - mh - 8));
+  let left = b.right - mw;                 // right-aligned to the toggle
+  left = Math.max(8, Math.min(left, vw - mw - 8));
+  menu.style.top = top + 'px'; menu.style.left = left + 'px'; menu.style.right = 'auto'; menu.style.bottom = 'auto';
+  menu.classList.toggle('up', flipUp);
+}
+function closeFloatingMenu(){
+  const s = __floatMenu; if(!s) return; __floatMenu = null;
+  document.removeEventListener('click', s.onDoc, true);
+  document.removeEventListener('keydown', s.onKey, true);
+  window.removeEventListener('resize', s.onReposition, true);
+  window.removeEventListener('scroll', s.onReposition, true);
+  s.menu.removeEventListener('click', s.onItem, true);
+  s.menu.style.display = 'none';
+  s.menu.classList.remove('floating','up');
+  s.menu.style.position=''; s.menu.style.top=''; s.menu.style.left=''; s.menu.style.right=''; s.menu.style.bottom='';
+  // Restore the menu to its original spot if that spot still exists; otherwise drop it
+  // (the table was re-rendered by the action, so a fresh menu already exists).
+  if(s.placeholder && s.placeholder.parentNode){ s.placeholder.parentNode.replaceChild(s.menu, s.placeholder); }
+  else if(s.menu.parentNode){ s.menu.parentNode.removeChild(s.menu); }
+}
+function openFloatingMenu(toggle, menu){
+  closeFloatingMenu();
+  const root = document.getElementById('menu-root') || document.body;
+  const placeholder = document.createComment('actions-menu');
+  if(menu.parentNode) menu.parentNode.replaceChild(placeholder, menu);
+  root.appendChild(menu);
+  menu.classList.add('floating');
+  menu.style.position = 'fixed';
+  menu.style.display = 'block';
+  positionFloatingMenu(toggle, menu); // measure + place after it is visible
+  const onDoc = (e)=>{ if(!menu.contains(e.target) && toggle!==e.target && !toggle.contains(e.target)) closeFloatingMenu(); };
+  const onKey = (e)=>{ if(e.key==='Escape'){ e.stopPropagation(); closeFloatingMenu(); } };
+  const onReposition = ()=>{ if(__floatMenu) positionFloatingMenu(toggle, menu); };
+  // An item click performs its own action (often re-rendering the table); close after it.
+  // Capture phase so it still fires even though item handlers call e.stopPropagation().
+  const onItem = (e)=>{ if(e.target.closest('.actions-item,[data-hr-action],[data-action]')) setTimeout(closeFloatingMenu, 0); };
+  menu.addEventListener('click', onItem, true);
+  document.addEventListener('keydown', onKey, true);
+  window.addEventListener('resize', onReposition, true);
+  window.addEventListener('scroll', onReposition, true);
+  // Defer the outside-click closer so the opening click doesn't immediately close it.
+  setTimeout(()=>{ if(__floatMenu && __floatMenu.onDoc===onDoc) document.addEventListener('click', onDoc, true); }, 0);
+  __floatMenu = { menu, placeholder, toggle, onDoc, onKey, onReposition, onItem };
 }
 const NAV_GROUPS = [
   {id:'executive', label:'Executive', items:[
@@ -1843,6 +1889,7 @@ function restoreSidebarScroll(){
   });
 }
 function render(){
+  closeFloatingMenu();    // v2.6.3b — never leave a portaled Actions menu orphaned across a re-render
   captureSidebarScroll(); // read the outgoing .nav's scroll position before it's torn down
   const app = document.getElementById('app');
   app.innerHTML = `
@@ -2557,18 +2604,10 @@ function actionsMenuHTML(t, context){
 function bindActionMenus(main){
   main.querySelectorAll('[data-actions]').forEach(btn=>btn.addEventListener('click', e=>{
     e.stopPropagation();
-    const id = btn.dataset.actions;
-    const menu = main.querySelector(`[data-menu="${id}"]`);
-    const isOpen = menu.style.display==='block';
-    main.querySelectorAll('.actions-dropdown').forEach(m=>{ m.style.display='none'; m.classList.remove('up'); });
-    // Re-arm the outside-click closer each time a menu opens (a {once:true}
-    // listener registered only at bind time is consumed by the first outside
-    // click and never closes menus again).
-    if(!isOpen){
-      menu.style.display='block';
-      positionActionsMenu(btn, menu); // v2.6.3a — flip upward if needed
-      document.addEventListener('click', ()=>{ main.querySelectorAll('.actions-dropdown').forEach(m=>{ m.style.display='none'; m.classList.remove('up'); }); }, {once:true});
-    }
+    // v2.6.3b — shared floating menu (portaled out of the table container, never clipped).
+    if(isFloatingMenuOpenFor(btn)){ closeFloatingMenu(); return; }
+    const menu = main.querySelector(`[data-menu="${btn.dataset.actions}"]`);
+    if(menu) openFloatingMenu(btn, menu);
   }));
   main.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click', async e=>{
     e.stopPropagation();
@@ -4643,6 +4682,7 @@ function renderAbout(main){
 }
 function renderReleaseNotes(main){
   const notes = [
+    {v:'2.6.3b — Floating Actions Menu Fix', items:['Fixed: the row Actions menu is no longer clipped by the scrolling table container. It is now a shared floating layer — portaled out to a top-level #menu-root node and positioned with position:fixed via getBoundingClientRect() — so it always renders fully visible above the table','The floating menu auto-flips up or down based on available space, closes on outside click and on Escape, and repositions on window resize/scroll. One shared implementation (openFloatingMenu/closeFloatingMenu) is reused by Employees, Contracts, Payroll, Overtime, Transactions and Execution Center','UI infrastructure only — no business logic, storage key, SCHEMA_VERSION (6) or calculation change']},
     {v:'2.6.3a — Payroll Workspace Hotfix', items:['Fixed: Approve Selected now moves rows from Review to Approved. Approval is a sign-off and is no longer blocked by commit validation — data checks (missing salary, invalid/duplicate contract) run at Post to Finance instead, where blocked rows are skipped and reported. Post to Finance now succeeds after Approve, with no duplicate payroll created','Fixed: the row Actions dropdown now opens upward automatically when there is not enough room below the row, so menu items are never hidden and no scrolling is needed. Applies to all Actions menus (Employees, Contracts, Overtime, Payroll, Transactions, Execution Center)','UI/action-flow only: the payroll calculation engine, storage keys, SCHEMA_VERSION (6) and lifecycle stages are unchanged']},
     {v:'2.6.3 — Payroll Intelligence Workspace', items:['Rebuilt Payroll as an operational workspace: one active period with a clear current-period banner and period switcher, top KPI cards (Current Period, Employees, Draft, Review, Approved, Posted, Executed, Total Payroll, Total Overtime), and a read-only worksheet instead of an editable spreadsheet','Payroll is Base Salary + Approved Overtime only — no tax, BPJS, loan, transport, meal, or deduction engine. Salary is edited on the Contract, overtime in Overtime; both flow into the read-only Total (single source of truth, no duplicated overtime entry)','Operational lifecycle Draft → Review → Approved → Posted → Executed, mapped over the existing stored status values with Executed derived from the linked finance transaction (no schema, storage-key or migration change)','Bulk operations with confirmation dialogs: Select All, Review Selected, Approve Selected, Post to Finance — only Approved payroll can be posted, and posting creates Planned transactions (never auto-executed; execution stays in the Execution Center)','Payroll period lock: lock a month to freeze generation, edits, its overtime, and finance posting; unlocking requires confirmation','Deterministic Payroll Health cards (no AI): contract expiring within 30 days, payroll up/down more than 20% vs last period, unusually high overtime, and employees missing an active contract','Payroll Summary (total employees, payroll total, total overtime, average, highest, lowest) and a read-only payroll preview showing employee, contract, progress, base, approved overtime, total and the generated finance transaction','Employee Detail is now a timeline: Profile, Active Contract, Contract History, Payroll History, Overtime History and Finance Transactions in one place','Duplicate prevention preserved (one payroll per employee per period — skip or update the existing draft, never duplicate). Smart Import, Employee Dedup, Contract Engine, Execution Center, Monthly Planning, Reports, Node build, verification, Git and the module structure are all unchanged','No business calculation, storage key or SCHEMA_VERSION (still 6) changed; period locks live in existing settings']},
     {v:'2.6.2 — Developer Experience & Module Decomposition', items:['Initialized a Git repository with a practical .gitignore (the portable release HTML in dist/ stays version-controlled)','Decomposed the largest JavaScript modules into a feature-folder tree — js/{core,ui,finance,people,import,analytics} — growing from 20 to 43 focused files and cutting the average module from ~410 to ~190 lines for much easier navigation and maintenance','Node.js is the primary build/verify toolchain; a shared tools/module-order.js manifest is the single source of truth for classic-script load order, mirrored by index.html','Pure code move only: no business logic, calculation, storage key, schema version (still 6), migration flag, backup format or UI behavior changed — the decomposition is verified byte-identical to the previous concatenation, so runtime behavior is unchanged','Still classic ordered <script> tags in one shared global scope — no ES modules, no import/export, no bundler']},
@@ -5181,14 +5221,10 @@ function hrActionsMenu(kind, id, items){
 function bindHRActions(main){
   main.querySelectorAll('[data-hr-actions]').forEach(btn=>btn.addEventListener('click', e=>{
     e.stopPropagation();
+    // v2.6.3b — floating menu portaled out of the table container (never clipped).
+    if(isFloatingMenuOpenFor(btn)){ closeFloatingMenu(); return; }
     const menu = main.querySelector(`[data-hr-menu="${btn.dataset.hrActions}"]`);
-    const open = menu.style.display==='block';
-    main.querySelectorAll('.actions-dropdown').forEach(m=>{ m.style.display='none'; m.classList.remove('up'); });
-    if(!open){
-      menu.style.display='block';
-      positionActionsMenu(btn, menu); // v2.6.3a — flip upward if not enough room below
-      document.addEventListener('click', ()=>{ main.querySelectorAll('.actions-dropdown').forEach(m=>{ m.style.display='none'; m.classList.remove('up'); }); }, {once:true});
-    }
+    if(menu) openFloatingMenu(btn, menu);
   }));
   main.querySelectorAll('[data-hr-action]').forEach(btn=>btn.addEventListener('click', async e=>{
     e.stopPropagation();
@@ -8648,12 +8684,12 @@ function payrollWorksheetRowHTML(p, sel){
     <td class="num"><b${payrollIsNegative(p)?' style="color:var(--brick);"':''}>${fmtIDR(computePayrollPlanned(p))}</b></td>
     <td>${payrollStagePill(p)}</td>
     <td>${hrActionsMenu('prow', p.id, [
-      ['detail','View Detail'],
-      canReview?['review','Mark Reviewed']:null,
-      canApprove?['ready','Approve']:null,
-      canDraft?['draft','Return to Draft']:null,
-      posted?['exec','Open in Execution Center']:null,
-      !posted?['cancel','Cancel Row']:null,
+      ['prow-detail','View Detail'],
+      canReview?['prow-review','Mark Reviewed']:null,
+      canApprove?['prow-ready','Approve']:null,
+      canDraft?['prow-draft','Return to Draft']:null,
+      posted?['prow-exec','Open in Execution Center']:null,
+      !posted?['prow-cancel','Cancel Row']:null,
     ])}</td>
   </tr>`;
 }

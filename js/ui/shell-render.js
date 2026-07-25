@@ -1,22 +1,66 @@
 /* ============================================================
    RENDER — app shell
    ============================================================ */
-/* v2.6.3a — shared auto-flip for Actions dropdowns (finance + HR menus).
-   Opens the menu upward when there isn't enough room below the toggle within
-   the viewport / nearest scroll container, so items are never hidden. Call it
-   AFTER the menu is made visible (it measures the rendered height). */
-function positionActionsMenu(btn, menu){
-  if(!btn || !menu) return;
-  menu.classList.remove('up');
-  const bRect = btn.getBoundingClientRect();
-  const menuH = menu.offsetHeight || 0;
-  const scroller = btn.closest('.table-wrap');
-  const viewBottom = window.innerHeight || document.documentElement.clientHeight;
-  const bottomLimit = scroller ? Math.min(scroller.getBoundingClientRect().bottom, viewBottom) : viewBottom;
-  const topLimit = scroller ? Math.max(scroller.getBoundingClientRect().top, 0) : 0;
-  const spaceBelow = bottomLimit - bRect.bottom;
-  const spaceAbove = bRect.top - topLimit;
-  if(spaceBelow < menuH + 8 && spaceAbove > spaceBelow) menu.classList.add('up');
+/* v2.6.3b — shared FLOATING Actions menu (finance + HR menus).
+   The dropdown is portaled out of the scrolling table container into #menu-root
+   and positioned with position:fixed via getBoundingClientRect(), so it is never
+   clipped by a table's overflow. It auto-flips up/down, closes on outside click
+   and Escape, and repositions on window resize/scroll. One menu is open at a time.
+   Both bindHRActions and bindActionMenus use openFloatingMenu/closeFloatingMenu. */
+let __floatMenu = null; // { menu, placeholder, toggle, onDoc, onKey, onReposition, onItem }
+function isFloatingMenuOpenFor(toggle){ return !!(__floatMenu && __floatMenu.toggle===toggle); }
+function positionFloatingMenu(toggle, menu){
+  const b = toggle.getBoundingClientRect();
+  const mh = menu.offsetHeight || 0, mw = menu.offsetWidth || 0;
+  const vh = window.innerHeight || document.documentElement.clientHeight;
+  const vw = window.innerWidth || document.documentElement.clientWidth;
+  const spaceBelow = vh - b.bottom;
+  const flipUp = spaceBelow < mh + 8 && b.top > spaceBelow; // not enough room below and more room above
+  let top = flipUp ? (b.top - mh - 4) : (b.bottom + 4);
+  top = Math.max(8, Math.min(top, vh - mh - 8));
+  let left = b.right - mw;                 // right-aligned to the toggle
+  left = Math.max(8, Math.min(left, vw - mw - 8));
+  menu.style.top = top + 'px'; menu.style.left = left + 'px'; menu.style.right = 'auto'; menu.style.bottom = 'auto';
+  menu.classList.toggle('up', flipUp);
+}
+function closeFloatingMenu(){
+  const s = __floatMenu; if(!s) return; __floatMenu = null;
+  document.removeEventListener('click', s.onDoc, true);
+  document.removeEventListener('keydown', s.onKey, true);
+  window.removeEventListener('resize', s.onReposition, true);
+  window.removeEventListener('scroll', s.onReposition, true);
+  s.menu.removeEventListener('click', s.onItem, true);
+  s.menu.style.display = 'none';
+  s.menu.classList.remove('floating','up');
+  s.menu.style.position=''; s.menu.style.top=''; s.menu.style.left=''; s.menu.style.right=''; s.menu.style.bottom='';
+  // Restore the menu to its original spot if that spot still exists; otherwise drop it
+  // (the table was re-rendered by the action, so a fresh menu already exists).
+  if(s.placeholder && s.placeholder.parentNode){ s.placeholder.parentNode.replaceChild(s.menu, s.placeholder); }
+  else if(s.menu.parentNode){ s.menu.parentNode.removeChild(s.menu); }
+}
+function openFloatingMenu(toggle, menu){
+  closeFloatingMenu();
+  const root = document.getElementById('menu-root') || document.body;
+  const placeholder = document.createComment('actions-menu');
+  if(menu.parentNode) menu.parentNode.replaceChild(placeholder, menu);
+  root.appendChild(menu);
+  menu.classList.add('floating');
+  menu.style.position = 'fixed';
+  menu.style.display = 'block';
+  positionFloatingMenu(toggle, menu); // measure + place after it is visible
+  const onDoc = (e)=>{ if(!menu.contains(e.target) && toggle!==e.target && !toggle.contains(e.target)) closeFloatingMenu(); };
+  const onKey = (e)=>{ if(e.key==='Escape'){ e.stopPropagation(); closeFloatingMenu(); } };
+  const onReposition = ()=>{ if(__floatMenu) positionFloatingMenu(toggle, menu); };
+  // An item click performs its own action (often re-rendering the table); close after it.
+  // Capture phase so it still fires even though item handlers call e.stopPropagation().
+  const onItem = (e)=>{ if(e.target.closest('.actions-item,[data-hr-action],[data-action]')) setTimeout(closeFloatingMenu, 0); };
+  menu.addEventListener('click', onItem, true);
+  document.addEventListener('keydown', onKey, true);
+  window.addEventListener('resize', onReposition, true);
+  window.addEventListener('scroll', onReposition, true);
+  // Defer the outside-click closer so the opening click doesn't immediately close it.
+  setTimeout(()=>{ if(__floatMenu && __floatMenu.onDoc===onDoc) document.addEventListener('click', onDoc, true); }, 0);
+  __floatMenu = { menu, placeholder, toggle, onDoc, onKey, onReposition, onItem };
 }
 const NAV_GROUPS = [
   {id:'executive', label:'Executive', items:[
@@ -72,6 +116,7 @@ function restoreSidebarScroll(){
   });
 }
 function render(){
+  closeFloatingMenu();    // v2.6.3b — never leave a portaled Actions menu orphaned across a re-render
   captureSidebarScroll(); // read the outgoing .nav's scroll position before it's torn down
   const app = document.getElementById('app');
   app.innerHTML = `

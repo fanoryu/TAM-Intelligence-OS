@@ -51,8 +51,9 @@ td.num, th.num{text-align:right;font-family:var(--mono);}
 
 .actions-menu{position:relative;display:inline-block;}
 .actions-dropdown{position:absolute;right:0;top:calc(100% + 4px);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:20;min-width:170px;box-shadow:0 8px 28px rgba(0,0,0,.45);}
-/* v2.6.3a — opens upward when there isn't enough room below the row (auto-flip). */
-.actions-dropdown.up{top:auto;bottom:calc(100% + 4px);}
+/* v2.6.3b — floating layer: portaled to #menu-root and positioned with position:fixed
+   via JS (getBoundingClientRect), so it is never clipped by a table's overflow. */
+.actions-dropdown.floating{position:fixed;right:auto;z-index:990;}
 .actions-item{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);font-size:12.5px;padding:7px 10px;border-radius:6px;cursor:pointer;}
 .actions-item:hover{background:var(--surface-3);}
 .actions-item.danger{color:var(--brick);}

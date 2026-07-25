@@ -224,18 +224,10 @@ function actionsMenuHTML(t, context){
 function bindActionMenus(main){
   main.querySelectorAll('[data-actions]').forEach(btn=>btn.addEventListener('click', e=>{
     e.stopPropagation();
-    const id = btn.dataset.actions;
-    const menu = main.querySelector(`[data-menu="${id}"]`);
-    const isOpen = menu.style.display==='block';
-    main.querySelectorAll('.actions-dropdown').forEach(m=>{ m.style.display='none'; m.classList.remove('up'); });
-    // Re-arm the outside-click closer each time a menu opens (a {once:true}
-    // listener registered only at bind time is consumed by the first outside
-    // click and never closes menus again).
-    if(!isOpen){
-      menu.style.display='block';
-      positionActionsMenu(btn, menu); // v2.6.3a — flip upward if needed
-      document.addEventListener('click', ()=>{ main.querySelectorAll('.actions-dropdown').forEach(m=>{ m.style.display='none'; m.classList.remove('up'); }); }, {once:true});
-    }
+    // v2.6.3b — shared floating menu (portaled out of the table container, never clipped).
+    if(isFloatingMenuOpenFor(btn)){ closeFloatingMenu(); return; }
+    const menu = main.querySelector(`[data-menu="${btn.dataset.actions}"]`);
+    if(menu) openFloatingMenu(btn, menu);
   }));
   main.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click', async e=>{
     e.stopPropagation();

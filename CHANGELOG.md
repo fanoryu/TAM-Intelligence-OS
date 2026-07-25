@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.6.3b — Floating Actions Menu Fix
+
+**Type:** UI infrastructure. **No business logic, schema, or storage change.**
+
+### Fixed
+- **Row Actions menu is no longer clipped by the scrolling table container.** Replaced the
+  in-container dropdown (which `overflow:auto` clipped even when flipped up) with a shared
+  **floating layer**: the menu is portaled out to a top-level `#menu-root` node and positioned
+  with `position:fixed` via `getBoundingClientRect()`, so it always renders fully visible.
+- One shared controller — `openFloatingMenu` / `closeFloatingMenu` / `positionFloatingMenu`
+  in `ui/shell-render.js` — reused by **Employees, Contracts, Payroll, Overtime, Transactions,
+  Execution Center** (both the HR `bindHRActions` and finance `bindActionMenus` menus). It:
+  auto-flips up/down by available space, closes on outside click and **Escape**, repositions
+  on window **resize/scroll**, keeps one menu open at a time, and is cleaned up centrally at
+  the start of `render()` so a portaled menu is never orphaned across a re-render.
+- Also fixed a latent wiring bug the portal exposed: the **Payroll** row menu emitted
+  un-prefixed action values (`detail`, `review`, …) that never matched the `bindHRActions`
+  dispatch (`prow-detail`, `prow-review`, …), so those dropdown items did nothing. They now
+  use the correct `prow-*` values and work (View Detail, Mark Reviewed, Approve, Return to
+  Draft, Open in Execution Center, Cancel Row). Every other page already used prefixed values.
+
+### Validation
+- Node build + verify: **87/87 checks pass** (CSS golden master now allows only the one new
+  `.actions-dropdown.floating` rule; new assertions for the portal, `position:fixed`, Escape,
+  reposition-on-scroll/resize, and removal of the old in-container helper). Browser (dist +
+  modular source, zero console errors): the menu is portaled to `#menu-root`, never inside a
+  `.table-wrap`, fully within the viewport, flips up on bottom rows; closes on outside click
+  and Escape; repositions on scroll; item actions fire and the menu is cleaned up — verified on
+  Payroll, Employees, Contracts, Overtime and Transactions.
+
+---
+
 ## 2.6.3a — Payroll Workspace Hotfix
 
 **Type:** UI / action-flow hotfix. **No calculation-engine, schema, or storage change.**

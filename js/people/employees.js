@@ -292,14 +292,10 @@ function hrActionsMenu(kind, id, items){
 function bindHRActions(main){
   main.querySelectorAll('[data-hr-actions]').forEach(btn=>btn.addEventListener('click', e=>{
     e.stopPropagation();
+    // v2.6.3b — floating menu portaled out of the table container (never clipped).
+    if(isFloatingMenuOpenFor(btn)){ closeFloatingMenu(); return; }
     const menu = main.querySelector(`[data-hr-menu="${btn.dataset.hrActions}"]`);
-    const open = menu.style.display==='block';
-    main.querySelectorAll('.actions-dropdown').forEach(m=>{ m.style.display='none'; m.classList.remove('up'); });
-    if(!open){
-      menu.style.display='block';
-      positionActionsMenu(btn, menu); // v2.6.3a — flip upward if not enough room below
-      document.addEventListener('click', ()=>{ main.querySelectorAll('.actions-dropdown').forEach(m=>{ m.style.display='none'; m.classList.remove('up'); }); }, {once:true});
-    }
+    if(menu) openFloatingMenu(btn, menu);
   }));
   main.querySelectorAll('[data-hr-action]').forEach(btn=>btn.addEventListener('click', async e=>{
     e.stopPropagation();
