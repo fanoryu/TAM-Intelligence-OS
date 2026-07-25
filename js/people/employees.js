@@ -174,6 +174,8 @@ function renderEmployeeDetail(main){
   const ct = activeContractToday(e.id);
   const calc = ct?contractCalc(ct, todayKey()):null;
   const txns = txnsForEmployee(e.id).slice().sort((a,b)=>String(b.monthKey).localeCompare(String(a.monthKey)));
+  const empPlans = payrollPlansForEmployee(e.id).slice().sort((a,b)=>String(b.monthKey).localeCompare(String(a.monthKey)));
+  const empOt = State.overtimeRecords.filter(o=>o.employeeId===e.id).slice().sort((a,b)=>String(b.monthKey).localeCompare(String(a.monthKey)) || String(b.overtimeDate||'').localeCompare(String(a.overtimeDate||'')));
   const overlaps = overlappingActiveContracts(e.id);
   const alerts = [];
   if(!ct) alerts.push({type:'warn', text:'This employee has no active contract for the current month.'});
@@ -230,8 +232,35 @@ function renderEmployeeDetail(main){
         </tr>`; }).join('') || '<tr><td colspan="7" class="empty">No contracts yet.</td></tr>'}</tbody>
       </table></div>
     </div>
+    <div class="card" style="margin-bottom:14px;">
+      <h3>Payroll History</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Period</th><th>Contract</th><th class="num">Base</th><th class="num">Overtime</th><th class="num">Total</th><th>Stage</th></tr></thead>
+        <tbody>${empPlans.map(p=>`<tr>
+          <td class="dim">${escapeHtml(p.month||'')} ${p.year||''}</td>
+          <td class="dim">${escapeHtml(p.contractNumber||'—')}</td>
+          <td class="num">${fmtIDR(payrollBaseSalary(p))}</td>
+          <td class="num">${fmtIDR(p.overtimeAmount)}</td>
+          <td class="num"><b>${fmtIDR(computePayrollPlanned(p))}</b></td>
+          <td>${payrollStagePill(p)}</td>
+        </tr>`).join('') || '<tr><td colspan="6" class="empty">No payroll generated for this employee yet.</td></tr>'}</tbody>
+      </table></div>
+    </div>
+    <div class="card" style="margin-bottom:14px;">
+      <h3>Overtime History</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Period</th><th>Date</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th></tr></thead>
+        <tbody>${empOt.map(o=>`<tr>
+          <td class="dim">${escapeHtml(o.month||'')} ${o.year||''}</td>
+          <td class="dim">${escapeHtml(o.overtimeDate||'—')}</td>
+          <td class="num">${num(o.overtimeHours)}</td>
+          <td class="num">${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}</td>
+          <td>${hrStatusBadge(o.status, OVERTIME_STATUS_META)}</td>
+        </tr>`).join('') || '<tr><td colspan="5" class="empty">No overtime records for this employee.</td></tr>'}</tbody>
+      </table></div>
+    </div>
     <div class="card">
-      <h3>Linked Payroll Transactions</h3>
+      <h3>Finance Transactions</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Month</th><th>Description</th><th class="num">Planned</th><th class="num">Actual</th><th>Status</th></tr></thead>
         <tbody>${txns.map(t=>`<tr>
@@ -240,7 +269,7 @@ function renderEmployeeDetail(main){
           <td class="num">${fmtIDR(t.planned)}</td>
           <td class="num">${t.actual!=null?fmtIDR(t.actual):'<span class="faint">—</span>'}</td>
           <td>${statusBadge(statusOf(t))}</td>
-        </tr>`).join('') || '<tr><td colspan="5" class="empty">No linked transactions yet. Generate and commit payroll to create them.</td></tr>'}</tbody>
+        </tr>`).join('') || '<tr><td colspan="5" class="empty">No finance transactions yet. Post approved payroll to create them.</td></tr>'}</tbody>
       </table></div>
     </div>`;
   document.getElementById('backEmp').addEventListener('click', ()=>hrNavTo('employees'));

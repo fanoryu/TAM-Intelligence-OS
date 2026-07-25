@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS = {
   allowPayrollCommitWithUnapprovedOvertime: false,
   onboardingDismissed: false,      // first-run guided checklist dismissal
   appearance: 'system',            // 'system' | 'dark' | 'light' (v2.4.0)
+  payrollLocks: {},                // v2.6.3 — { monthKey: true } locked payroll periods (additive; same settings key)
   schemaVersion: SCHEMA_VERSION,
 };
 const State = {

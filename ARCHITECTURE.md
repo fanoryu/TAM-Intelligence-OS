@@ -223,3 +223,38 @@ Provenance (old flat file → new modules):
 | all others (00–08,10,13–16,19) | moved 1:1 into `core/`, `ui/`, `import/` |
 
 Average module size dropped from ~410 to ~190 lines; the largest is now ~350 (was 1,581).
+
+---
+
+## 10. v2.6.3 — Payroll Intelligence Workspace
+
+Payroll is an **operational workspace**, not a CRUD spreadsheet. Two modules carry it:
+
+- `people/payroll-ops-engine.js` — data + rules: generation (duplicate-safe), review
+  lifecycle, commit/post, and the v2.6.3 additions: `payrollStage`/`payrollStagePill`/
+  `payrollStageCounts`, `payrollSummary`, `payrollHealth`, and the period lock
+  (`isPayrollLocked`/`setPayrollLock`).
+- `people/payroll-workspace.js` — the UI: `renderPayrollWorkspace` (period banner, KPI cards,
+  health, summary), the read-only `renderPayrollWorksheet` (incremental search preserved), and
+  `renderPayrollDetail` (read-only preview).
+
+**Lifecycle = display mapping, not new data.** Stored `pp.status` stays
+`Draft/Reviewed/Ready/Committed/Cancelled` (unchanged — no migration). `payrollStage(pp)` maps
+them to **Draft → Review → Approved → Posted**, and derives **Executed** from the linked
+transaction's status. So the operational vocabulary is presentation-only.
+
+**Single source of truth.** Payroll = Base Salary + Approved Overtime. Salary comes from the
+Contract, overtime from Approved overtime records; both flow into the read-only Total
+(`computePayrollPlanned`, untouched). The worksheet edits nothing — it removed the
+allowance/bonus/benefits/deduction columns. Posting (`commitReadyPayroll`) creates **Planned**
+finance transactions and flips their approved overtime to "Committed to Payroll"; execution
+stays in the Execution Center.
+
+**Period lock** persists in `State.settings.payrollLocks` (`{monthKey: true}`) — an additive
+field on the existing `tam_settings_v1` key, so **no new storage key and no SCHEMA_VERSION
+change**. Guards live at the mutation chokepoints: `setPayrollStatus`, `bulkPayrollStatus`,
+`commitReadyPayroll`, and the overtime mutators (`add/update/setStatus/duplicate/delete/
+worksheetSave`) all refuse when the target month is locked.
+
+**Health** (`payrollHealth`) is deterministic — contract-expiry, ±20% period-over-period,
+high-overtime, and missing-contract rules — no AI, no external calls.

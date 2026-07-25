@@ -122,6 +122,7 @@ async function updateOvertimeRecord(id, fields){
 }
 async function setOvertimeStatus(id, status){
   const o = overtimeById(id); if(!o) return;
+  if(isPayrollLocked(o.monthKey)){ showWarning('That payroll period is locked — overtime cannot be modified.'); return; }
   if(o.status==='Committed to Payroll'){ showWarning('This overtime is already committed to payroll and cannot change status.'); return; }
   o.status = status;
   if(status==='Approved' && o.approvedAmount==null) o.approvedAmount = o.calculatedAmount;
@@ -131,6 +132,7 @@ async function setOvertimeStatus(id, status){
 }
 async function duplicateOvertimeRecord(id){
   const o = overtimeById(id); if(!o) return;
+  if(isPayrollLocked(o.monthKey)){ showWarning('That payroll period is locked — overtime cannot be added.'); return; }
   const copy = JSON.parse(JSON.stringify(o));
   copy.id = uid('ot'); copy.status='Draft'; copy.approvedAmount=null; copy.payrollPlanId=null; copy.committedTxnId=null;
   copy.createdAt = copy.updatedAt = new Date().toISOString();
@@ -140,6 +142,7 @@ async function duplicateOvertimeRecord(id){
 }
 async function deleteOvertimeRecord(id){
   const o = overtimeById(id); if(!o) return;
+  if(isPayrollLocked(o.monthKey)){ showWarning('That payroll period is locked — overtime cannot be deleted.'); return; }
   if(o.status==='Committed to Payroll'){ showWarning('Committed overtime cannot be deleted. Reject is unavailable after commit.'); return; }
   if(!confirmAction('Delete this overtime record? This cannot be undone.')) return;
   State.overtimeRecords = State.overtimeRecords.filter(x=>x.id!==id);
@@ -295,6 +298,8 @@ function openOvertimeModal(id){
           monthKey:(fd.get('monthKey')||'').trim(), overtimeDate:fd.get('overtimeDate')||null,
           overtimeHours:hours, workDescription:(fd.get('workDescription')||'').trim(), notes:(fd.get('notes')||'').trim(),
         };
+        const targetMonth = isNew ? fields.monthKey : o.monthKey;
+        if(isPayrollLocked(targetMonth)){ showWarning('That payroll period is locked — overtime cannot be modified. Unlock the period in the Payroll Workspace first.'); return; }
         if(isNew){ if(!fields.employeeId){ showWarning('Select an employee.'); return; } await addOvertimeRecord(fields); showSuccess('Overtime record created (Draft).'); }
         else { await updateOvertimeRecord(o.id, fields); showSuccess('Overtime record updated.'); }
         closeModal(); render();
@@ -400,6 +405,7 @@ function renderOvertimeWorksheet(main){
   draw();
 }
 async function worksheetSave(monthKey, rows, approve){
+  if(isPayrollLocked(monthKey)){ showWarning('That payroll period is locked — overtime cannot be modified.'); return; }
   let saved=0;
   for(const r of rows){
     const hours = num(r.hours);

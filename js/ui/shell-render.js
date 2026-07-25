@@ -16,7 +16,7 @@ const NAV_GROUPS = [
   {id:'people', label:'People & Contracts', items:[
     {id:'employees', label:'Employees', ic:'☺'},
     {id:'contracts', label:'Contracts', ic:'▦'},
-    {id:'payroll', label:'Payroll Planning', ic:'৳'},
+    {id:'payroll', label:'Payroll Workspace', ic:'৳'},
     {id:'overtime', label:'Overtime', ic:'⏱'},
     {id:'monthlyplan', label:'Monthly Plan Generator', ic:'⊞'},
   ]},

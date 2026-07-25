@@ -167,6 +167,7 @@ function payrollCommitBlockers(pp){
 }
 async function setPayrollStatus(id, status){
   const pp = payrollPlanById(id); if(!pp) return;
+  if(isPayrollLocked(pp.monthKey)){ showWarning('This payroll period is locked — unlock it to change status.'); return; }
   if(pp.status==='Committed' && status!=='Committed'){ showWarning('Committed payroll cannot change status here — use the adjustment workflow.'); return; }
   if(status==='Ready'){ const b=payrollCommitBlockers(pp); if(b.length){ showWarning('Cannot mark Ready: '+b.join(', ')+'.'); return; } }
   pp.status = status; pp.updatedAt = new Date().toISOString();
@@ -174,6 +175,7 @@ async function setPayrollStatus(id, status){
   await persistPayrollPlans();
 }
 async function bulkPayrollStatus(monthKey, ids, status){
+  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — unlock it to make changes.'); return 0; }
   let done=0;
   for(const id of ids){ const pp=payrollPlanById(id); if(!pp||pp.status==='Committed') continue; if(status==='Ready' && payrollCommitBlockers(pp).length) continue; pp.status=status; pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:status.toLowerCase(), ts:pp.updatedAt, note:'Bulk → '+status}); done++; }
   await persistPayrollPlans(); return done;
@@ -229,6 +231,7 @@ function commitPayrollPreview(monthKey, ids){
   return s;
 }
 async function commitReadyPayroll(monthKey, ids){
+  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — finance posting cannot run again.'); return {created:0, updated:0, skipped:ids.length, locked:true}; }
   const mo=keyToMonthObj(monthKey); const plan=ensureMonthlyPlan(monthKey); const now=new Date().toISOString();
   let created=0, updated=0, skipped=0;
   for(const id of ids){
@@ -258,4 +261,79 @@ async function prepareNextMonthPayroll(monthKey){
   await persistPayrollPlans();
   showSuccess(`Prepared ${keyToMonthObj(nextKey).month} ${keyToMonthObj(nextKey).year}: ${res.generated} generated, ${res.excluded.length} excluded. Regenerated from active contracts — actuals and execution status are not carried over.`, 6000);
   render();
+}
+
+/* ============================================================
+   PAYROLL INTELLIGENCE (v2.6.3) — display lifecycle stages, period
+   lock, deterministic health rules, and period summary. Additive:
+   the operational lifecycle Draft → Review → Approved → Posted →
+   Executed is a display mapping over the stored status values
+   (Reviewed/Ready/Committed) with Executed derived from the linked
+   finance transaction — so no data migration, storage key, or
+   SCHEMA_VERSION change is needed. Locks live in settings.
+   Payroll = Base Salary + Approved Overtime (TAM uses no other
+   components), so computePayrollPlanned is the read-only Total.
+   ============================================================ */
+const PAYROLL_STAGE_META = {
+  'Draft':    {pill:'pill-status-planned'},
+  'Review':   {pill:'pill-status-scheduled'},
+  'Approved': {pill:'pill-status-partial'},
+  'Posted':   {pill:'pill-status-completed'},
+  'Executed': {pill:'pill-status-completed'},
+  'Cancelled':{pill:'pill-status-cancelled'},
+};
+const PAYROLL_STAGES = ['Draft','Review','Approved','Posted','Executed'];
+// Map a stored payroll plan to its operational stage (Executed derived from its transaction).
+function payrollStage(pp){
+  if(!pp || pp.status==='Cancelled') return 'Cancelled';
+  if(pp.status==='Committed'){
+    const t=payrollTxnOf(pp);
+    if(t && ['completed','archived'].includes(statusOf(t))) return 'Executed';
+    return 'Posted';
+  }
+  if(pp.status==='Ready') return 'Approved';
+  if(pp.status==='Reviewed') return 'Review';
+  return 'Draft';
+}
+function payrollStagePill(pp){ return hrStatusBadge(payrollStage(pp), PAYROLL_STAGE_META); }
+function payrollStageCounts(monthKey){
+  const c={Draft:0, Review:0, Approved:0, Posted:0, Executed:0};
+  payrollPlansForMonth(monthKey).forEach(p=>{ const s=payrollStage(p); if(c[s]!=null) c[s]++; });
+  return c;
+}
+// Period summary: totals + average/highest/lowest (Feature 9).
+function payrollSummary(monthKey){
+  const plans=payrollPlansForMonth(monthKey);
+  const amts=plans.map(p=>num(p.plannedAmount!=null?p.plannedAmount:computePayrollPlanned(p)));
+  const total=amts.reduce((s,x)=>s+x,0);
+  return {count:plans.length, total, overtime:plans.reduce((s,p)=>s+num(p.overtimeAmount),0),
+    average: plans.length?Math.round(total/plans.length):0,
+    highest: amts.length?Math.max(...amts):0, lowest: amts.length?Math.min(...amts):0};
+}
+// Deterministic (no AI) payroll health rules for the active period (Feature 7).
+function payrollHealth(monthKey){
+  const out=[]; const prevKey=prevMonthKey(monthKey);
+  payrollPlansForMonth(monthKey).forEach(p=>{
+    const ct=contractById(p.contractId);
+    if(ct){ const cc=contractCalc(ct, monthKey); if(cc.valid && cc.daysUntilEnd!=null && cc.daysUntilEnd>=0 && cc.daysUntilEnd<=30) out.push({sev:'warn', title:'Contract expiring within 30 days', detail:`${p.employeeName}: ${ct.contractNumber||'contract'} ends in ${cc.daysUntilEnd} day(s).`}); }
+    const prev=State.payrollPlans.find(x=>x.monthKey===prevKey && x.employeeId===p.employeeId && x.status!=='Cancelled');
+    if(prev){ const a=computePayrollPlanned(prev), b=computePayrollPlanned(p); if(a>0){ const d=(b-a)/a;
+      if(d>=0.2) out.push({sev:'warn', title:'Payroll increased more than 20%', detail:`${p.employeeName}: ${fmtIDRShort(a)} → ${fmtIDRShort(b)} (+${Math.round(d*100)}%).`});
+      else if(d<=-0.2) out.push({sev:'warn', title:'Payroll decreased more than 20%', detail:`${p.employeeName}: ${fmtIDRShort(a)} → ${fmtIDRShort(b)} (${Math.round(d*100)}%).`}); } }
+    const base=payrollBaseSalary(p);
+    if(base>0 && num(p.overtimeAmount) > 0.5*base) out.push({sev:'warn', title:'Unusually high overtime', detail:`${p.employeeName}: overtime ${fmtIDRShort(p.overtimeAmount)} exceeds 50% of base salary.`});
+    else if(num(p.overtimeHours) > 60) out.push({sev:'warn', title:'Unusually high overtime hours', detail:`${p.employeeName}: ${num(p.overtimeHours)} overtime hours this period.`});
+  });
+  State.employees.forEach(e=>{ if(e.active===false || e.employmentStatus!=='Active') return;
+    const reason=payrollExclusionReason(e, monthKey);
+    if(reason) out.push({sev:'info', title: /contract/i.test(reason)?'Employee missing active contract':'Employee not in payroll', detail:`${e.fullName}: ${reason}.`});
+  });
+  return out;
+}
+/* ---------- payroll period lock (Feature 6) ---------- */
+function isPayrollLocked(monthKey){ return !!(State.settings.payrollLocks && State.settings.payrollLocks[monthKey]); }
+async function setPayrollLock(monthKey, locked){
+  if(!State.settings.payrollLocks) State.settings.payrollLocks={};
+  if(locked) State.settings.payrollLocks[monthKey]=true; else delete State.settings.payrollLocks[monthKey];
+  await saveSettings();
 }

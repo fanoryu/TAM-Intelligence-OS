@@ -1,5 +1,70 @@
 # Changelog
 
+## 2.6.3 — Payroll Intelligence Workspace
+
+**Type:** feature — payroll operational workspace. **No schema, storage-key, or calculation-engine change.**
+
+Upgrades Payroll from a generator into a clean, workflow-oriented **operational workspace**.
+Payroll in TAM is **Base Salary + Approved Overtime only** — no tax, BPJS, loan, transport,
+meal allowance, or deduction engine.
+
+### Added
+- **Payroll Workspace** (the main payroll page): a current-period banner + period switcher,
+  top KPI cards (Current Period, Employees, Draft, Review, Approved, Posted, Executed, Total
+  Payroll, Total Overtime), and workspace actions (Generate, Review, Approve, Post to Finance).
+- **Operational lifecycle** Draft → Review → Approved → Posted → Executed, shown as stage
+  badges. It is a **display mapping over the existing stored status values** (Reviewed/Ready/
+  Committed) with **Executed derived** from the linked finance transaction — so **no data
+  migration**. Execution still happens in the Execution Center.
+- **Bulk operations** with confirmation dialogs: Select All, Review Selected, Approve
+  Selected, Post to Finance.
+- **Payroll period lock** (`State.settings.payrollLocks`, same `tam_settings_v1` key): a
+  locked month blocks regeneration, edits, its overtime changes, and finance re-posting.
+  Unlock requires confirmation. Overtime mutators (add/edit/status/duplicate/delete/worksheet)
+  are guarded against locked periods.
+- **Payroll Health** — deterministic (no AI) warning cards: contract expiring within 30 days,
+  payroll up/down >20% vs previous period, unusually high overtime, employee missing an
+  active contract.
+- **Payroll Summary**: total employees, payroll total, total overtime, average, highest, lowest.
+- **Employee Timeline** on Employee Detail: Profile, Active Contract, Contract History,
+  **Payroll History**, **Overtime History**, and **Finance Transactions** in one linked view.
+- **Read-only payroll preview** (employee, contract, progress, base, approved overtime, total,
+  generated finance transaction) with a payroll history log.
+
+### Changed
+- The payroll worksheet is now **read-only** (Employee · Contract · Progress · Base · Approved
+  OT · Total · Stage) — the editable component spreadsheet (allowance/bonus/benefits/deduction
+  columns) is gone. Edit salary via the Contract, overtime via Overtime.
+- "Commit Ready Payroll" is now **Post to Finance** / "Post Approved Payroll to Finance"; only
+  Approved payroll may be posted; it creates **Planned** transactions and never auto-executes.
+- Nav label "Payroll Planning" → **"Payroll Workspace"**. Recurring adjustments UI is retained
+  for backward compatibility but is no longer part of the standard workflow.
+- Version identity → 2.6.3; new Release Notes entry (history preserved).
+
+### Unchanged (verified)
+- **`SCHEMA_VERSION` stays 6**; all storage keys, migration flags, backup shape, and CSS are
+  byte-for-byte unchanged. The calculation engine (`computePayrollPlanned`) is untouched;
+  because TAM configures no adjustments, Total already equals Base + Approved Overtime.
+- Employee Dedup, Smart Import, Contract Engine, Execution Center, Monthly Planning, Reports,
+  Node build, verification, Git, and the 43-module structure are all preserved. The v2.6.1
+  search-focus fix still holds on the payroll search.
+- Still classic ordered scripts — no ES modules, no bundler.
+
+### Validation
+- Node build + verify: **76/76 checks pass** (adds payroll-workspace assertions).
+- Browser (dist + modular source, zero console errors): Generate, duplicate prevention,
+  Draft→Review→Approved→Posted lifecycle, bulk review/approve/post, period lock (blocks bulk
+  and re-posting), approved-overtime integration (Total = Base + OT; overtime flips to
+  "Committed to Payroll" on post), finance posting creates Planned transactions, Executed
+  derived from a completed transaction, employee timeline, period switching, payroll search
+  focus, and dark/light themes.
+
+### Out of scope (not implemented, by design)
+- BPJS, tax, loan, meal allowance, transport, insurance, deduction engine, payslip PDF,
+  multi-user approval, electronic signature.
+
+---
+
 ## 2.6.2 — Developer Experience & Module Decomposition
 
 **Type:** developer workflow + code organization. **No business logic, data, or schema change.**

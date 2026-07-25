@@ -20,7 +20,7 @@ const read = (p) => fs.readFileSync(p, 'utf8');
 const trimLF = (s) => s.replace(/^\n+/, '').replace(/\n+$/, '');
 
 const orig = read(path.join(root, 'tam-intelligence-os-v2.5.2.html'));
-const dist = read(path.join(root, 'dist', 'tam-intelligence-os-v2.6.2.html'));
+const dist = read(path.join(root, 'dist', 'tam-intelligence-os-v2.6.3.html'));
 
 let passes = 0; const fails = [];
 const check = (cond, msg) => { if (cond) { passes++; console.log('  [PASS] ' + msg); } else { fails.push(msg); console.log('  [FAIL] ' + msg); } };
@@ -41,11 +41,11 @@ check(trimLF(srcCss) === distCss, 'concat(css/*.css) == dist CSS payload');
 check(trimLF(srcJs) === distJs, 'concat(js/*.js) == dist JS payload');
 
 console.log('== VERSION IDENTITY ==');
-check(dist.includes("const APP_VERSION = '2.6.2';"), 'APP_VERSION == 2.6.2');
-check(dist.includes("const APP_RELEASE_NAME = 'Developer Experience & Module Decomposition';"), 'APP_RELEASE_NAME updated');
-check(dist.includes('<title>TAM Intelligence OS v2.6.2</title>'), '<title> updated to v2.6.2');
-check(dist.includes("{v:'2.6.2 "), 'Release Notes has a 2.6.2 entry');
-check(dist.includes("{v:'2.6.1 "), 'Release Notes still has the 2.6.1 entry (history preserved)');
+check(dist.includes("const APP_VERSION = '2.6.3';"), 'APP_VERSION == 2.6.3');
+check(dist.includes("const APP_RELEASE_NAME = 'Payroll Intelligence Workspace';"), 'APP_RELEASE_NAME updated');
+check(dist.includes('<title>TAM Intelligence OS v2.6.3</title>'), '<title> updated to v2.6.3');
+check(dist.includes("{v:'2.6.3 "), 'Release Notes has a 2.6.3 entry');
+check(dist.includes("{v:'2.6.2 ") && dist.includes("{v:'2.6.1 "), 'Release Notes still has 2.6.2 and 2.6.1 entries (history preserved)');
 
 console.log('== DATA-SAFETY INVARIANTS ==');
 const mDist = dist.match(/const SCHEMA_VERSION = (\d+);/);
@@ -80,6 +80,16 @@ const oldHandlers = [
 oldHandlers.forEach((h)=>check(!dist.includes(h), 'old full-render search handler removed: '+h.substring(0,24)+'...'));
 ['id="empRows"','id="ctRows"','id="otRows"','id="txnRows"','id="pwRows"','id="txnCount"']
   .forEach((id)=>check(dist.includes(id), 'incremental container present: '+id));
+
+console.log('== PAYROLL INTELLIGENCE WORKSPACE (v2.6.3) ==');
+['function payrollStage(','function payrollStagePill(','function payrollStageCounts(','function payrollSummary(','function payrollHealth(','function isPayrollLocked(','function setPayrollLock(','function renderPayrollWorkspace(']
+  .forEach((fn)=>check(dist.includes(fn), 'defined: '+fn.replace('function ','').replace('(','')));
+check(dist.includes("label:'Payroll Workspace'"), 'nav label renamed to Payroll Workspace');
+check(dist.includes('payrollLocks: {}') || dist.includes('payrollLocks:{}'), 'payrollLocks settings field present (lock persistence, same settings key)');
+check(dist.includes('Post to Finance') || dist.includes('Post Approved Payroll to Finance'), 'Post to Finance action present');
+check(dist.includes("<h3>Payroll History</h3>") && dist.includes("<h3>Overtime History</h3>"), 'Employee timeline (Payroll + Overtime History) present');
+// lifecycle mapped over existing stored values — no new payroll status persisted
+check(dist.includes("const PAYROLL_STATUSES = ['Draft','Reviewed','Ready','Committed','Cancelled']"), 'stored payroll status values unchanged (no migration)');
 
 console.log('== MODULE DECOMPOSITION (v2.6.2) ==');
 const jsdir = path.join(root, 'js');
