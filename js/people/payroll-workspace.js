@@ -294,8 +294,8 @@ function renderPayrollDetail(main){
   const recs=(p.overtimeIds||[]).map(overtimeById).filter(Boolean);
   main.innerHTML = pageHeader(p.employeeName||'Payroll', `${escapeHtml(p.month)} ${p.year} · ${escapeHtml(p.contractNumber||'—')} · ${escapeHtml(p.contractProgress||'')}`,
       `<button class="btn" id="pdBack">← Payroll Workspace</button>${emp?`<button class="btn" id="pdEmp">Employee</button>`:''}${ct?`<button class="btn" id="pdCt">Contract</button>`:''}${txn?`<button class="btn" id="pdTxn">Transaction</button>`:''}`)
-    + `<div class="grid grid-2" style="margin-bottom:14px;">
-      <div class="card"><h3>Payroll <span class="tag">read-only</span></h3><div style="font-size:13px;line-height:1.95;">
+    + `<div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
+      <div class="card"><h3>Payroll <span class="tag">read-only</span></h3><div style="font-size:13px;line-height:1.75;">
         <div>Employee: <b>${escapeHtml(p.employeeName||'—')}</b></div>
         <div>Contract: <b>${escapeHtml(p.contractNumber||'—')}</b></div>
         <div>Current Contract Progress: <b>${escapeHtml(p.contractProgress||'—')}</b></div>
@@ -307,7 +307,7 @@ function renderPayrollDetail(main){
         <div>Stage: ${payrollStagePill(p)}</div>
         <p class="hint" style="margin-top:8px;">Payroll = Base Salary + Approved Overtime. Edit salary via the Contract; edit overtime via Overtime. Generated finance transaction is shown at right.</p>
       </div></div>
-      <div class="card"><h3>Generated Finance Transaction</h3>${txn?`<div style="font-size:13px;line-height:1.95;">
+      <div class="card"><h3>Generated Finance Transaction</h3>${txn?`<div style="font-size:13px;line-height:1.75;">
         <div>Transaction Status: ${statusBadge(statusOf(txn))}</div>
         <div>Planned: <b class="mono">${fmtIDR(txn.planned)}</b> · Actual paid: <b class="mono">${txn.actual!=null?fmtIDR(txn.actual):'—'}</b></div>
         <div>Remaining: <b class="mono">${fmtIDR(num(txn.planned)-num(txn.actual))}</b></div>

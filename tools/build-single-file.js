@@ -40,7 +40,7 @@ html = html.replace(cssLinkBlock, cssInline).replace(jsTagBlock, jsInline);
 
 const outDir = path.join(root, 'dist');
 fs.mkdirSync(outDir, { recursive: true });
-const outPath = path.join(outDir, 'tam-intelligence-os-v2.6.3b.html');
+const outPath = path.join(outDir, 'tam-intelligence-os-v2.6.3c.html');
 fs.writeFileSync(outPath, html, 'utf8');
 
 console.log('Built ' + path.relative(root, outPath) + ' (' + Buffer.byteLength(html, 'utf8') + ' bytes)');

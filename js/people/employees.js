@@ -192,10 +192,10 @@ function renderEmployeeDetail(main){
       </div>
     </div>
     ${alerts.length?`<div class="insight-list" style="margin-bottom:14px;">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
-    <div class="grid grid-2" style="margin-bottom:14px;">
+    <div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
       <div class="card">
         <h3>Profile</h3>
-        <div style="font-size:13px;line-height:2;">
+        <div style="font-size:13px;line-height:1.75;">
           <div>Status: ${hrStatusBadge(e.employmentStatus||'Inactive', EMP_STATUS_META)} ${e.active===false?'<span class="pill pill-status-archived">record off</span>':''}</div>
           <div>Contract Type: <b>${escapeHtml(e.contractType||'—')}</b></div>
           <div>Join Date: <b>${fmtDateID(e.joinDate)}</b></div>
@@ -209,7 +209,7 @@ function renderEmployeeDetail(main){
       <div class="card">
         <h3>Active Contract</h3>
         ${ct?`
-          <div style="font-size:13px;line-height:1.9;">
+          <div style="font-size:13px;line-height:1.7;">
             <div><b>${escapeHtml(ct.contractNumber||'—')}</b> ${hrStatusBadge(contractEffectiveStatus(ct), CONTRACT_STATUS_META)}</div>
             <div class="dim">${fmtDateID(calc.startDate)} → ${fmtDateID(calc.endDate)}</div>
             <div style="margin:8px 0 4px;">Progress <b>${calc.progress}</b> · ${calc.remaining} month${calc.remaining===1?'':'s'} remaining</div>

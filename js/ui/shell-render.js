@@ -68,7 +68,7 @@ const NAV_GROUPS = [
   ]},
   {id:'finance', label:'Finance', items:[
     {id:'financeOverview', label:'Finance Overview', ic:'▣'},
-    {id:'executioncenter', label:'Execution Center', ic:'⚡'},
+    {id:'executioncenter', label:'Execution Center', ic:'⚡︎'}, // v2.6.3c — VS-15 forces monochrome text (was a colored emoji that stood out)
     {id:'transactions', label:'Transactions', ic:'≡'},
     {id:'add', label:'Add / Upload', ic:'+'},
     {id:'cashflow', label:'Cash Flow', ic:'∼'},

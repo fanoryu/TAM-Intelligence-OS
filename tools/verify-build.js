@@ -20,7 +20,7 @@ const read = (p) => fs.readFileSync(p, 'utf8');
 const trimLF = (s) => s.replace(/^\n+/, '').replace(/\n+$/, '');
 
 const orig = read(path.join(root, 'tam-intelligence-os-v2.5.2.html'));
-const dist = read(path.join(root, 'dist', 'tam-intelligence-os-v2.6.3b.html'));
+const dist = read(path.join(root, 'dist', 'tam-intelligence-os-v2.6.3c.html'));
 
 let passes = 0; const fails = [];
 const check = (cond, msg) => { if (cond) { passes++; console.log('  [PASS] ' + msg); } else { fails.push(msg); console.log('  [FAIL] ' + msg); } };
@@ -44,11 +44,11 @@ check(trimLF(srcCss) === distCss, 'concat(css/*.css) == dist CSS payload');
 check(trimLF(srcJs) === distJs, 'concat(js/*.js) == dist JS payload');
 
 console.log('== VERSION IDENTITY ==');
-check(dist.includes("const APP_VERSION = '2.6.3b';"), 'APP_VERSION == 2.6.3b');
-check(dist.includes("const APP_RELEASE_NAME = 'Floating Actions Menu Fix';"), 'APP_RELEASE_NAME updated');
-check(dist.includes('<title>TAM Intelligence OS v2.6.3b</title>'), '<title> updated to v2.6.3b');
-check(dist.includes("{v:'2.6.3b "), 'Release Notes has a 2.6.3b entry');
-check(dist.includes("{v:'2.6.3a ") && dist.includes("{v:'2.6.3 ") && dist.includes("{v:'2.6.1 "), 'Release Notes still has 2.6.3a/2.6.3/2.6.1 entries (history preserved)');
+check(dist.includes("const APP_VERSION = '2.6.3c';"), 'APP_VERSION == 2.6.3c');
+check(dist.includes("const APP_RELEASE_NAME = 'Responsive UI Polish';"), 'APP_RELEASE_NAME updated');
+check(dist.includes('<title>TAM Intelligence OS v2.6.3c</title>'), '<title> updated to v2.6.3c');
+check(dist.includes("{v:'2.6.3c "), 'Release Notes has a 2.6.3c entry');
+check(dist.includes("{v:'2.6.3b ") && dist.includes("{v:'2.6.3a ") && dist.includes("{v:'2.6.3 "), 'Release Notes still has 2.6.3b/2.6.3a/2.6.3 entries (history preserved)');
 
 console.log('== DATA-SAFETY INVARIANTS ==');
 const mDist = dist.match(/const SCHEMA_VERSION = (\d+);/);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TAM Intelligence OS v2.6.3b</title>
+<title>TAM Intelligence OS v2.6.3c</title>
 <meta name="theme-color" content="#0E1420">
 <meta name="color-scheme" content="dark light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -358,8 +358,8 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.6.3b';
-const APP_RELEASE_NAME = 'Floating Actions Menu Fix';
+const APP_VERSION = '2.6.3c';
+const APP_RELEASE_NAME = 'Responsive UI Polish';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
@@ -1841,7 +1841,7 @@ const NAV_GROUPS = [
   ]},
   {id:'finance', label:'Finance', items:[
     {id:'financeOverview', label:'Finance Overview', ic:'▣'},
-    {id:'executioncenter', label:'Execution Center', ic:'⚡'},
+    {id:'executioncenter', label:'Execution Center', ic:'⚡︎'}, // v2.6.3c — VS-15 forces monochrome text (was a colored emoji that stood out)
     {id:'transactions', label:'Transactions', ic:'≡'},
     {id:'add', label:'Add / Upload', ic:'+'},
     {id:'cashflow', label:'Cash Flow', ic:'∼'},
@@ -4682,6 +4682,7 @@ function renderAbout(main){
 }
 function renderReleaseNotes(main){
   const notes = [
+    {v:'2.6.3c — Responsive UI Polish', items:['Sidebar icon consistency: the Execution Center icon now renders as monochrome text like every other menu item (it was a colored emoji that drew attention even when inactive) — only the active row background and text color indicate the current page','Responsive Employee, Contract and Payroll detail pages: the two side-by-side cards (e.g. Profile / Active Contract) size to their own content instead of stretching to equal height, and stack vertically when width is limited (125%/150% browser zoom), avoiding overly tall cards','Tightened vertical spacing in the detail cards for higher information density while staying readable; top action buttons (Back / Edit / New Contract) wrap gracefully on narrow widths','UI/CSS presentation only — no business logic, storage, calculations, verification, SCHEMA_VERSION (6) or styles files changed']},
     {v:'2.6.3b — Floating Actions Menu Fix', items:['Fixed: the row Actions menu is no longer clipped by the scrolling table container. It is now a shared floating layer — portaled out to a top-level #menu-root node and positioned with position:fixed via getBoundingClientRect() — so it always renders fully visible above the table','The floating menu auto-flips up or down based on available space, closes on outside click and on Escape, and repositions on window resize/scroll. One shared implementation (openFloatingMenu/closeFloatingMenu) is reused by Employees, Contracts, Payroll, Overtime, Transactions and Execution Center','UI infrastructure only — no business logic, storage key, SCHEMA_VERSION (6) or calculation change']},
     {v:'2.6.3a — Payroll Workspace Hotfix', items:['Fixed: Approve Selected now moves rows from Review to Approved. Approval is a sign-off and is no longer blocked by commit validation — data checks (missing salary, invalid/duplicate contract) run at Post to Finance instead, where blocked rows are skipped and reported. Post to Finance now succeeds after Approve, with no duplicate payroll created','Fixed: the row Actions dropdown now opens upward automatically when there is not enough room below the row, so menu items are never hidden and no scrolling is needed. Applies to all Actions menus (Employees, Contracts, Overtime, Payroll, Transactions, Execution Center)','UI/action-flow only: the payroll calculation engine, storage keys, SCHEMA_VERSION (6) and lifecycle stages are unchanged']},
     {v:'2.6.3 — Payroll Intelligence Workspace', items:['Rebuilt Payroll as an operational workspace: one active period with a clear current-period banner and period switcher, top KPI cards (Current Period, Employees, Draft, Review, Approved, Posted, Executed, Total Payroll, Total Overtime), and a read-only worksheet instead of an editable spreadsheet','Payroll is Base Salary + Approved Overtime only — no tax, BPJS, loan, transport, meal, or deduction engine. Salary is edited on the Contract, overtime in Overtime; both flow into the read-only Total (single source of truth, no duplicated overtime entry)','Operational lifecycle Draft → Review → Approved → Posted → Executed, mapped over the existing stored status values with Executed derived from the linked finance transaction (no schema, storage-key or migration change)','Bulk operations with confirmation dialogs: Select All, Review Selected, Approve Selected, Post to Finance — only Approved payroll can be posted, and posting creates Planned transactions (never auto-executed; execution stays in the Execution Center)','Payroll period lock: lock a month to freeze generation, edits, its overtime, and finance posting; unlocking requires confirmation','Deterministic Payroll Health cards (no AI): contract expiring within 30 days, payroll up/down more than 20% vs last period, unusually high overtime, and employees missing an active contract','Payroll Summary (total employees, payroll total, total overtime, average, highest, lowest) and a read-only payroll preview showing employee, contract, progress, base, approved overtime, total and the generated finance transaction','Employee Detail is now a timeline: Profile, Active Contract, Contract History, Payroll History, Overtime History and Finance Transactions in one place','Duplicate prevention preserved (one payroll per employee per period — skip or update the existing draft, never duplicate). Smart Import, Employee Dedup, Contract Engine, Execution Center, Monthly Planning, Reports, Node build, verification, Git and the module structure are all unchanged','No business calculation, storage key or SCHEMA_VERSION (still 6) changed; period locks live in existing settings']},
@@ -5121,10 +5122,10 @@ function renderEmployeeDetail(main){
       </div>
     </div>
     ${alerts.length?`<div class="insight-list" style="margin-bottom:14px;">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
-    <div class="grid grid-2" style="margin-bottom:14px;">
+    <div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
       <div class="card">
         <h3>Profile</h3>
-        <div style="font-size:13px;line-height:2;">
+        <div style="font-size:13px;line-height:1.75;">
           <div>Status: ${hrStatusBadge(e.employmentStatus||'Inactive', EMP_STATUS_META)} ${e.active===false?'<span class="pill pill-status-archived">record off</span>':''}</div>
           <div>Contract Type: <b>${escapeHtml(e.contractType||'—')}</b></div>
           <div>Join Date: <b>${fmtDateID(e.joinDate)}</b></div>
@@ -5138,7 +5139,7 @@ function renderEmployeeDetail(main){
       <div class="card">
         <h3>Active Contract</h3>
         ${ct?`
-          <div style="font-size:13px;line-height:1.9;">
+          <div style="font-size:13px;line-height:1.7;">
             <div><b>${escapeHtml(ct.contractNumber||'—')}</b> ${hrStatusBadge(contractEffectiveStatus(ct), CONTRACT_STATUS_META)}</div>
             <div class="dim">${fmtDateID(calc.startDate)} → ${fmtDateID(calc.endDate)}</div>
             <div style="margin:8px 0 4px;">Progress <b>${calc.progress}</b> · ${calc.remaining} month${calc.remaining===1?'':'s'} remaining</div>
@@ -5521,10 +5522,10 @@ function renderContractDetail(main){
       </div>
     </div>
     ${alerts.length?`<div class="insight-list" style="margin-bottom:14px;">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
-    <div class="grid grid-2" style="margin-bottom:14px;">
+    <div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
       <div class="card">
         <h3>Contract</h3>
-        <div style="font-size:13px;line-height:2;">
+        <div style="font-size:13px;line-height:1.75;">
           <div>Employee: <button class="linklike" id="ctEmpLink"><b>${escapeHtml(c.employeeName||'—')}</b></button></div>
           <div>Start: <b>${fmtDateID(cc.startDate)}</b></div>
           <div>End: <b>${fmtDateID(cc.endDate)}</b></div>
@@ -8745,8 +8746,8 @@ function renderPayrollDetail(main){
   const recs=(p.overtimeIds||[]).map(overtimeById).filter(Boolean);
   main.innerHTML = pageHeader(p.employeeName||'Payroll', `${escapeHtml(p.month)} ${p.year} · ${escapeHtml(p.contractNumber||'—')} · ${escapeHtml(p.contractProgress||'')}`,
       `<button class="btn" id="pdBack">← Payroll Workspace</button>${emp?`<button class="btn" id="pdEmp">Employee</button>`:''}${ct?`<button class="btn" id="pdCt">Contract</button>`:''}${txn?`<button class="btn" id="pdTxn">Transaction</button>`:''}`)
-    + `<div class="grid grid-2" style="margin-bottom:14px;">
-      <div class="card"><h3>Payroll <span class="tag">read-only</span></h3><div style="font-size:13px;line-height:1.95;">
+    + `<div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
+      <div class="card"><h3>Payroll <span class="tag">read-only</span></h3><div style="font-size:13px;line-height:1.75;">
         <div>Employee: <b>${escapeHtml(p.employeeName||'—')}</b></div>
         <div>Contract: <b>${escapeHtml(p.contractNumber||'—')}</b></div>
         <div>Current Contract Progress: <b>${escapeHtml(p.contractProgress||'—')}</b></div>
@@ -8758,7 +8759,7 @@ function renderPayrollDetail(main){
         <div>Stage: ${payrollStagePill(p)}</div>
         <p class="hint" style="margin-top:8px;">Payroll = Base Salary + Approved Overtime. Edit salary via the Contract; edit overtime via Overtime. Generated finance transaction is shown at right.</p>
       </div></div>
-      <div class="card"><h3>Generated Finance Transaction</h3>${txn?`<div style="font-size:13px;line-height:1.95;">
+      <div class="card"><h3>Generated Finance Transaction</h3>${txn?`<div style="font-size:13px;line-height:1.75;">
         <div>Transaction Status: ${statusBadge(statusOf(txn))}</div>
         <div>Planned: <b class="mono">${fmtIDR(txn.planned)}</b> · Actual paid: <b class="mono">${txn.actual!=null?fmtIDR(txn.actual):'—'}</b></div>
         <div>Remaining: <b class="mono">${fmtIDR(num(txn.planned)-num(txn.actual))}</b></div>

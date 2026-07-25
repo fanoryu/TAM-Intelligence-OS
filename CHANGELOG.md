@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.6.3c — Responsive UI Polish
+
+**Type:** UI polish. **No business logic, storage, verification, or CSS-file change.**
+
+### Improved
+- **Sidebar icon consistency:** the Execution Center icon now renders as **monochrome text**
+  (a Unicode text-presentation selector, VS-15, is appended to the ⚡ glyph) instead of a
+  colored emoji that drew attention even when the page was inactive. Only the active row's
+  background and text color indicate the current page.
+- **Responsive detail pages (Employee / Contract / Payroll):** the two side-by-side cards now
+  use `align-items:start`, so each card sizes to its own content instead of stretching to the
+  taller card's height (fixing the "vertically stretched / overly tall" look at 125%–150%
+  browser zoom). They already stack to one column at ≤1050px CSS width (existing `.grid-2`
+  breakpoint), which covers 125%/150% zoom.
+- **Tighter vertical spacing:** detail-card `line-height` reduced (2 → 1.75, 1.9/1.95 → 1.7/1.75)
+  for higher information density while remaining readable. Top action buttons (Back / Edit /
+  New Contract) already wrap via `.head-controls{flex-wrap:wrap}`.
+
+All changes are in JS/markup (inline styles + reusing existing responsive classes) — **no
+`.css` files were touched, so the CSS golden master is unchanged**, and no verification logic
+was modified.
+
+### Validation
+- Node build + verify: **87/87 checks pass** (CSS golden master still asserts CSS == v2.5.2 +
+  only the v2.6.3b floating rule). Browser, zero console errors, at 100% / 125% / 150% zoom in
+  dark and light: no horizontal scrolling, no overlapping controls, no clipped content; detail
+  cards stack when width is limited and are content-sized (not stretched); the Execution Center
+  icon renders monochrome like its siblings.
+
+---
+
 ## 2.6.3b — Floating Actions Menu Fix
 
 **Type:** UI infrastructure. **No business logic, schema, or storage change.**

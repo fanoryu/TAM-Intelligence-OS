@@ -245,10 +245,10 @@ function renderContractDetail(main){
       </div>
     </div>
     ${alerts.length?`<div class="insight-list" style="margin-bottom:14px;">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
-    <div class="grid grid-2" style="margin-bottom:14px;">
+    <div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
       <div class="card">
         <h3>Contract</h3>
-        <div style="font-size:13px;line-height:2;">
+        <div style="font-size:13px;line-height:1.75;">
           <div>Employee: <button class="linklike" id="ctEmpLink"><b>${escapeHtml(c.employeeName||'—')}</b></button></div>
           <div>Start: <b>${fmtDateID(cc.startDate)}</b></div>
           <div>End: <b>${fmtDateID(cc.endDate)}</b></div>

@@ -2,18 +2,18 @@
 
 Integrated Management Intelligence for **PT Total Asset Manajemen**.
 
-Current release: **v2.6.3b — Floating Actions Menu Fix**
+Current release: **v2.6.3c — Responsive UI Polish**
 (lineage: **v2.6.0** modular split; **v2.6.1** search-box focus; **v2.6.2** module
 decomposition + Git; **v2.6.3** Payroll operational workspace; **v2.6.3a** Approve→Post
-lifecycle fix; **v2.6.3b** shared floating Actions menu that's never clipped by table
-containers).
+lifecycle fix; **v2.6.3b** floating Actions menu; **v2.6.3c** responsive detail pages +
+consistent sidebar icons).
 
 Two supported outputs:
 
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` + `js/` (43 modules in `core/ ui/ finance/ people/ import/ analytics/`) loaded as ordered **classic scripts** (shared global scope, no ES modules) | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.3b.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.3c.html` |
 
 ---
 
@@ -38,7 +38,7 @@ any v18+ works). It has no dependencies — plain `fs`/`path`, nothing to `npm i
 Node is used **only** for the tooling, never to run the app itself. The PowerShell scripts
 are kept as an **optional fallback** for machines without Node.
 
-Regenerate `dist/tam-intelligence-os-v2.6.3b.html` from the modular source:
+Regenerate `dist/tam-intelligence-os-v2.6.3c.html` from the modular source:
 
 ```bash
 node tools/build-single-file.js
@@ -86,6 +86,10 @@ The verifier (87 checks) fails the build if:
 
 ## What each recent release changed (and did not)
 
+- **v2.6.3c — Responsive UI Polish.** Execution Center sidebar icon rendered monochrome
+  (consistent with siblings); Employee/Contract/Payroll detail cards size to content and stack
+  at 125%/150% zoom; tighter detail-card spacing. JS/markup only — no `.css` files or
+  verification touched (CSS golden master unchanged).
 - **v2.6.3b — Floating Actions Menu Fix.** The row Actions menu is portaled to a top-level
   `#menu-root` and positioned with `position:fixed` (via `getBoundingClientRect`), so it's
   never clipped by a table's `overflow`. One shared controller (auto-flip, close on
