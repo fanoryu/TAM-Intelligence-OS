@@ -294,9 +294,12 @@ function bindHRActions(main){
     e.stopPropagation();
     const menu = main.querySelector(`[data-hr-menu="${btn.dataset.hrActions}"]`);
     const open = menu.style.display==='block';
-    main.querySelectorAll('.actions-dropdown').forEach(m=>m.style.display='none');
-    menu.style.display = open?'none':'block';
-    if(!open) document.addEventListener('click', ()=>{ main.querySelectorAll('.actions-dropdown').forEach(m=>m.style.display='none'); }, {once:true});
+    main.querySelectorAll('.actions-dropdown').forEach(m=>{ m.style.display='none'; m.classList.remove('up'); });
+    if(!open){
+      menu.style.display='block';
+      positionActionsMenu(btn, menu); // v2.6.3a — flip upward if not enough room below
+      document.addEventListener('click', ()=>{ main.querySelectorAll('.actions-dropdown').forEach(m=>{ m.style.display='none'; m.classList.remove('up'); }); }, {once:true});
+    }
   }));
   main.querySelectorAll('[data-hr-action]').forEach(btn=>btn.addEventListener('click', async e=>{
     e.stopPropagation();

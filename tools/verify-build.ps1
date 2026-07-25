@@ -15,7 +15,7 @@ $root = Split-Path -Parent $PSScriptRoot
 function Read-Lf([string]$p){ [System.IO.File]::ReadAllText($p) }
 
 $orig = Read-Lf (Join-Path $root 'tam-intelligence-os-v2.5.2.html')
-$dist = Read-Lf (Join-Path $root 'dist/tam-intelligence-os-v2.6.3.html')
+$dist = Read-Lf (Join-Path $root 'dist/tam-intelligence-os-v2.6.3a.html')
 $LF = "`n"
 $fails = New-Object System.Collections.Generic.List[string]
 $passes = 0
@@ -37,8 +37,12 @@ $origCss = Extract-Style $orig
 $distJs  = Extract-MainScript $dist
 
 # ---- CSS unchanged (v2.6.1 touched no styles) ----
-Write-Host "== CSS UNCHANGED vs v2.5.2 ==" -ForegroundColor Cyan
-Check ($distCss -eq $origCss) 'dist CSS == v2.5.2 CSS byte-for-byte (styles untouched since v2.5.2)'
+Write-Host "== CSS vs v2.5.2 (only the v2.6.3a auto-flip rule added) ==" -ForegroundColor Cyan
+$dash = [char]0x2014
+$cssAnchor = '.actions-dropdown{position:absolute;right:0;top:calc(100% + 4px);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:20;min-width:170px;box-shadow:0 8px 28px rgba(0,0,0,.45);}'
+$cssAdded = $cssAnchor + "`n/* v2.6.3a " + $dash + " opens upward when there isn't enough room below the row (auto-flip). */`n.actions-dropdown.up{top:auto;bottom:calc(100% + 4px);}"
+$expectedCss = $origCss.Replace($cssAnchor, $cssAdded)
+Check ($distCss -eq $expectedCss) 'dist CSS == v2.5.2 CSS + ONLY the v2.6.3a auto-flip rule (no other style change)'
 
 # ---- build fidelity ----
 $cssFiles = @('tokens.css','base.css','shell.css','components.css','charts.css')
@@ -52,10 +56,10 @@ Check ($srcJs.Trim("`n")  -eq $distJs)  'concat(js/*.js) == dist JS payload'
 
 # ---- version identity ----
 Write-Host "== VERSION IDENTITY ==" -ForegroundColor Cyan
-Check ($dist.Contains("const APP_VERSION = '2.6.3';")) "APP_VERSION == 2.6.3"
-Check ($dist.Contains("const APP_RELEASE_NAME = 'Payroll Intelligence Workspace';")) "APP_RELEASE_NAME updated"
-Check ($dist.Contains('<title>TAM Intelligence OS v2.6.3</title>')) "<title> updated to v2.6.3"
-Check ($dist.Contains("{v:'2.6.3 ")) "Release Notes has a 2.6.3 entry"
+Check ($dist.Contains("const APP_VERSION = '2.6.3a';")) "APP_VERSION == 2.6.3a"
+Check ($dist.Contains("const APP_RELEASE_NAME = 'Payroll Workspace Hotfix';")) "APP_RELEASE_NAME updated"
+Check ($dist.Contains('<title>TAM Intelligence OS v2.6.3a</title>')) "<title> updated to v2.6.3a"
+Check ($dist.Contains("{v:'2.6.3a ")) "Release Notes has a 2.6.3a entry"
 
 # ---- SCHEMA + storage keys + migration flags unchanged ----
 $mDist = [regex]::Match($dist,'const SCHEMA_VERSION = (\d+);')

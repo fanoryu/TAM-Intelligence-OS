@@ -126,8 +126,8 @@ function renderPayrollWorkspace(main){
   });
   const aa=document.getElementById('actApprove'); if(aa) aa.addEventListener('click', async ()=>{
     const ids=selIds(); if(!ids.length){ showWarning('Select one or more rows first.'); return; }
-    if(!confirmAction(`Approve ${ids.length} selected row(s)? Rows with blockers (missing salary/contract) are skipped.`)) return;
-    const n=await bulkPayrollStatus(monthKey, ids, 'Ready'); showSuccess(n+' row(s) Approved'+(n<ids.length?` (${ids.length-n} skipped)`:'')+'.'); renderPayrollWorkspace(main);
+    if(!confirmAction(`Approve ${ids.length} selected row(s)? Approved payroll can then be posted to finance.`)) return;
+    const n=await bulkPayrollStatus(monthKey, ids, 'Ready'); showSuccess(n+' row(s) approved.'); renderPayrollWorkspace(main);
   });
   const ap=document.getElementById('actPost'); if(ap) ap.addEventListener('click', ()=>openCommitPayrollModal(monthKey, main));
 

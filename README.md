@@ -2,18 +2,18 @@
 
 Integrated Management Intelligence for **PT Total Asset Manajemen**.
 
-Current release: **v2.6.3 — Payroll Intelligence Workspace**
+Current release: **v2.6.3a — Payroll Workspace Hotfix**
 (lineage: **v2.6.0** split the stable `tam-intelligence-os-v2.5.2.html` into a modular
-source tree; **v2.6.1** fixed search-box focus with incremental rendering; **v2.6.2**
-decomposed the largest modules into a feature-folder tree and initialized Git; **v2.6.3**
-rebuilt Payroll as an operational workspace — Base Salary + Approved Overtime only).
+source tree; **v2.6.1** fixed search-box focus; **v2.6.2** decomposed the largest modules
+and initialized Git; **v2.6.3** rebuilt Payroll as an operational workspace; **v2.6.3a**
+fixed Approve→Post lifecycle and added Actions-menu auto-flip).
 
 Two supported outputs:
 
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` + `js/` (43 modules in `core/ ui/ finance/ people/ import/ analytics/`) loaded as ordered **classic scripts** (shared global scope, no ES modules) | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.3.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.3a.html` |
 
 ---
 
@@ -38,7 +38,7 @@ any v18+ works). It has no dependencies — plain `fs`/`path`, nothing to `npm i
 Node is used **only** for the tooling, never to run the app itself. The PowerShell scripts
 are kept as an **optional fallback** for machines without Node.
 
-Regenerate `dist/tam-intelligence-os-v2.6.3.html` from the modular source:
+Regenerate `dist/tam-intelligence-os-v2.6.3a.html` from the modular source:
 
 ```bash
 node tools/build-single-file.js
@@ -69,7 +69,7 @@ Optional fallback (no Node.js):
 powershell -ExecutionPolicy Bypass -File tools/verify-build.ps1
 ```
 
-The verifier (76 checks) fails the build if:
+The verifier (82 checks) fails the build if:
 
 - **CSS drifts from v2.5.2** (styles are unchanged — CSS must stay byte-for-byte identical),
 - the dist inlined payloads do not equal the concatenated modular source (build fidelity),
@@ -86,6 +86,10 @@ The verifier (76 checks) fails the build if:
 
 ## What each recent release changed (and did not)
 
+- **v2.6.3a — Payroll Workspace Hotfix.** Approve Selected now moves rows Review→Approved
+  (approval is a sign-off; data validation moved to Post to Finance, which skips/reports
+  blocked rows). Actions dropdowns auto-flip upward when there's no room below. UI/action-flow
+  only — no calculation-engine, schema, or storage change.
 - **v2.6.3 — Payroll Intelligence Workspace.** Rebuilt Payroll as an operational workspace:
   current-period banner + switcher, KPI cards, read-only worksheet, Draft→Review→Approved→
   Posted→Executed lifecycle (display mapping over unchanged stored statuses; Executed derived

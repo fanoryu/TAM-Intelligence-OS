@@ -169,15 +169,20 @@ async function setPayrollStatus(id, status){
   const pp = payrollPlanById(id); if(!pp) return;
   if(isPayrollLocked(pp.monthKey)){ showWarning('This payroll period is locked — unlock it to change status.'); return; }
   if(pp.status==='Committed' && status!=='Committed'){ showWarning('Committed payroll cannot change status here — use the adjustment workflow.'); return; }
-  if(status==='Ready'){ const b=payrollCommitBlockers(pp); if(b.length){ showWarning('Cannot mark Ready: '+b.join(', ')+'.'); return; } }
+  // v2.6.3a — Approve is a sign-off and is NOT gated by commit-blockers; validation
+  // happens at Post (commitReadyPayroll re-checks and skips blocked rows). This keeps
+  // the Review → Approved → Posted lifecycle moving.
   pp.status = status; pp.updatedAt = new Date().toISOString();
   (pp.history=pp.history||[]).push({event:status==='Reviewed'?'reviewed':status==='Ready'?'marked-ready':status==='Cancelled'?'cancelled':'edited', ts:pp.updatedAt, note:'Status → '+status});
   await persistPayrollPlans();
 }
 async function bulkPayrollStatus(monthKey, ids, status){
   if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — unlock it to make changes.'); return 0; }
+  // v2.6.3a — bulk Approve/Review is a sign-off; it is NOT gated by commit-blockers.
+  // Only Committed rows are skipped. Post (commitReadyPayroll) validates before creating
+  // finance transactions, so blocked rows can be Approved but will not post.
   let done=0;
-  for(const id of ids){ const pp=payrollPlanById(id); if(!pp||pp.status==='Committed') continue; if(status==='Ready' && payrollCommitBlockers(pp).length) continue; pp.status=status; pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:status.toLowerCase(), ts:pp.updatedAt, note:'Bulk → '+status}); done++; }
+  for(const id of ids){ const pp=payrollPlanById(id); if(!pp||pp.status==='Committed') continue; pp.status=status; pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:status.toLowerCase(), ts:pp.updatedAt, note:'Bulk → '+status}); done++; }
   await persistPayrollPlans(); return done;
 }
 

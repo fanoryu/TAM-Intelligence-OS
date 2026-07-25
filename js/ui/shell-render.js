@@ -1,6 +1,23 @@
 /* ============================================================
    RENDER — app shell
    ============================================================ */
+/* v2.6.3a — shared auto-flip for Actions dropdowns (finance + HR menus).
+   Opens the menu upward when there isn't enough room below the toggle within
+   the viewport / nearest scroll container, so items are never hidden. Call it
+   AFTER the menu is made visible (it measures the rendered height). */
+function positionActionsMenu(btn, menu){
+  if(!btn || !menu) return;
+  menu.classList.remove('up');
+  const bRect = btn.getBoundingClientRect();
+  const menuH = menu.offsetHeight || 0;
+  const scroller = btn.closest('.table-wrap');
+  const viewBottom = window.innerHeight || document.documentElement.clientHeight;
+  const bottomLimit = scroller ? Math.min(scroller.getBoundingClientRect().bottom, viewBottom) : viewBottom;
+  const topLimit = scroller ? Math.max(scroller.getBoundingClientRect().top, 0) : 0;
+  const spaceBelow = bottomLimit - bRect.bottom;
+  const spaceAbove = bRect.top - topLimit;
+  if(spaceBelow < menuH + 8 && spaceAbove > spaceBelow) menu.classList.add('up');
+}
 const NAV_GROUPS = [
   {id:'executive', label:'Executive', items:[
     {id:'execDashboard', label:'Executive Dashboard', ic:'◆'},

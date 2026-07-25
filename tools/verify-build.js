@@ -20,7 +20,7 @@ const read = (p) => fs.readFileSync(p, 'utf8');
 const trimLF = (s) => s.replace(/^\n+/, '').replace(/\n+$/, '');
 
 const orig = read(path.join(root, 'tam-intelligence-os-v2.5.2.html'));
-const dist = read(path.join(root, 'dist', 'tam-intelligence-os-v2.6.3.html'));
+const dist = read(path.join(root, 'dist', 'tam-intelligence-os-v2.6.3a.html'));
 
 let passes = 0; const fails = [];
 const check = (cond, msg) => { if (cond) { passes++; console.log('  [PASS] ' + msg); } else { fails.push(msg); console.log('  [FAIL] ' + msg); } };
@@ -29,8 +29,11 @@ function extractMainScript(h){ const i=h.indexOf('const APP_VERSION'); if(i<0) r
 
 const distCss = extractStyle(dist), origCss = extractStyle(orig), distJs = extractMainScript(dist);
 
-console.log('== CSS UNCHANGED vs v2.5.2 ==');
-check(distCss === origCss, 'dist CSS == v2.5.2 CSS byte-for-byte (styles untouched since v2.5.2)');
+console.log('== CSS vs v2.5.2 (only the v2.6.3a auto-flip rule added) ==');
+const cssAnchor = '.actions-dropdown{position:absolute;right:0;top:calc(100% + 4px);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:20;min-width:170px;box-shadow:0 8px 28px rgba(0,0,0,.45);}';
+const cssAdded = cssAnchor + "\n/* v2.6.3a — opens upward when there isn't enough room below the row (auto-flip). */\n.actions-dropdown.up{top:auto;bottom:calc(100% + 4px);}";
+const expectedCss = origCss.split(cssAnchor).join(cssAdded);
+check(distCss === expectedCss, 'dist CSS == v2.5.2 CSS + ONLY the v2.6.3a auto-flip rule (no other style change)');
 
 const cssFiles = ['tokens.css','base.css','shell.css','components.css','charts.css'];
 const jsFiles = require('./module-order.js');
@@ -41,11 +44,11 @@ check(trimLF(srcCss) === distCss, 'concat(css/*.css) == dist CSS payload');
 check(trimLF(srcJs) === distJs, 'concat(js/*.js) == dist JS payload');
 
 console.log('== VERSION IDENTITY ==');
-check(dist.includes("const APP_VERSION = '2.6.3';"), 'APP_VERSION == 2.6.3');
-check(dist.includes("const APP_RELEASE_NAME = 'Payroll Intelligence Workspace';"), 'APP_RELEASE_NAME updated');
-check(dist.includes('<title>TAM Intelligence OS v2.6.3</title>'), '<title> updated to v2.6.3');
-check(dist.includes("{v:'2.6.3 "), 'Release Notes has a 2.6.3 entry');
-check(dist.includes("{v:'2.6.2 ") && dist.includes("{v:'2.6.1 "), 'Release Notes still has 2.6.2 and 2.6.1 entries (history preserved)');
+check(dist.includes("const APP_VERSION = '2.6.3a';"), 'APP_VERSION == 2.6.3a');
+check(dist.includes("const APP_RELEASE_NAME = 'Payroll Workspace Hotfix';"), 'APP_RELEASE_NAME updated');
+check(dist.includes('<title>TAM Intelligence OS v2.6.3a</title>'), '<title> updated to v2.6.3a');
+check(dist.includes("{v:'2.6.3a "), 'Release Notes has a 2.6.3a entry');
+check(dist.includes("{v:'2.6.3 ") && dist.includes("{v:'2.6.2 ") && dist.includes("{v:'2.6.1 "), 'Release Notes still has 2.6.3/2.6.2/2.6.1 entries (history preserved)');
 
 console.log('== DATA-SAFETY INVARIANTS ==');
 const mDist = dist.match(/const SCHEMA_VERSION = (\d+);/);
@@ -80,6 +83,17 @@ const oldHandlers = [
 oldHandlers.forEach((h)=>check(!dist.includes(h), 'old full-render search handler removed: '+h.substring(0,24)+'...'));
 ['id="empRows"','id="ctRows"','id="otRows"','id="txnRows"','id="pwRows"','id="txnCount"']
   .forEach((id)=>check(dist.includes(id), 'incremental container present: '+id));
+
+console.log('== PAYROLL WORKSPACE HOTFIX (v2.6.3a) ==');
+// Bug 1: Approve no longer gated by commit-blockers in the lifecycle helpers.
+check(!dist.includes("if(status==='Ready' && payrollCommitBlockers(pp).length) continue;"), 'bulk Approve no longer skips on commit-blockers');
+check(!dist.includes("if(status==='Ready'){ const b=payrollCommitBlockers(pp); if(b.length){"), 'single Approve no longer gated on commit-blockers');
+// commit still validates
+check(dist.includes('if(payrollCommitBlockers(pp).length){ skipped++; continue; }'), 'Post to Finance still validates blockers (skips + reports)');
+// Bug 2: dropdown auto-flip
+check(dist.includes('function positionActionsMenu('), 'positionActionsMenu (auto-flip) defined');
+check(dist.includes('.actions-dropdown.up{'), 'CSS .actions-dropdown.up (upward) present');
+check((dist.match(/positionActionsMenu\(btn, menu\)/g)||[]).length >= 2, 'auto-flip wired into HR + finance action menus');
 
 console.log('== PAYROLL INTELLIGENCE WORKSPACE (v2.6.3) ==');
 ['function payrollStage(','function payrollStagePill(','function payrollStageCounts(','function payrollSummary(','function payrollHealth(','function isPayrollLocked(','function setPayrollLock(','function renderPayrollWorkspace(']

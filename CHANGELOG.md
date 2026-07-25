@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.6.3a — Payroll Workspace Hotfix
+
+**Type:** UI / action-flow hotfix. **No calculation-engine, schema, or storage change.**
+
+### Fixed
+- **Approve Selected now moves rows from Review to Approved.** Approval is a sign-off and
+  is no longer gated by commit-blockers in the lifecycle helpers (`setPayrollStatus`,
+  `bulkPayrollStatus`). Data validation (missing salary, invalid/duplicate contract, invalid
+  schedule) now runs **only at Post to Finance** (`commitReadyPayroll`), where blocked rows
+  are skipped and reported. So **Post to Finance succeeds after Approve**, valid rows create
+  Planned transactions, and no duplicate payroll is created. The payroll calculation engine
+  (generation, `computePayrollPlanned`, overtime math) is untouched.
+- **Actions dropdown auto-flips upward** when there isn't enough room below the row, so menu
+  items are never hidden and no scrolling is required. A shared `positionActionsMenu()` helper
+  measures available space against the viewport / nearest scroll container and adds
+  `.actions-dropdown.up` when needed. Wired into both the HR menus (Employees, Contracts,
+  Overtime, Payroll) and the finance menus (Transactions, Execution Center).
+
+### Validation
+- Node build + verify: **82/82 checks pass** (CSS golden master tightened to allow **only**
+  the one new `.actions-dropdown.up` rule; new hotfix assertions for the approve gate and the
+  auto-flip). Browser (dist), zero console errors: Approve moves Review→Approved (incl. a
+  zero-salary row), Post posts the valid rows and skips the blocked one, no duplicate payroll,
+  and the Actions menu flips up on bottom rows (down on top rows) on Employees and Payroll.
+
+---
+
 ## 2.6.3 — Payroll Intelligence Workspace
 
 **Type:** feature — payroll operational workspace. **No schema, storage-key, or calculation-engine change.**
