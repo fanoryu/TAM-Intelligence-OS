@@ -1,0 +1,21 @@
+# TAM Intelligence OS — version control ignores
+# The app itself needs no dependencies; Node is used only for build/verify tooling.
+
+# Node tooling
+node_modules/
+npm-debug.log*
+*.log
+
+# Build scratch (NOT the release HTML — see below)
+dist/*.tmp
+
+# Editor / OS noise
+.vscode/settings.json
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
+
+# --- Intentionally tracked ---
+# The portable single-file release IS version-controlled. dist/*.tmp above is scratch only;
+# dist/*.html must stay in the repo, so it is deliberately NOT ignored.
+!dist/*.html

@@ -1,0 +1,353 @@
+/* ---- SETTINGS / ABOUT / RELEASE NOTES ---- */
+function renderSettings(main){
+  const s = State.settings;
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Settings</h1><p class="desc">Configuration for ${escapeHtml(APP_NAME)}.</p></div></div>
+    <div class="card" style="max-width:760px;margin-bottom:14px;">
+      <h3>General</h3>
+      <form id="settingsForm">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="field"><label>Company Name</label><input class="input" name="companyName" value="${escapeHtml(s.companyName)}"></div>
+          <div class="field"><label>Product Name</label><input class="input" name="productName" value="${escapeHtml(s.productName)}"></div>
+          <div class="field"><label>Currency</label><input class="input" value="IDR — Indonesian Rupiah" disabled></div>
+          <div class="field"><label>Opening Cash Balance (Rp)</label><input class="input" name="openingCashBalance" type="number" step="any" value="${s.openingCashBalance??''}" placeholder="Leave blank if unknown"></div>
+          <div class="field"><label>Default Trend Range</label>
+            <select class="input" name="defaultTrendRange">
+              <option value="all" ${s.defaultTrendRange==='all'?'selected':''}>All Time</option>
+              <option value="year" ${s.defaultTrendRange==='year'?'selected':''}>Current Year</option>
+              <option value="last3" ${s.defaultTrendRange==='last3'?'selected':''}>Last 3 Months</option>
+              <option value="last6" ${s.defaultTrendRange==='last6'?'selected':''}>Last 6 Months</option>
+              <option value="last12" ${s.defaultTrendRange==='last12'?'selected':''}>Last 12 Months</option>
+            </select>
+          </div>
+          <div class="field"><label>Default Landing Page</label>
+            <select class="input" name="defaultLandingPage">
+              <option value="execDashboard" ${s.defaultLandingPage==='execDashboard'?'selected':''}>Executive Dashboard</option>
+              <option value="financeOverview" ${s.defaultLandingPage==='financeOverview'?'selected':''}>Finance Overview</option>
+              <option value="executioncenter" ${s.defaultLandingPage==='executioncenter'?'selected':''}>Execution Center</option>
+              <option value="transactions" ${s.defaultLandingPage==='transactions'?'selected':''}>Transactions</option>
+              <option value="trends" ${s.defaultLandingPage==='trends'?'selected':''}>Monthly Trends</option>
+            </select>
+          </div>
+          <div class="field"><label>Appearance</label>
+            <select class="input" name="appearance">
+              <option value="system" ${(s.appearance||'system')==='system'?'selected':''}>Follow System</option>
+              <option value="dark" ${s.appearance==='dark'?'selected':''}>Dark</option>
+              <option value="light" ${s.appearance==='light'?'selected':''}>Light</option>
+            </select>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <h3 style="margin-top:0;">Execution Defaults</h3>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="field"><label>Default Payment Method</label>
+            <select class="input" name="defaultPaymentMethod">${PAYMENT_METHODS.map(m=>`<option ${s.defaultPaymentMethod===m?'selected':''}>${m}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>Default Bank</label>
+            <select class="input" name="defaultBank">${BANK_ACCOUNTS.map(b=>`<option ${s.defaultBank===b?'selected':''}>${b}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>Auto-archive completed transactions</label>
+            <select class="input" name="autoArchiveCompleted"><option value="no" ${!s.autoArchiveCompleted?'selected':''}>No</option><option value="yes" ${s.autoArchiveCompleted?'selected':''}>Yes</option></select>
+          </div>
+          <div class="field"><label>Auto-complete when Actual = Planned</label>
+            <select class="input" name="autoCompleteWhenEqual"><option value="yes" ${s.autoCompleteWhenEqual?'selected':''}>Yes</option><option value="no" ${!s.autoCompleteWhenEqual?'selected':''}>No</option></select>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <h3 style="margin-top:0;">People &amp; Contracts Defaults</h3>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="field"><label>Contract Expiry Warning (days)</label><input class="input" type="number" min="1" name="contractExpiryWarningDays" value="${s.contractExpiryWarningDays??90}"></div>
+          <div class="field"><label>Default Contract Duration (months)</label><input class="input" type="number" min="1" name="defaultContractDuration" value="${s.defaultContractDuration??12}"></div>
+          <div class="field"><label>Default Payroll Generation Day</label><input class="input" type="number" min="1" max="31" name="defaultPayrollGenerationDay" value="${s.defaultPayrollGenerationDay??25}"></div>
+          <div class="field"><label>Default Payroll Category</label><select class="input" name="defaultPayrollCategory">${KNOWN_CATEGORIES.map(c=>`<option ${s.defaultPayrollCategory===c?'selected':''}>${c}</option>`).join('')}</select></div>
+          <div class="field"><label>Include inactive employees in reports</label><select class="input" name="includeInactiveInReports"><option value="no" ${!s.includeInactiveInReports?'selected':''}>No</option><option value="yes" ${s.includeInactiveInReports?'selected':''}>Yes</option></select></div>
+          <div class="field"><label>Auto-generate recurring expenses</label><select class="input" name="autoGenerateRecurring"><option value="yes" ${s.autoGenerateRecurring?'selected':''}>Yes</option><option value="no" ${!s.autoGenerateRecurring?'selected':''}>No</option></select></div>
+          <div class="field"><label>Auto-calculate contract progress</label><select class="input" name="autoCalcContractProgress"><option value="yes" ${s.autoCalcContractProgress!==false?'selected':''}>Yes</option><option value="no" ${s.autoCalcContractProgress===false?'selected':''}>No</option></select></div>
+        </div>
+        <div class="divider"></div>
+        <h3 style="margin-top:0;">Work Schedule &amp; Overtime</h3>
+        <p class="hint" style="margin:-6px 0 12px;">Company defaults used only when an employee or contract has no schedule of its own. ${escapeHtml(s.overtimeMethodLabel||'TAM Internal Overtime Calculation Method')}.</p>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="field"><label>Company Default Working Hours / Day</label><input class="input" type="number" step="0.5" min="1" name="companyWorkHoursPerDay" value="${s.companyWorkHoursPerDay??8}"></div>
+          <div class="field"><label>Company Default Working Days / Week</label><input class="input" type="number" step="1" min="1" name="companyWorkDaysPerWeek" value="${s.companyWorkDaysPerWeek??5}"></div>
+          <div class="field"><label>Company Default Weeks / Month</label><input class="input" type="number" step="1" min="1" name="companyWeeksPerMonth" value="${s.companyWeeksPerMonth??4}"></div>
+          <div class="field"><label>Overtime Final Rounding</label><select class="input" name="overtimeRounding">${Object.entries(OVERTIME_ROUNDING).map(([k,v])=>`<option value="${k}" ${s.overtimeRounding===k?'selected':''}>${v.label}</option>`).join('')}</select></div>
+          <div class="field" style="grid-column:span 2;"><label>Overtime Calculation Method Label</label><input class="input" name="overtimeMethodLabel" value="${escapeHtml(s.overtimeMethodLabel||'TAM Internal Overtime Calculation Method')}"></div>
+          <div class="field"><label>Require Overtime Approval Before Payroll</label><select class="input" name="requireOvertimeApproval"><option value="yes" ${s.requireOvertimeApproval?'selected':''}>Yes</option><option value="no" ${!s.requireOvertimeApproval?'selected':''}>No</option></select></div>
+          <div class="field"><label>High Overtime Warning (hours / month)</label><input class="input" type="number" min="0" name="highOvertimeWarningHours" value="${s.highOvertimeWarningHours??40}"></div>
+          <div class="field"><label>Allow Payroll Commit with Unapproved Overtime</label><select class="input" name="allowPayrollCommitWithUnapprovedOvertime"><option value="no" ${!s.allowPayrollCommitWithUnapprovedOvertime?'selected':''}>No</option><option value="yes" ${s.allowPayrollCommitWithUnapprovedOvertime?'selected':''}>Yes</option></select></div>
+        </div>
+        <div class="modal-actions" style="justify-content:flex-start;margin-top:16px;">
+          <button type="submit" class="btn btn-accent">Save Settings</button>
+        </div>
+      </form>
+    </div>
+    <div class="card" style="max-width:760px;margin-bottom:14px;border-color:var(--accent);">
+      <h3>Data Reset &amp; Onboarding</h3>
+      <p class="hint" style="margin-bottom:12px;">Manage the data in this browser. Start Fresh downloads a full backup and requires typed confirmation before clearing — it never erases silently.</p>
+      <div class="small-btn-row" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn btn-accent" id="drExportBackup">Export Complete Backup</button>
+        <button class="btn btn-danger" id="drStartFresh">Start Fresh…</button>
+        <button class="btn" id="drDemo">Load Demo Data (DEMO)</button>
+        <button class="btn" id="drImportBackup">Import Existing Backup</button>
+        <button class="btn" id="drImportExcel">Import Legacy Excel</button>
+        <button class="btn" id="drShowOnb">Show Onboarding Checklist</button>
+      </div>
+    </div>
+    <div class="card" style="max-width:760px;margin-bottom:14px;">
+      <h3>Storage Status</h3>
+      <p class="dim" style="font-size:13px;line-height:2;">
+        Storage Mode: <b>${escapeHtml(StorageAdapter.modeLabel())}</b><br>
+        Persistence Status: <b style="color:${StorageAdapter.status==='active'?'var(--green)':StorageAdapter.status==='error'?'var(--brick)':'var(--gold, #C9A15C)'};">${escapeHtml(StorageAdapter.statusLabel())}</b>
+      </p>
+      ${StorageAdapter.lastError?`<p class="hint">Last storage error: ${escapeHtml(StorageAdapter.lastError)}</p>`:''}
+      <p class="hint">${StorageAdapter.mode==='claude'
+        ? 'Data is persisted by the Claude Artifact environment.'
+        : 'Data is persisted in this browser’s localStorage for this file location. Use Data Portability below to move data to another browser or device.'}</p>
+    </div>
+    <div class="card" style="max-width:760px;margin-bottom:14px;">
+      <h3>System Diagnostics</h3>
+      <div id="diagnosticsBody">${buildDiagnosticsHTML()}</div>
+      <div class="small-btn-row" style="margin-top:12px;">
+        <button class="btn btn-accent" id="runIntegrity">Run Integrity Check</button>
+        <button class="btn" id="openDedupSettings">Employee Duplicate Review${(function(){const g=findEmployeeDuplicateGroups();return g.length?` (${g.length})`:'';})()}</button>
+      </div>
+      <div id="integrityBody" style="margin-top:12px;">${State.lastIntegrity?buildIntegrityHTML(State.lastIntegrity):''}</div>
+    </div>
+    <div class="card" style="max-width:760px;margin-bottom:14px;">
+      <h3>Data Portability</h3>
+      <p class="hint" style="margin-bottom:12px;">Export or restore your complete dataset — all transactions, settings, and backups — as a single JSON file. Use this to move between browsers, devices, or between the Claude Artifact and the standalone file. A safety backup of current data is created automatically before every restore.</p>
+      <div class="small-btn-row">
+        <button class="btn btn-accent" id="exportComplete">Export Complete Backup (JSON)</button>
+        <button class="btn" id="importCompleteBtn">Import Complete Backup…</button>
+        <input type="file" id="importCompleteFile" accept=".json,application/json" style="display:none;">
+      </div>
+      <div id="portabilityPreview" style="margin-top:12px;"></div>
+    </div>
+    <div class="card" style="max-width:760px;margin-bottom:14px;">
+      <h3>Data Export</h3>
+      <div class="small-btn-row" style="flex-wrap:wrap;gap:6px;">
+        <button class="btn" id="exportAllTxns">Export All Transactions (CSV)</button>
+        <button class="btn" id="exportSettingsJson">Export Settings (JSON)</button>
+        <button class="btn" id="exportEmpCsv">Export Employees (CSV)</button>
+        <button class="btn" id="exportCtCsv">Export Contracts (CSV)</button>
+      </div>
+    </div>
+    <div class="card" style="max-width:760px;margin-bottom:14px;">
+      <h3>Backup Management</h3>
+      <div id="settingsBackupPanel"></div>
+    </div>
+    <div class="card" style="max-width:760px;border-color:var(--brick);">
+      <h3 style="color:var(--brick);">Reset Application Data</h3>
+      <p class="hint">Permanently clears all transactions, backups, and settings stored in this browser. This cannot be undone.</p>
+      <button class="btn btn-danger" id="resetAppData">Reset All Data</button>
+    </div>
+  `;
+  document.getElementById('settingsForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    State.settings.companyName = (fd.get('companyName')||'').trim() || COMPANY_NAME_DEFAULT;
+    State.settings.productName = (fd.get('productName')||'').trim() || APP_NAME;
+    const ocb = fd.get('openingCashBalance');
+    State.settings.openingCashBalance = (ocb===''||ocb===null) ? null : Number(ocb);
+    State.settings.defaultTrendRange = fd.get('defaultTrendRange');
+    State.settings.defaultLandingPage = fd.get('defaultLandingPage');
+    State.settings.appearance = ['system','dark','light'].includes(fd.get('appearance')) ? fd.get('appearance') : 'system';
+    State.settings.defaultPaymentMethod = fd.get('defaultPaymentMethod');
+    State.settings.defaultBank = fd.get('defaultBank');
+    State.settings.autoArchiveCompleted = fd.get('autoArchiveCompleted')==='yes';
+    State.settings.autoCompleteWhenEqual = fd.get('autoCompleteWhenEqual')==='yes';
+    State.settings.contractExpiryWarningDays = Number(fd.get('contractExpiryWarningDays'))||90;
+    State.settings.defaultContractDuration = Number(fd.get('defaultContractDuration'))||12;
+    State.settings.defaultPayrollGenerationDay = Number(fd.get('defaultPayrollGenerationDay'))||25;
+    State.settings.defaultPayrollCategory = fd.get('defaultPayrollCategory')||'Gaji';
+    State.settings.includeInactiveInReports = fd.get('includeInactiveInReports')==='yes';
+    State.settings.autoGenerateRecurring = fd.get('autoGenerateRecurring')==='yes';
+    State.settings.autoCalcContractProgress = fd.get('autoCalcContractProgress')==='yes';
+    State.settings.companyWorkHoursPerDay = Number(fd.get('companyWorkHoursPerDay'))||8;
+    State.settings.companyWorkDaysPerWeek = Number(fd.get('companyWorkDaysPerWeek'))||5;
+    State.settings.companyWeeksPerMonth = Number(fd.get('companyWeeksPerMonth'))||4;
+    State.settings.overtimeRounding = OVERTIME_ROUNDING[fd.get('overtimeRounding')]?fd.get('overtimeRounding'):'rupiah';
+    State.settings.overtimeMethodLabel = (fd.get('overtimeMethodLabel')||'').trim()||'TAM Internal Overtime Calculation Method';
+    State.settings.requireOvertimeApproval = fd.get('requireOvertimeApproval')==='yes';
+    State.settings.highOvertimeWarningHours = Number(fd.get('highOvertimeWarningHours'))||0;
+    State.settings.allowPayrollCommitWithUnapprovedOvertime = fd.get('allowPayrollCommitWithUnapprovedOvertime')==='yes';
+    await saveSettings();
+    applyTheme();               // reflect any Appearance change immediately (charts redraw on render)
+    toast('Settings saved.');
+    render();
+  });
+  document.getElementById('drExportBackup').addEventListener('click', ()=>{ downloadBlob(JSON.stringify(buildCompleteBackup(),null,2), `${FILE_BASE}-complete-backup-${new Date().toISOString().slice(0,10)}.json`, 'application/json'); showSuccess('Complete backup downloaded.'); });
+  document.getElementById('drStartFresh').addEventListener('click', startFresh);
+  document.getElementById('drDemo').addEventListener('click', loadDemoData);
+  document.getElementById('drImportBackup').addEventListener('click', ()=>document.getElementById('importCompleteFile').click());
+  document.getElementById('drImportExcel').addEventListener('click', ()=>{ State.view='add'; render(); });
+  document.getElementById('drShowOnb').addEventListener('click', async ()=>{ State.settings.onboardingDismissed=false; await saveSettings(); State.view='execDashboard'; render(); });
+  document.getElementById('exportComplete').addEventListener('click', ()=>{
+    downloadBlob(JSON.stringify(buildCompleteBackup(), null, 2), `${FILE_BASE}-complete-backup-${new Date().toISOString().slice(0,10)}.json`, 'application/json');
+    toast('Complete backup downloaded.');
+  });
+  document.getElementById('importCompleteBtn').addEventListener('click', ()=>document.getElementById('importCompleteFile').click());
+  document.getElementById('importCompleteFile').addEventListener('change', async e=>{
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if(!file) return;
+    const box = document.getElementById('portabilityPreview');
+    let data = null;
+    try{ data = JSON.parse(await file.text()); }
+    catch(err){
+      box.innerHTML = `<div class="insight-item warn" style="display:block;">Cannot read <b>${escapeHtml(file.name)}</b> — not valid JSON: ${escapeHtml(err.message)}</div>`;
+      toast('Import failed: file is not valid JSON.', 6000);
+      return;
+    }
+    const v = validateCompleteBackup(data);
+    if(!v.ok){
+      box.innerHTML = `<div class="insight-item warn" style="display:block;">
+        <b>Validation failed — nothing was restored.</b><br>
+        ${v.errors.map(er=>escapeHtml(er)).join('<br>')}
+      </div>`;
+      toast('Import failed validation. No data was changed.', 6000);
+      return;
+    }
+    const i = v.info;
+    box.innerHTML = `
+      <div class="insight-item" style="display:block;">
+        <b>Ready to restore from ${escapeHtml(file.name)}</b><br><br>
+        Transactions: <b>${i.txnCount}</b> (across ${i.monthCount} month${i.monthCount===1?'':'s'})<br>
+        Settings: <b>${i.hasSettings?('included — company "'+escapeHtml(i.companyName)+'"'):'not included (current settings kept)'}</b><br>
+        Backups: <b>${i.backupCount}</b><br>
+        Schema Version: <b>${escapeHtml(i.schemaVersion)}</b><br>
+        Source: <b>${escapeHtml(i.sourceApp)} v${escapeHtml(i.sourceVersion)}</b>${i.exportedAt?` — exported ${escapeHtml(new Date(i.exportedAt).toLocaleString('id-ID'))}`:''}<br><br>
+        Restoring replaces ALL current transactions${i.hasSettings?', settings':''} and backups. A safety backup of current data will be created first.
+      </div>
+      <div class="small-btn-row" style="margin-top:10px;">
+        <button class="btn btn-danger" id="confirmRestore">Restore This Backup</button>
+        <button class="btn" id="cancelRestore">Cancel</button>
+      </div>`;
+    document.getElementById('cancelRestore').addEventListener('click', ()=>{ box.innerHTML=''; });
+    document.getElementById('confirmRestore').addEventListener('click', async ()=>{
+      if(!confirm(`Replace ALL current data with the contents of ${file.name}?\n\n${i.txnCount} transactions will be restored. A safety backup of your current data will be created first.`)) return;
+      await restoreCompleteBackup(data);
+      toast('Complete backup restored. A pre-restore safety backup was saved.', 6000);
+      render();
+    });
+  });
+  document.getElementById('exportAllTxns').addEventListener('click', ()=>exportCsv(State.txns));
+  document.getElementById('exportSettingsJson').addEventListener('click', ()=>downloadBlob(JSON.stringify(State.settings,null,2), `${FILE_BASE}-settings.json`, 'application/json'));
+  document.getElementById('exportEmpCsv').addEventListener('click', exportEmployeesCsv);
+  document.getElementById('exportCtCsv').addEventListener('click', exportContractsCsv);
+  document.getElementById('resetAppData').addEventListener('click', async ()=>{
+    if(!confirm('This will permanently delete ALL transactions, backups, and settings stored in this browser. This cannot be undone. Continue?')) return;
+    if(!confirm('Are you absolutely sure? This is your last chance to cancel.')) return;
+    try{
+      await StorageAdapter.set('tam_txns_v1', JSON.stringify([]));
+      await StorageAdapter.set('tam_backups_v1', JSON.stringify([]));
+      await StorageAdapter.set('tam_settings_v1', JSON.stringify(DEFAULT_SETTINGS));
+      for(const k of Object.values(HR_KEYS)) await StorageAdapter.set(k, JSON.stringify([]));
+    }catch(e){ console.error(e); }
+    State.txns=[]; State.backups=[]; State.settings={...DEFAULT_SETTINGS}; State.selectedMonth=null;
+    State.employees=[]; State.contracts=[]; State.payrollPlans=[]; State.recurringExpenses=[]; State.monthlyPlans=[]; State.overtimeRecords=[]; State.importBatches=[]; State.payrollAdjustments=[]; State.employeeMerges=[];
+    toast('All application data has been reset.');
+    State.view='execDashboard';
+    render();
+  });
+  renderBackupPanel(document.getElementById('settingsBackupPanel'), main);
+  const riBtn = document.getElementById('runIntegrity');
+  if(riBtn) riBtn.addEventListener('click', ()=>{
+    const res = runIntegrityCheck();
+    const body = document.getElementById('integrityBody');
+    if(body) body.innerHTML = buildIntegrityHTML(res);
+    const diag = document.getElementById('diagnosticsBody');
+    if(diag) diag.innerHTML = buildDiagnosticsHTML(); // refresh integrity-status line
+    const label = res.counts.critical?`${res.counts.critical} critical`:res.counts.warning?`${res.counts.warning} warning(s)`:'healthy';
+    showSuccess('Integrity check complete — '+label+'.');
+  });
+  const odBtn = document.getElementById('openDedupSettings');
+  if(odBtn) odBtn.addEventListener('click', ()=>{ State.view='employeeDedup'; render(); });
+}
+// System Diagnostics summary block (Phase 14).
+function buildDiagnosticsHTML(){
+  const li = State.lastIntegrity;
+  const integrityStatus = li ? (li.counts.critical?`<span style="color:var(--brick);">${escapeHtml(li.status)}</span>`:li.counts.warning?`<span style="color:var(--accent);">${escapeHtml(li.status)}</span>`:`<span style="color:var(--green);">${escapeHtml(li.status)}</span>`) : '<span class="faint">not yet run</span>';
+  const rows = [
+    ['App Version', escapeHtml(APP_VERSION+' — '+APP_RELEASE_NAME)],
+    ['Schema Version', String(SCHEMA_VERSION)],
+    ['Storage Mode', escapeHtml(StorageAdapter.modeLabel())],
+    ['Persistence Status', escapeHtml(StorageAdapter.statusLabel())],
+    ['Transactions', String(State.txns.length)],
+    ['Employees', String(State.employees.length)],
+    ['Unique Employee Names', (function(){ return String(new Set(State.employees.map(e=>normalizeEmployeeName(e.fullName)).filter(Boolean)).size); })()],
+    ['Duplicate Employee Groups', (function(){ const g=findEmployeeDuplicateGroups(); return g.length?`<span style="color:var(--brick);">${g.length}</span>`:'0'; })()],
+    ['Duplicate Employee Records', (function(){ const g=findEmployeeDuplicateGroups(); const n=g.reduce((a,x)=>a+x.employees.length,0); return n?`<span style="color:var(--brick);">${n}</span>`:'0'; })()],
+    ['Last Employee Merge', (function(){ const m=(State.employeeMerges||[])[0]; return m?escapeHtml(new Date(m.ts).toLocaleString('id-ID'))+' → '+escapeHtml(m.canonicalCode||m.canonicalEmployeeId):'<span class="faint">never</span>'; })()],
+    ['Last Smart Import Unique Employees', (function(){ const s=State.lastSmartImportUnique; return s?`${s.uniqueEmployees} of ${s.rows} row(s) (${s.newEmployees} new · ${s.matchedEmployees} matched)`:'<span class="faint">—</span>'; })()],
+    ['Contracts', String(State.contracts.length)],
+    ['Payroll Plans', String(State.payrollPlans.length)],
+    ['Monthly Plans', String(State.monthlyPlans.length)],
+    ['Recurring Expenses', String(State.recurringExpenses.length)],
+    ['Overtime Records', String(State.overtimeRecords.length)],
+    ['Import Batches', String(State.importBatches.length)+(State.importBatches.some(b=>!b.undone)?' ('+State.importBatches.filter(b=>!b.undone).length+' active)':'')],
+    ['Payroll Adjustments', String(State.payrollAdjustments.length)],
+    ['Backups', String(State.backups.length)],
+    ['Last Successful Save', State.lastSaveAt?escapeHtml(new Date(State.lastSaveAt).toLocaleString('id-ID')):'<span class="faint">— (no write yet this session)</span>'],
+    ['Last Migration', State.settings.lastMigrationAt?escapeHtml(new Date(State.settings.lastMigrationAt).toLocaleString('id-ID')):'<span class="faint">—</span>'],
+    ['Last Data Reset', (()=>{ const r=lastResetAudit(); return r?escapeHtml(new Date(r.ts).toLocaleString('id-ID')):'<span class="faint">never</span>'; })()],
+    ['Data Integrity', integrityStatus],
+  ];
+  return `<div class="table-wrap"><table><tbody>${rows.map(([k,v])=>`<tr><td class="dim" style="width:210px;">${k}</td><td><b>${v}</b></td></tr>`).join('')}</tbody></table></div>`;
+}
+// Integrity findings block (Phase 14) — read-only, never deletes anything.
+function buildIntegrityHTML(res){
+  if(!res) return '';
+  const head = `<p class="hint" style="margin-bottom:8px;">Ran ${escapeHtml(new Date(res.ranAt).toLocaleString('id-ID'))} · ${res.counts.critical} critical · ${res.counts.warning} warning · ${res.counts.info} info. Findings are reported only — nothing is deleted or changed automatically.</p>`;
+  if(!res.findings.length) return head + `<div class="insight-item good" style="display:block;">No integrity issues detected. All records have valid IDs, links, dates, and amounts.</div>`;
+  return head + `<div class="insight-list">${res.findings.map(f=>`<div class="insight-item ${f.severity==='critical'?'warn':f.severity==='warning'?'warn':''}">${severityPill(f.severity)} <span style="margin-left:6px;">${escapeHtml(f.message)}</span></div>`).join('')}</div>`;
+}
+function renderAbout(main){
+  main.innerHTML = `
+    <div class="page-head"><div><h1>About</h1></div></div>
+    <div class="card" style="max-width:640px;">
+      <h3 style="margin-top:0;">${escapeHtml(APP_NAME)}</h3>
+      <p class="dim">Version ${APP_VERSION} — ${escapeHtml(APP_RELEASE_NAME)}</p>
+      <p class="dim">${escapeHtml(APP_TAGLINE)}</p>
+      <p class="dim">${escapeHtml(State.settings.companyName||COMPANY_NAME_DEFAULT)}</p>
+      <div class="divider"></div>
+      <p style="font-size:13px;line-height:1.7;">${escapeHtml(APP_POSITIONING)}</p>
+      <div class="divider"></div>
+      <p class="dim" style="font-size:13px;line-height:2;">
+        Storage Mode: <b>${escapeHtml(StorageAdapter.modeLabel())}</b><br>
+        Persistence Status: <b style="color:${StorageAdapter.status==='active'?'var(--green)':StorageAdapter.status==='error'?'var(--brick)':'var(--gold, #C9A15C)'};">${escapeHtml(StorageAdapter.statusLabel())}</b>
+      </p>
+      <div class="insight-item" style="margin-top:14px;display:block;">Data is stored privately on this device (${escapeHtml(StorageAdapter.modeLabel())}). Use Settings → Data Portability to move your complete dataset to another browser or device. Cloud synchronization and multi-user access are not yet enabled.</div>
+    </div>
+  `;
+}
+function renderReleaseNotes(main){
+  const notes = [
+    {v:'2.6.2 — Developer Experience & Module Decomposition', items:['Initialized a Git repository with a practical .gitignore (the portable release HTML in dist/ stays version-controlled)','Decomposed the largest JavaScript modules into a feature-folder tree — js/{core,ui,finance,people,import,analytics} — growing from 20 to 43 focused files and cutting the average module from ~410 to ~190 lines for much easier navigation and maintenance','Node.js is the primary build/verify toolchain; a shared tools/module-order.js manifest is the single source of truth for classic-script load order, mirrored by index.html','Pure code move only: no business logic, calculation, storage key, schema version (still 6), migration flag, backup format or UI behavior changed — the decomposition is verified byte-identical to the previous concatenation, so runtime behavior is unchanged','Still classic ordered <script> tags in one shared global scope — no ES modules, no import/export, no bundler']},
+    {v:'2.6.1 — Search Focus & Incremental Rendering Fix', items:['Fixed a UX regression where typing in any search box (Employees, Contracts, Transactions, Payroll Planning, Overtime) lost keyboard focus after every keystroke, forcing a re-click before each character','Search and filter controls now update only the table body (and any filter-dependent totals) instead of rebuilding the whole page — the search input keeps focus, caret position and text selection, so typing feels like a native desktop app','Table scroll position is preserved while filtering; dropdown selections and payroll row-selection checkboxes survive incremental filtering (selection state lives in State and is re-applied)','Purely a rendering-path fix: no business logic, calculation, storage key, schema version (still 6), migration flag, backup format, import, deduplication, payroll/overtime result or export was changed; all row actions, inline edits and Actions menus are preserved']},
+    {v:'2.6.0 — Modular Frontend Architecture', items:['Phase 0 of the Modular Frontend Architecture initiative: the single-file application was physically split into ordered CSS and JavaScript source files loaded as classic scripts in the original declaration order, preserving the exact shared global scope and runtime behavior','No business logic, calculation, storage key, schema version (still 6), migration flag, backup format or UI behavior was changed — this is a controlled extraction only, verified against the v2.5.2 golden master','A portable single-file build (dist/tam-intelligence-os-v2.6.0.html) is generated from the modular source and remains behaviorally identical to previous releases, opening directly in any browser with the same external XLSX and font behavior','Smart Import, Employee Deduplication, Payroll Planning, Overtime, Monthly Plan Generator, Execution Center, reports, diagnostics, themes, charts, backup/restore and sidebar behavior are all preserved unchanged']},
+    {v:'2.5.2 — Employee Deduplication & Master Data Consolidation', items:['Fixed the core bug where importing a multi-sheet workbook created the same employee once per month (e.g. Achmad Ferdiansyah appearing under many Employee IDs). Employees are master data — one record per real person','Smart Import now builds ONE workbook-wide canonical employee index across all rows, existing Employees, existing Contracts, and existing payroll/transaction links BEFORE creating anything; every monthly row for the same person references one candidate','Shared employee-name normalization (trim, collapse spaces, remove line breaks, normalize apostrophes/hyphens and trailing punctuation, case-insensitive) — the original display name is preserved and genuinely different names are never merged on fuzzy similarity','Matching priority: existing employeeId → existing contract already linked to a person → exact normalized full name → name+bank → name+email → name+salary (supporting evidence only) → manual review. A new contract number for the same person creates a new Contract linked to the existing Employee; salary changes and contract renewals never create a new Employee','Commit uses ONE shared employee-resolution map and a per-employee contract map: each unique person is created once, each contract number is created once per person and reused across months, and payroll plans and transactions all link to the same employeeId','Re-importing the same workbook (or separate monthly workbooks) produces 0 duplicate employees, 0 duplicate contracts, 0 duplicate payroll plans and 0 duplicate transactions — stable matching plus import audit evidence','New Employee Duplicate Review tool: detects groups with the same normalized name, shows every duplicate Employee ID with its linked contracts/payroll/transactions/overtime/adjustments, proposes a canonical record (most links → most complete profile → oldest → lowest sequence), and merges only on confirmation — repointing all linked records, preserving every history entry and financial amount, with a complete automatic backup and an audit record; profile conflicts are shown side-by-side and never overwritten silently','Smart Import review now shows workbook-wide unique counts (payroll rows, unique employees, existing matched, new, possible duplicates, contracts, payroll plans, transactions) and the shared candidate + canonical Employee ID per row','Integrity Check detects duplicate normalized names, one contract number linked to multiple employees, payroll/overtime split across duplicate IDs, orphaned duplicates, conflicting bank/email within a group, and import batches that created multiple employees for one candidate — with navigation to Employee Duplicate Review (never auto-merging)','Diagnostics add unique employee-name count, duplicate groups/records, last merge, and last Smart Import unique-employee count; a new Employee Duplicate Audit report (Normalized Name, Employee IDs, Canonical Employee, Contracts, Payroll Plans, Transactions, Merge Status)','Fresh-install fix: the "Existing data detected" prompt now appears only when a real business dataset has records (transactions, employees, contracts, payroll plans, recurring expenses, monthly plans, overtime, adjustments, or import batches that created records) — empty arrays, default settings, migration flags, schema version, empty backups/audits and UI preferences no longer trigger it, and it lists only datasets with non-zero counts','Safe one-time v2.5.2 migration takes a backup, runs once, preserves all data and storage keys, and never auto-merges existing duplicates — they are only detected and surfaced for your confirmation. Smart Import, Payroll Planning, Overtime, Monthly Plan, Execution Center, themes, charts, backup/restore and sidebar behavior are all preserved']},
+    {v:'2.5.1 — Structured Payroll Column Mapping', items:['Smart Import now reads the real TAM "Rencana Penggunaan Dana" layout where each employee is a vertically-merged block in column B — employee name (main row), contract number (sub-row), and contract progress N/M (sub-row) are gathered together instead of the sub-rows being discarded, which is what previously left contracts as "Missing Information"','Sub-row gathering: parseLetterDocSheet now attaches each block\'s contract-number and progress cells to the employee item and derives structured employeeName / contractNumber / progressCurrent / progressTotal / salary fields that survive the plan⇄realisasi merge','Structured column support: parseGenericTable recognizes dedicated Indonesian & English headers — Nama / Nama Karyawan / Employee, No Kontrak / Nomor Kontrak / Contract Number, Progress / Masa Kontrak, Gaji / Salary / Nominal, Jam Kerja, Hari Kerja, Lembur — and preserves employeeName, contractNumber, contractProgress, salary, workingHoursPerDay, workingDaysPerWeek and overtimeHours through every parsing stage','Flexible contract-number parsing accepts arabic or roman month segments, 3–6 segments and "/" or "." separators (e.g. 1/AIMO-DT/1/2026, 01/TAM/01.SDM.IV/2026, 3/AIMO-DT/SPK/VI/2025); progress parsing accepts 8/12, 8 / 12, 8,5/12, "Month 8 of 12" and "8 of 12"','Progress is always converted to currentMonth + durationMonths and start is inferred from the contract number, payroll month and progress — the raw "8/12" is never stored as permanent contract state; when the contract number\'s own month/year disagrees with the progress-derived start, the row is flagged instead of guessed','Employees with no contract number and no progress (e.g. a "bulan Juni" note) are no longer blocked — a default-duration contract starting the payroll month is proposed and clearly flagged "defaults" for review','New Column Mapping page before import shows Source Header, Detected Meaning, Sample Value and Confidence with manual override for structured column tables, plus a Raw Parsed Row Preview so you can inspect exactly what was extracted from each payroll row','Full backward compatibility: the existing letter-document import, generic CSV/XLSX import, Update Existing Month, Legacy Mapping, audit batch and Undo are all preserved; no storage keys, migrations or data changed']},
+    {v:'2.5.0 — Native Payroll Operations Engine', items:['Payroll Planning is now the primary monthly payroll operations workspace — run the full cycle (Employee → Contract → Schedule → Overtime → Generate → Review → Commit → Execution → Reports) entirely inside TAM, no Excel required','Persistent monthly payroll worksheet with cycle status (Not Generated / Draft / In Review / Ready to Commit / Committed / Partially/Fully Executed), totals, eligible & excluded employees, and per-row review lifecycle (Draft / Reviewed / Ready / Committed / Cancelled)','Generate Payroll for a month from active contracts, contract progress, work schedules, approved overtime, and recurring adjustments — with exact exclusion reasons for anyone not included','Centralized payroll calculation: Base + Overtime + Allowance + Bonus + Benefits/BPJS + Other Addition − Deduction − Other Deduction, full precision internally, rounded only at the end, with a negative-payroll warning and a component breakdown','Inline editing of additions/deductions/notes; base salary and overtime are read-only (overtime auto-populates from approved records); “Override Salary for This Payroll Only” stores original + overridden + reason and never touches the contract','Overtime integration: only Approved overtime enters a draft, committing flips it to Committed to Payroll (no double inclusion), and changed approved overtime marks the row Changed instead of silently altering committed payroll','Contract progress (e.g. 8/12) is always calculated from start date + duration + payroll month — never typed manually for operations','Commit Ready Payroll to Monthly Plan with a confirmation summary (totals, new/existing/changed transactions, conflicts, skipped); creates one Planned Gaji transaction per employee with structured links (employeeId, contractId, payrollPlanId, overtimeIds, monthlyPlanId), never duplicating or auto-executing','Monthly Plan Generator now consumes committed payroll instead of generating it, with a payroll-source status (Generated / Reviewed / Committed / Missing / Changed) and an Open Payroll Planning button','Payroll execution tracking reflects the Execution Center (planned/scheduled/partial/completed) with actual paid, remaining, date, method, bank and reference — plus Open in Execution Center','Prepare Next Month regenerates payroll from master data and advancing contract progress; actuals, execution status, and salary overrides are never copied forward','Recurring payroll adjustments (fixed additions/deductions with effective windows) applied on generation via snapshots — editing them never changes historical payroll','Payroll detail & history view (components, schedule, overtime breakdown, adjustments, linked plan/transaction, execution, timestamped events); payroll operational KPIs and alerts on the dashboard','New reports (Monthly Payroll Register, by Department, Components, Execution Status, Excluded Employees) and integrity checks (payroll without employee/contract, outside coverage, duplicate month, negative amount, broken overtime, total inconsistent, missing plan/transaction, override without reason)','Smart Import repositioned as a migration & historical tool with import purposes (Initial Company Setup / Historical Payroll Migration / Finance Transactions Only / Review Without Commit) and a Continue to Payroll Planning action — all existing import, Update Existing Month, Legacy Mapping, audit and Undo capabilities preserved','New storage key tam_payroll_adjustments_v1, schema v6 with a one-time backed-up migration that normalizes only missing payroll fields (no historical totals or actual amounts changed); one-line branding, System/Dark/Light themes, chart readability, action menus and sidebar scroll all preserved']},
+    {v:'2.4.0 — Smart Import & Chart Readability Engine', items:['Smart Import: payroll Excel/CSV files now auto-detect and synchronize employees, contracts, payroll plans, monthly plans and finance transactions — no more manual re-entry after importing','Import wizard: Upload → Parse → Detect Months/Categories → Detect Employees/Contracts → Match → Review Conflicts → Select Actions → Commit → Results','Extracts employee name, contract number, contract progress (8/12), salary, month and amounts; infers a proposed contract start from payroll month − (current − 1), using XI/2025-style evidence in the contract number','Employee matching (Exact / High Confidence / Needs Review / No Match) and contract matching (Existing / New / Updated / Conflict / Missing Information) with old-vs-imported values shown side by side; nothing is auto-merged or auto-overwritten','Per-row actions and a toolbar (Select All Safe, Unselect All, Skip Conflicts, Review Only, Commit Selected); duplicates are prevented by Employee + Contract + Month','Committed records carry structured IDs (employeeId, contractId, payrollPlanId, importBatchId, importRowId); descriptions stay readable','Data safety: an automatic backup + audit batch before every commit, plus Undo Last Smart Import with a rollback preview that never removes executed, modified, or committed-executed records','Import modes: Finance Only, Smart Payroll & Master Sync (default), Review Only — the existing Finance-transaction import, Update Existing Month, and Legacy Payroll Mapping remain intact','Chart readability: dynamic heights (320/380/420), minimum 44px Y-tick spacing (reduce ticks, never compress), reserved left margin so Rp labels never clip, Rp0 always shown, Indonesian axis formatting (Rp20,1 Jt), single-point centering with a Planned/Actual annotation and no fake trend line, and 12–13px labels','Appearance setting: Follow System (default), Dark, or Light — a professional light theme (off-white background, white cards, navy text, gold accent), applied before first paint, live-updating with the OS while on System, with charts redrawing on theme change','Branding: single-line "TAM Intelligence OS" over "PT TOTAL ASSET MANAJEMEN" in a slightly wider sidebar, collapsing to "TAM OS" on narrow screens','Diagnostics, Integrity Check, Data Portability, Backup/Restore and Reset now cover import batches; integrity detects payroll without employee, duplicate employees, duplicate payroll plans, contract conflicts, broken import links, rollback conflicts and invalid contract evidence — never auto-merging or auto-deleting']},
+    {v:'2.3.1 — Execution Center Unscheduled Queue Fix', items:['Fixed a bucket-logic bug where a Planned transaction with no valid date counted toward Pending Execution but appeared in no tab (hidden from every view)','New Unscheduled tab lists Planned/Scheduled transactions that are not fully executed and have no valid scheduled or transaction date','Every pending transaction now belongs to exactly one bucket — priority Partial → Unscheduled → Today’s Planned → Upcoming → Overdue (Partial is never double-counted)','Pending Execution KPI now equals the exact sum of Unscheduled + Today’s Planned + Upcoming + Overdue + Partial','Free-text values such as "Per minggu", "Akhir bulan", or "-" are no longer misread as calendar dates (they no longer mis-sort into Upcoming/Overdue)','Unscheduled rows show a "Missing schedule date" badge and a primary "Schedule" action; empty state reads "No unscheduled transactions."','All existing execution actions and calculations, and the v2.1.2 action-menu behaviour, are preserved']},
+    {v:'2.3.0 — Clean Data & Payroll Overtime Engine', items:['Clean production release: no company transactions, employees, contracts, payroll, plans, recurring expenses, or backups are bundled — the file starts empty and you enter or import your own data','Data safety: existing browser data is never erased silently. A first-run choice (Keep / Export & Start Fresh / Cancel) appears when prior-version data is detected','Start Fresh (Settings → Data Reset & Onboarding) downloads a complete backup, requires typing DELETE ALL TAM DATA, clears only TAM keys, writes an audit record, and reloads clean','First-run onboarding checklist (dismissible, non-blocking) and actionable empty states on every page','Structured work schedules on employees and contracts (hours/day, days/week, weeks/month, effective date, notes) with precedence contract → employee → company default — no single global assumption','New Overtime module using the TAM Internal Overtime Calculation Method: Standard Hours = h/day × d/week × wk/month; Hourly Rate = Salary ÷ Standard Hours (full precision); Amount = Hours × Rate, rounding only the final payable','Verified examples: 6h/day, Rp3,500,000, 7.5h → Rp218,750; 8h/day → Rp164,062.50 → Rp164,063 (nearest rupiah). Each employee is calculated independently','Overtime records with Draft / Reviewed / Approved / Rejected / Committed to Payroll, full calculation snapshots, live preview, decimal hours, no negatives, duplicate, CSV export, and a bulk monthly worksheet','Payroll integration: approved overtime auto-fills the payroll Overtime field for the employee and month; committing flips it to Committed to Payroll, links overtime IDs, and prevents committing the same overtime twice','Transactions carry structured overtime links and show an Overtime Breakdown; the description format (name / contract / progress) is unchanged','Overtime settings (company schedule defaults, final rounding, method label, approval requirement, high-overtime warning), reports (Monthly Summary, by Employee/Contract, highest, pending review, payroll-with-overtime), and dashboard KPIs + alerts','New storage key tam_overtime_records_v1, schema v5 with a one-time backed-up migration; Data Portability, Complete Backup, restore validation, reset, diagnostics, and the integrity check all cover overtime','Optional Load Demo Data (clearly labelled DEMO) to try the workflow instantly. Method note: this follows the internal method configured in TAM — verify separately for statutory payroll compliance']},
+    {v:'2.2.1 — Architecture Review & Stabilization', items:['Architecture audit across state, storage, rendering, events, and business logic — no working behavior or workflow changed, no storage keys renamed, no data reset','New System Diagnostics panel in Settings: app/schema version, storage mode & persistence status, record counts, last successful save, last migration, and data-integrity status','New Run Integrity Check: detects broken employee/contract/payroll links, duplicate IDs, duplicate payroll rows, overlapping contracts, orphan transactions, invalid dates, negative/invalid amounts, and corrupt monthly-plan references — reported by severity (Info/Warning/Critical) and never auto-deleted','Reusable validators for employees, contracts, payroll plans, recurring expenses, monthly plans, transactions, imported rows, and backup JSON — shared by the integrity checker and available to forms/imports/restore','Centralized user notifications (showSuccess / showWarning / showError / confirmAction): technical detail goes to console, readable messages to the user, no silent failures','Unified StorageAdapter write path records the last successful save; added a saveAllData() persistence coordinator','One-time, non-destructive normalization migration fills any missing id / createdAt / updatedAt on every entity (relationships already use IDs) — a safety backup is taken only if anything is changed; existing values and amounts are never touched','Accessibility: Escape closes any modal, focus moves into the dialog on open and returns to the opener on close, and dialogs are marked role="dialog" aria-modal','Preserved the v2.1.2 action-menu binding fix and all v2.2.0 People & Contracts functionality','Script reorganized into clearly labeled sections with a top-of-file map; the deliverable remains a single HTML file']},
+    {v:'2.2.0 — Employee, Contract & Monthly Planning Engine', items:['New People & Contracts module: Employees, Contracts, Payroll Planning, and Monthly Plan Generator — monthly finance plans are now generated inside the app, not from Excel','Employee master data: full CRUD, search/filter, CSV export, deactivate/reactivate, and delete protection when payroll or transactions are linked','Contract management with automatic calendar-month progress (e.g. 8/12) calculated from start date + duration — never entered manually; before start 0/N, after end N/N and Expired','Contract detail with progress bar, linked payroll plans, linked transactions, history, and renewal (old → Renewed, new → Active/Draft, history preserved)','Contract alerts: expiring within 90/60/30 days, expired, no active contract, overlapping contracts','Payroll Planning: generate editable rows for eligible active employees from their covering contract; exclusion warnings; Existing/Changed/New/Skipped duplicate detection','Commit Payroll to Monthly Plan creates Planned Gaji transactions with structured links (employeeId, contractId, payrollPlanId) — appearing in Transactions, Execution Center, Finance Overview, Planned vs Actual, Trends and Reports; never executed automatically','Recurring expense templates (Monthly/Quarterly/Semiannual/Annual) fed into the Monthly Plan Generator','Monthly Plan Generator combining payroll, recurring expenses and copied manual items, with a review preview (totals, duplicates, missing/zero warnings), Draft → Reviewed → Committed status, and Copy Previous Month (actuals never copied; status stays Planned)','Transaction detail shows employee, contract number, contract progress, payroll plan, and source, with navigation to employee/contract/payroll detail','Legacy Payroll Mapping tool to conservatively link historical Gaji transactions to employees and contracts — high-confidence matching, manual confirmation, descriptions preserved, no contracts auto-created','New reports: Employee List, Active/Expiring Contracts, Monthly Payroll Plan, Payroll by Employee/Contract, Contract Cost Summary, Monthly Plan Summary (CSV export)','New storage keys (employees, contracts, payroll plans, recurring expenses, monthly plans) with schema v4 and a one-time safe migration + pre-migration backup — existing transactions and settings are never modified','Dashboard integration: Active Employees, Active Contracts, Contracts Expiring Soon, Payroll Planned, Monthly Plan Status, and payroll/plan alerts; Excel import, backup/restore, and standalone persistence remain fully functional']},
+    {v:'2.1.2 — Execution Workflow UX & Action Binding Fix', items:['Transactions is now the financial ledger: browse, search, filter, review, and export — its Actions menu offers only View Detail / History, Edit, and Delete','All operational payment actions (Execute, Schedule, Partial execution, Complete, Cancel, Archive, Duplicate) now live exclusively in the Execution Center','New "Open Execution Center" button and helper text on the Transactions page; navigation preserves the sidebar scroll position','Fixed: Execution Center action menus were double-bound after switching tabs — menus closed instantly and actions could fire twice','Fixed: the same double-binding on the Transactions page after changing any filter or typing in search','Fixed: action menus stopped closing on outside clicks after the first use; the dropdown also now closes when an action is chosen','Transaction history, status, and actual amounts remain fully visible on Transactions; all filters, exports, data, and calculations unchanged']},
+    {v:'2.1.1 — Standalone Persistence & Portability', items:['New StorageAdapter: automatically uses Claude Artifact storage when available, otherwise browser localStorage','The application now persists data when opened directly as a standalone HTML file in any modern browser','Load priority on startup: Claude Artifact storage → browser localStorage → built-in seed data (no duplication, no overwriting)','Corrupt stored data is detected, reported, and preserved under a recovery key instead of failing silently','Storage quota and write failures now show clear error notifications','New Data Portability section in Settings: export and restore a Complete Backup (transactions + settings + backups) as JSON','Validation and a full preview (transaction, settings, backup counts, schema version) before any restore','Automatic pre-restore safety backup of current data','Storage Mode and Persistence Status shown in Settings and About','Versioned file naming (tam-intelligence-os-v2.1.1.html) and versioned export/download filenames']},
+    {v:'2.1 — Finance Execution Engine', items:['Full transaction lifecycle: Planned → Scheduled → Partial → Completed, plus Cancelled and Archived','Execute modal with actual amount, payment method, bank, reference, and notes','Per-row Actions menu: Execute, Schedule, Edit, Duplicate, Cancel, Archive, Delete','New Execution Center with Today / Upcoming / Overdue / Partial / Completed Today / Recent views','Transaction detail with execution timeline and full history log','Execution KPI cards on Finance Overview (Executed, Remaining, Execution Rate, status counts)','Execution-aware executive alerts (large payments, high variance, cancelled payroll, overdue, partials)','Status, method, and bank filters plus reference/notes search on Transactions','Execution defaults in Settings (payment method, bank, auto-archive, auto-complete)','Automatic one-time migration of existing data with pre-migration backup']},
+    {v:'2.0', items:['TAM Intelligence OS branding','Modular navigation','Executive Dashboard','Finance Overview','Cash Flow foundation','Budget Center foundation','Executive Insights','Settings and release information']},
+    {v:'1.2', items:['Monthly Trends','Native SVG charts','Chart interactions']},
+    {v:'1.1', items:['Improved import workflow','Duplicate handling','Update Existing Month','Backup and restore']},
+    {v:'1.0', items:['Finance core','Excel import','Transactions','Planned vs Actual','Reports']},
+  ];
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Release Notes</h1></div></div>
+    ${notes.map(n=>`<div class="card" style="margin-bottom:14px;">
+      <h3>Version ${n.v}</h3>
+      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.9;color:var(--text-dim);">${n.items.map(i=>`<li>${escapeHtml(i)}</li>`).join('')}</ul>
+    </div>`).join('')}
+  `;
+}
