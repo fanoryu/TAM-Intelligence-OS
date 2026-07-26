@@ -171,6 +171,9 @@ async function executeTransaction(id, data){
   t.status = newStatus;
   pushHistory(t, 'executed', `Executed ${fmtIDR(data.actualAmount)}${data.method?' via '+data.method:''}`, {amount:data.actualAmount});
   await persist();
+  logActivity({type:'finance.execute', module:'Finance', entity:t.uraian||t.category||'Transaction', entityId:t.id,
+    desc:`Executed ${fmtIDR(data.actualAmount)}${data.method?' via '+data.method:''} — status ${newStatus}`,
+    refs:{transactionId:t.id, employeeId:t.employeeId||null, payrollPlanId:t.payrollPlanId||null, monthKey:t.monthKey||null}});
 }
 async function scheduleTransaction(id, date){
   const t = findTxn(id); if(!t) return;

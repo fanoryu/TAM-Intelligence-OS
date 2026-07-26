@@ -1,26 +1,40 @@
 #!/usr/bin/env node
 /*
- * verify-build.js — TAM Intelligence OS v2.6.1 (Search Focus & Incremental Rendering Fix)
+ * verify-build.js — TAM Intelligence OS (Release Automation, v2.6.4+)
  * --------------------------------------------------------------------------------------
- * v2.6.1 intentionally changes the render PATH for search/filter controls, so the dist JS
- * is no longer byte-identical to v2.5.2 (that was the v2.6.0 golden master). This checks:
- *   - CSS still untouched  -> dist CSS == v2.5.2 CSS byte-for-byte.
+ * The dist JS is no longer byte-identical to v2.5.2 (search-focus fix, payroll workspace,
+ * and later releases changed behavior intentionally). This verifier checks:
+ *   - CSS still untouched  -> dist CSS == v2.5.2 CSS byte-for-byte (+ only the v2.6.3b
+ *     floating-menu rule that later releases added).
  *   - Build fidelity: dist inlined payloads == concatenated modular source.
+ *   - Version identity is DERIVED from js/core/constants.js (single source of truth) —
+ *     APP_VERSION, <title>, APP_RELEASE_NAME, the Release Notes entry, and the generated
+ *     dist filename must all agree with it (v2.6.4 Release Automation).
  *   - Data-safety invariants unchanged (keys, flags, schema 6, seed, mounts, init).
  *   - FOCUS FIX present: search boxes route to apply*Filter and no longer call the full
  *     page renderer on 'input'.
+ *   - Payroll lifecycle + floating menu + module decomposition (as in prior releases).
+ *   - v2.6.4 Activity Log + payroll audit timeline + post-blocker feedback present.
  * Usage:  node tools/verify-build.js
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { readAppMeta } = require('./app-version.js');
 const root = path.resolve(__dirname, '..');
 const LF = '\n';
 const read = (p) => fs.readFileSync(p, 'utf8');
 const trimLF = (s) => s.replace(/^\n+/, '').replace(/\n+$/, '');
 
+// Version is derived from the single source of truth (constants.js) — never hardcoded here.
+const meta = readAppMeta();
+
 const orig = read(path.join(root, 'tam-intelligence-os-v2.5.2.html'));
-const dist = read(path.join(root, 'dist', 'tam-intelligence-os-v2.6.3c.html'));
+if (!fs.existsSync(meta.distPath)) {
+  console.error('Expected dist build not found: dist/' + meta.distName + ' — run `node tools/build-single-file.js` first.');
+  process.exit(1);
+}
+const dist = read(meta.distPath);
 
 let passes = 0; const fails = [];
 const check = (cond, msg) => { if (cond) { passes++; console.log('  [PASS] ' + msg); } else { fails.push(msg); console.log('  [FAIL] ' + msg); } };
@@ -43,12 +57,14 @@ console.log('== BUILD FIDELITY (source -> dist) ==');
 check(trimLF(srcCss) === distCss, 'concat(css/*.css) == dist CSS payload');
 check(trimLF(srcJs) === distJs, 'concat(js/*.js) == dist JS payload');
 
-console.log('== VERSION IDENTITY ==');
-check(dist.includes("const APP_VERSION = '2.6.3c';"), 'APP_VERSION == 2.6.3c');
-check(dist.includes("const APP_RELEASE_NAME = 'Responsive UI Polish';"), 'APP_RELEASE_NAME updated');
-check(dist.includes('<title>TAM Intelligence OS v2.6.3c</title>'), '<title> updated to v2.6.3c');
-check(dist.includes("{v:'2.6.3c "), 'Release Notes has a 2.6.3c entry');
-check(dist.includes("{v:'2.6.3b ") && dist.includes("{v:'2.6.3a ") && dist.includes("{v:'2.6.3 "), 'Release Notes still has 2.6.3b/2.6.3a/2.6.3 entries (history preserved)');
+console.log('== VERSION IDENTITY (derived from constants.js — no hardcoded version) ==');
+check(dist.includes("const APP_VERSION = '" + meta.version + "';"), 'APP_VERSION == ' + meta.version + ' (matches constants.js)');
+check(dist.includes("const APP_RELEASE_NAME = '" + meta.releaseName + "';"), 'APP_RELEASE_NAME == "' + meta.releaseName + '" (matches constants.js)');
+check(dist.includes('<title>TAM Intelligence OS v' + meta.version + '</title>'), '<title> == v' + meta.version);
+check(dist.includes("{v:'" + meta.version + " "), 'Release Notes has a ' + meta.version + ' entry');
+check(path.basename(meta.distPath) === 'tam-intelligence-os-v' + meta.version + '.html', 'generated dist filename derived from APP_VERSION (dist/' + meta.distName + ')');
+// History preserved: prior release entries are permanent and must never disappear.
+check(dist.includes("{v:'2.6.3c ") && dist.includes("{v:'2.6.3b ") && dist.includes("{v:'2.6.3a ") && dist.includes("{v:'2.6.3 "), 'Release Notes still has 2.6.3c/2.6.3b/2.6.3a/2.6.3 entries (history preserved)');
 
 console.log('== DATA-SAFETY INVARIANTS ==');
 const mDist = dist.match(/const SCHEMA_VERSION = (\d+);/);
@@ -88,8 +104,9 @@ console.log('== PAYROLL LIFECYCLE (v2.6.3a) + FLOATING MENU (v2.6.3b) ==');
 // Bug 1: Approve no longer gated by commit-blockers in the lifecycle helpers.
 check(!dist.includes("if(status==='Ready' && payrollCommitBlockers(pp).length) continue;"), 'bulk Approve no longer skips on commit-blockers');
 check(!dist.includes("if(status==='Ready'){ const b=payrollCommitBlockers(pp); if(b.length){"), 'single Approve no longer gated on commit-blockers');
-// commit still validates
-check(dist.includes('if(payrollCommitBlockers(pp).length){ skipped++; continue; }'), 'Post to Finance still validates blockers (skips + reports)');
+// commit still validates — and (v2.6.4) records the exact skip reason per row (no relaxation of rules)
+check(dist.includes('const blockers = payrollCommitBlockers(pp);'), 'Post to Finance still computes payrollCommitBlockers(pp) before posting');
+check(dist.includes('if(blockers.length){ skipped++; skippedDetails.push({name:pp.employeeName, reasons:blockers}); continue; }'), 'Post to Finance skips blocked rows and records exact blocker reasons (v2.6.4)');
 // Bug 2 (v2.6.3b): shared floating actions menu (portal, position:fixed, flip, close, reposition)
 check(dist.includes('function openFloatingMenu(') && dist.includes('function closeFloatingMenu(') && dist.includes('function positionFloatingMenu('), 'floating menu controller defined');
 check(dist.includes('<div id="menu-root"></div>'), '#menu-root portal layer present');
@@ -125,6 +142,28 @@ check(flatLeft.length === 0, 'no flat js/NN-*.js files remain' + (flatLeft.lengt
 const indexHtml = read(path.join(root,'index.html'));
 const idxTagBlock = jsFiles.map((f)=>`<script src="js/${f}"></script>`).join(LF);
 check(indexHtml.includes(idxTagBlock), 'index.html <script> tags match module-order.js exactly (order + paths)');
+
+console.log('== ACTIVITY LOG + AUDIT VISIBILITY (v2.6.4) ==');
+// Activity Log page: helpers, render, incremental filter, CSV, nav + dispatch.
+check(dist.includes('function logActivity(') && dist.includes('function getAuditEvents('), 'audit helpers logActivity / getAuditEvents defined');
+check(dist.includes("const AUDIT_LOG_KEY = 'tam_audit_log_v1'"), 'audit log reuses existing tam_audit_log_v1 key (no new storage key)');
+check(dist.includes('function renderActivityLog('), 'Activity Log page renderer defined');
+check(dist.includes('function applyActivityFilter('), 'Activity Log uses incremental filter (search focus preserved)');
+check(dist.includes('id="actRows"'), 'Activity Log incremental tbody container present');
+check(dist.includes('function exportActivityCsv('), 'Activity Log CSV export defined');
+check(dist.includes("label:'Activity Log'"), 'Activity Log nav item present');
+check(dist.includes("State.view==='activity'") && dist.includes('renderActivityLog(main)'), 'Activity Log wired into renderView dispatch');
+// No brand-new storage key was introduced for activity (must still be exactly the 13 known keys).
+check(!/tam_activity_log_v\d/.test(dist) && !/tam_audit_v\d/.test(dist), 'no independent activity/audit storage key introduced');
+// Instrumentation at the key chokepoints so the log actually has cross-module records.
+['payroll.generate','payroll.post','payroll.lock','payroll.unlock','overtime.','finance.execute','import.commit']
+  .forEach((t)=>check(dist.includes("'"+t) || dist.includes("type:'"+t), 'audit instrumentation present: '+t));
+// Payroll audit timeline (real events only, derived — not duplicated state).
+check(dist.includes('function buildPayrollTimeline(') && dist.includes('function buildPayrollPeriodTimeline('), 'payroll timeline builders defined (workspace + detail)');
+check(dist.includes('<h3>Payroll Timeline</h3>') || dist.includes('Payroll Timeline'), 'Payroll Detail timeline present');
+// Post-blocker feedback modal (posted vs skipped, employee + exact reason).
+check(dist.includes('function openPostResultModal('), 'post-result summary modal defined (posted vs skipped)');
+check(dist.includes('skippedDetails') && dist.includes('posted:'), 'commitReadyPayroll returns posted + skippedDetails');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

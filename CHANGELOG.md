@@ -1,5 +1,50 @@
 # Changelog
 
+## 2.6.4 — Release Automation & Payroll Audit Visibility
+
+**Type:** Release tooling + read-only audit features. **No business logic, storage key,
+migration flag, SCHEMA_VERSION (6) or CSS-file change.**
+
+### Release automation (Part 1)
+- **The version is no longer hardcoded in the tooling.** The single source of truth is
+  `const APP_VERSION` (and `APP_RELEASE_NAME`) in `js/core/constants.js`. New
+  `tools/app-version.js` parses those constants; `build-single-file.js` and `verify-build.js`
+  derive from it, and the PowerShell fallbacks (`*.ps1`) parse the same constants.
+- The portable **dist filename is derived** — `dist/tam-intelligence-os-v${APP_VERSION}.html`.
+  The build fails clearly if `APP_VERSION` cannot be parsed, and asserts the assembled HTML
+  actually carries that version and `<title>` and that the filename matches.
+- `verify-build.js` now derives and checks `APP_VERSION`, `<title>`, `APP_RELEASE_NAME`, the
+  Release Notes entry and the generated filename against the same source; stale header comments
+  corrected. No existing verification check was weakened.
+
+### Activity Log (Part 3)
+- New **Management → Activity Log**: a read-only audit trail across payroll, overtime, finance
+  execution, imports and deletes. Columns: time, module, event, entity, description, related IDs.
+- Search + module + event-type + period filters, newest-first, empty state, and CSV export.
+  **Incrementally rendered** (only the table body swaps) so the search box keeps focus.
+- Backed by the **existing** `tam_audit_log_v1` store (same key the reset record used) — **no
+  new storage key, no SCHEMA_VERSION change**. Newest 500 events retained; survives a data reset.
+
+### Payroll audit visibility (Part 4)
+- **Payroll Detail → Payroll Timeline** and **Payroll Workspace → Period Activity**: read-only
+  timelines for Generated, Reviewed, Approved, Posted to Finance, Executed, Period locked/unlocked.
+- Derived from existing payroll history, the linked transaction, and audit records. Events with
+  no real timestamp are **omitted, never fabricated**. No business state is duplicated.
+
+### Post-blocker feedback (Part 5)
+- **Post to Finance** now shows a clear posted-vs-skipped summary. Each skipped Approved row
+  shows the **employee name and the exact blocker reason**, stays Approved, and creates **no**
+  transaction. Blocker rules are unchanged; no duplicate transactions are created.
+
+### Validation
+- Node build + verify: **109/109 checks pass** (up from 87 — adds version-derivation, Activity
+  Log, payroll-timeline and post-blocker assertions). PowerShell fallback: **53/53**, deriving
+  the same version. Modular source and portable dist boot with **zero console errors**; Activity
+  Log filters/CSV, payroll timeline (real events only), and the post-result summary verified in
+  the browser in dark/light/system themes. 44 JS modules load in order.
+
+---
+
 ## 2.6.3c — Responsive UI Polish
 
 **Type:** UI polish. **No business logic, storage, verification, or CSS-file change.**

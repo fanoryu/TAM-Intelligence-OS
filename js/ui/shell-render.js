@@ -95,6 +95,7 @@ const NAV_GROUPS = [
   {id:'management', label:'Management', items:[
     {id:'calendar', label:'Financial Calendar', ic:'▢', placeholder:true},
     {id:'reports', label:'Reports', ic:'▤'},
+    {id:'activity', label:'Activity Log', ic:'▤'},
   ]},
   {id:'system', label:'System', items:[
     {id:'settings', label:'Settings', ic:'⚙'},
@@ -199,6 +200,7 @@ function renderView(main){
   if(State.view==='recurring') return renderRecurringExpenses(main);
   if(State.view==='legacyMap') return renderLegacyPayrollMapping(main);
   if(State.view==='reports') return renderReports(main);
+  if(State.view==='activity') return renderActivityLog(main);
   if(State.view==='settings') return renderSettings(main);
   if(State.view==='about') return renderAbout(main);
   if(State.view==='releasenotes') return renderReleaseNotes(main);

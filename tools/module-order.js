@@ -37,6 +37,7 @@ module.exports = [
   'finance/budget.js',
   'analytics/executive-insights.js',
   'ui/settings-about.js',
+  'ui/activity-log.js',
   'analytics/reports.js',
   // --- people & contracts (from 12) ---
   'people/people-core.js',

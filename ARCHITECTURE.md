@@ -1,12 +1,24 @@
-# TAM Intelligence OS — Architecture (Phase 0)
+# TAM Intelligence OS — Architecture
 
-**Release:** v2.6.0 — Modular Frontend Architecture
-**Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth)
-**Scope of Phase 0:** physical split only. No behavior change.
+**Current release:** v2.6.4 — Release Automation & Payroll Audit Visibility
+**Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
+CSS/data-safety invariants)
+**Shape today:** a modular source of **44 classic-script JS modules** (in `core/ ui/ finance/
+people/ import/ analytics/`) + 5 CSS files, assembled into one portable
+`dist/tam-intelligence-os-v${APP_VERSION}.html`. Still one shared global scope — no ES modules,
+no bundler. `SCHEMA_VERSION` is 6.
+
+> **How to read this document.** Sections 1 and 3–6 describe the founding **Phase 0** split
+> (v2.6.0) and are preserved as historical provenance — the line ranges are the authority for
+> how the original cut was derived. Section 2 is the original 20-file map (historical). The
+> project as it stands today is described by the release sections: **§8** (v2.6.1 incremental
+> render), **§9** (v2.6.2 decomposition into the feature-folder tree — the current 44-module
+> layout), **§10** (v2.6.3 Payroll workspace) and **§11** (v2.6.4 release automation + audit
+> visibility). Where an early section says "20 files", read §9 for the current structure.
 
 ---
 
-## 1. Design principle: preserve the shared global scope
+## 1. Design principle: preserve the shared global scope (Phase 0, still in force)
 
 The stable app is one `<script>` in one global function scope. Templates reference
 functions by bare name, delegated event handlers call globals, and top-level `const`
@@ -26,7 +38,12 @@ top-level boundary** (between complete declarations) so each file parses on its 
 
 ---
 
-## 2. JavaScript modules (20 files, original order preserved)
+## 2. JavaScript modules — the original Phase 0 split (20 files) — *historical*
+
+> **Historical (v2.6.0).** This is the original 20-file cut. In v2.6.2 these files were
+> decomposed into the current 44-module feature-folder tree (see **§9**), and v2.6.4 added one
+> more module (`ui/activity-log.js`). This table is retained because its line ranges are the
+> provenance for how the source was first derived from the golden master.
 
 Each file is a verbatim, contiguous slice of `tam-intelligence-os-v2.5.2.html`. The line
 ranges are the provenance; they are the authority for how the split was derived.
@@ -258,3 +275,54 @@ worksheetSave`) all refuse when the target month is locked.
 
 **Health** (`payrollHealth`) is deterministic — contract-expiry, ±20% period-over-period,
 high-overtime, and missing-contract rules — no AI, no external calls.
+
+---
+
+## 11. v2.6.4 — Release automation + Activity Log + payroll audit visibility
+
+Two independent concerns, no schema/CSS/calculation change.
+
+**Release automation (single version source).** The version lives once, as `const APP_VERSION`
+(and `APP_RELEASE_NAME`) in `js/core/constants.js`. `tools/app-version.js` parses those two
+constants and exposes `readAppMeta() → {version, releaseName, distName, distPath}`;
+`build-single-file.js` and `verify-build.js` both `require()` it, and the PowerShell fallbacks
+parse the same constants with a regex. Consequences:
+
+- The dist filename is **derived** — `dist/tam-intelligence-os-v${APP_VERSION}.html` — never
+  typed by hand. `build` asserts the assembled HTML actually carries that `APP_VERSION` and
+  `<title>`, and fails clearly if `APP_VERSION` is missing/malformed or the filename would not
+  match. `verify` derives the expected version and checks `APP_VERSION`, `<title>`,
+  `APP_RELEASE_NAME`, the Release Notes entry and the filename all agree.
+- Cutting a release = edit the two constants + add a Release Notes entry. No tooling edits.
+
+**Activity Log + audit trail (`js/ui/activity-log.js`).** A read-only, cross-module view over
+the **existing** `tam_audit_log_v1` store (the same key the Start-Fresh reset record already
+used — **no new storage key, no SCHEMA_VERSION change**). `logActivity(entry)` prepends a record
+(`{ts,type,module,entity,entityId,desc,refs}`), caps the store at the newest 500, and is
+best-effort (never throws, so auditing can never break a user action). The store lives in
+`localStorage` (like the pre-existing reset record) so it survives a data reset;
+`normalizeAuditEntry` maps both the legacy `{event,ts,note}` reset shape and the rich shape to
+one display shape. `renderActivityLog` filters (search / module / event-type / period), renders
+newest-first, and mirrors the v2.6.1 incremental pattern (`applyActivityFilter` swaps only the
+`#actRows` tbody, so the search box keeps focus). CSV export honours the active filters.
+
+Instrumentation lives at existing mutation chokepoints so nothing new is threaded through the
+app: payroll generate / status change (single + bulk) / post / lock-unlock / salary override
+(`payroll-ops-engine.js`), overtime status change (`overtime.js`), transaction execution
+(`execution-center.js`), Smart Import commit (`smart-import-commit.js`), and employee/contract
+deletes. `logActivity`/`getAuditEvents` are defined in a module that loads before its callers,
+but every call is at **runtime** (inside handlers), so classic-script load order is not a factor.
+
+**Payroll audit visibility (derived, real events only).** `buildPayrollTimeline(pp)` merges the
+plan's own `history[]` (Generated → Reviewed → Approved → Posted), the linked transaction's
+`executed` history (Executed), and lock/unlock records from the audit log — **omitting any event
+that has no real timestamp** (nothing is fabricated). `buildPayrollPeriodTimeline(monthKey)`
+surfaces period-level generate/post/lock/unlock events. Both are read-only views over data that
+already exists; no business state is duplicated. Payroll Detail renders the per-plan timeline;
+the Workspace renders Period Activity.
+
+**Post-blocker feedback.** `commitReadyPayroll` now returns `{created, updated, skipped, posted,
+skippedDetails}`. Blocker rules are unchanged (`payrollCommitBlockers`): a blocked Approved row
+is **skipped**, stays Approved, creates no transaction, and its exact reasons are captured.
+`openPostResultModal` shows a single read-only posted-vs-skipped summary (employee + reason) when
+anything was skipped; a clean post just toasts.

@@ -43,6 +43,7 @@ function renderPayrollWorkspace(main){
   const excludedNow = State.employees.map(e=>({e, reason:payrollExclusionReason(e, monthKey)}))
     .filter(x=>x.reason && x.e.active!==false && x.e.employmentStatus==='Active');
   const health = payrollHealth(monthKey);
+  const periodEvents = buildPayrollPeriodTimeline(monthKey); // v2.6.4 read-only period activity
   const hasRows = plans.length>0;
 
   const kpi = (label, value, sub) => `<div class="card stat-card"><div class="stat-label">${label}</div><div class="stat-value">${value}</div>${sub?`<div class="stat-sub dim">${sub}</div>`:''}</div>`;
@@ -98,6 +99,10 @@ function renderPayrollWorkspace(main){
     </div>`:''}
 
     <div id="payArea"></div>
+
+    ${periodEvents.length?`<div class="card" style="margin-top:14px;"><h3>Period Activity <span class="tag">${periodEvents.length}</span></h3>
+      <p class="hint" style="margin-top:-2px;margin-bottom:10px;">Recorded generate / post / lock / unlock events for ${escapeHtml(mo.month)} ${mo.year} — newest first. See the full cross-module trail in Management → Activity Log.</p>
+      ${payrollTimelineHTML(periodEvents)}</div>`:''}
 
     ${excludedNow.length?`<div class="card" style="margin-top:14px;"><h3>Excluded Employees <span class="tag">${excludedNow.length}</span></h3><div class="insight-list">${excludedNow.map(x=>`<div class="insight-item warn"><b>${escapeHtml(x.e.fullName)}</b> — ${escapeHtml(x.reason)}</div>`).join('')}</div></div>`:''}`;
 
@@ -273,10 +278,38 @@ function openCommitPayrollModal(monthKey, main){
       root.querySelector('#cpGo').addEventListener('click', async ()=>{
         const res=await commitReadyPayroll(monthKey, readyIds); sel.clear(); closeModal();
         if(res.locked) return;
-        showSuccess(`Posted to finance: ${res.created} transaction(s) created, ${res.updated} updated${res.skipped?', '+res.skipped+' skipped':''}.`, 6000);
+        // v2.6.4 — if any Approved row was skipped, show a clear posted-vs-skipped summary
+        // (employee + exact blocker reason). Blocked rows stay Approved and are NOT posted.
+        if(res.skippedDetails && res.skippedDetails.length){ openPostResultModal(res); }
+        else showSuccess(`Posted to finance: ${res.created} transaction(s) created, ${res.updated} updated.`, 6000);
         render();
       });
     }});
+}
+// v2.6.4 — Post to Finance result summary: posted vs skipped, with the exact blocker reason
+// per skipped row. Read-only, single modal (no chain). Blocker rules are unchanged.
+function openPostResultModal(res){
+  const posted=res.posted||[], skipped=res.skippedDetails||[];
+  const postedHTML = posted.length
+    ? `<div class="hist-list">${posted.map(p=>`<div class="hist-row"><span class="hist-event">Posted</span><span class="hist-note">${escapeHtml(p.name)}${p.created?'':' <span class="faint">(updated existing)</span>'}</span></div>`).join('')}</div>`
+    : '<div class="empty">No rows were posted.</div>';
+  const skippedHTML = skipped.length
+    ? `<div class="insight-list">${skipped.map(s=>`<div class="insight-item warn"><b>${escapeHtml(s.name)}</b> — ${escapeHtml((s.reasons||[]).join('; '))}</div>`).join('')}</div>`
+    : '';
+  openModalHTML(`<h3>Post to Finance — Result</h3>
+    <div style="font-size:12.5px;line-height:1.9;">
+      <div><b style="color:var(--green,#4FAE7C);">${res.created} created</b> · <b>${res.updated} updated</b> · <b style="color:var(--brick);">${skipped.length} skipped</b></div>
+    </div>
+    <div style="margin-top:10px;"><h4 style="margin:0 0 6px;">Posted (${posted.length})</h4>${postedHTML}</div>
+    ${skipped.length?`<div style="margin-top:12px;"><h4 style="margin:0 0 6px;">Skipped — kept Approved, not posted (${skipped.length})</h4>${skippedHTML}
+      <p class="hint" style="margin-top:8px;">These rows stayed Approved and no transaction was created for them. Fix the reason (salary on the Contract, a valid/unique contract, or a non-negative total), then Post to Finance again.</p></div>`:''}
+    <div class="modal-actions"><button type="button" class="btn btn-accent" id="prOk">Done</button></div>`,
+    {width:600, onMount:(root)=>root.querySelector('#prOk').addEventListener('click', closeModal)});
+}
+// Shared read-only timeline markup (reuses the existing .hist-* classes; no CSS change).
+function payrollTimelineHTML(events){
+  if(!events || !events.length) return '<div class="empty">No recorded events yet.</div>';
+  return `<div class="hist-list">${events.map(e=>`<div class="hist-row"><span class="hist-event">${escapeHtml(e.label)}</span><span class="hist-note">${escapeHtml(e.detail||'')}</span><span class="hist-ts faint">${e.ts?new Date(e.ts).toLocaleString('id-ID'):'—'}</span></div>`).join('')}</div>`;
 }
 function exportPayrollCsv(monthKey){
   const plans=payrollPlansForMonth(monthKey, true);
@@ -316,6 +349,9 @@ function renderPayrollDetail(main){
         <div style="margin-top:8px;"><button class="btn btn-sm" id="pdExec">Open in Execution Center</button></div>
       </div>`:'<div class="empty">Not posted to finance yet. Approve then Post to Finance to create a Planned transaction.</div>'}</div>
     </div>
+    <div class="card" style="margin-bottom:14px;"><h3>Payroll Timeline</h3>
+      <p class="hint" style="margin-top:-2px;margin-bottom:10px;">Generated → Reviewed → Approved → Posted → Executed, plus period lock/unlock. Only events that actually occurred are shown (real timestamps — nothing is fabricated).</p>
+      ${payrollTimelineHTML(buildPayrollTimeline(p))}</div>
     <div class="card"><h3>Payroll History</h3><div class="hist-list">${(p.history||[]).map(h=>`<div class="hist-row"><span class="hist-event">${escapeHtml((h.event||'').charAt(0).toUpperCase()+(h.event||'').slice(1))}</span><span class="hist-note">${escapeHtml(h.note||'')}</span><span class="hist-ts faint">${h.ts?new Date(h.ts).toLocaleString('id-ID'):'—'}</span></div>`).join('')||'<div class="empty">No history.</div>'}</div></div>`;
   document.getElementById('pdBack').addEventListener('click', ()=>hrNavTo('payroll'));
   const ge=document.getElementById('pdEmp'); if(ge) ge.addEventListener('click', ()=>hrNavTo('employeeDetail',{detailEmpId:emp.id}));

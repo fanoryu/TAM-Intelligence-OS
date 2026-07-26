@@ -172,7 +172,9 @@ async function deleteContract(id){
   }
   if(c.status!=='Draft' && !confirm('Permanently delete this contract? Only unused records should be deleted.')) return;
   State.contracts = State.contracts.filter(x=>x.id!==id);
-  await persistContracts(); toast('Contract deleted.'); render();
+  await persistContracts();
+  logActivity({type:'contract.delete', module:'Contracts', entity:c.contractNumber||c.employeeName||'Contract', entityId:c.id, desc:`Contract "${c.contractNumber||'—'}"${c.employeeName?' ('+c.employeeName+')':''} deleted`, refs:{contractId:c.id, employeeId:c.employeeId||null}});
+  toast('Contract deleted.'); render();
 }
 
 // Renewal: old → Renewed, new → Active (or Draft), history preserved, no

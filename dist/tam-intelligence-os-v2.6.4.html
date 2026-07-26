@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TAM Intelligence OS v2.6.3c</title>
+<title>TAM Intelligence OS v2.6.4</title>
 <meta name="theme-color" content="#0E1420">
 <meta name="color-scheme" content="dark light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -358,8 +358,8 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.6.3c';
-const APP_RELEASE_NAME = 'Responsive UI Polish';
+const APP_VERSION = '2.6.4';
+const APP_RELEASE_NAME = 'Release Automation & Payroll Audit Visibility';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
@@ -1868,6 +1868,7 @@ const NAV_GROUPS = [
   {id:'management', label:'Management', items:[
     {id:'calendar', label:'Financial Calendar', ic:'▢', placeholder:true},
     {id:'reports', label:'Reports', ic:'▤'},
+    {id:'activity', label:'Activity Log', ic:'▤'},
   ]},
   {id:'system', label:'System', items:[
     {id:'settings', label:'Settings', ic:'⚙'},
@@ -1972,6 +1973,7 @@ function renderView(main){
   if(State.view==='recurring') return renderRecurringExpenses(main);
   if(State.view==='legacyMap') return renderLegacyPayrollMapping(main);
   if(State.view==='reports') return renderReports(main);
+  if(State.view==='activity') return renderActivityLog(main);
   if(State.view==='settings') return renderSettings(main);
   if(State.view==='about') return renderAbout(main);
   if(State.view==='releasenotes') return renderReleaseNotes(main);
@@ -2339,6 +2341,9 @@ async function executeTransaction(id, data){
   t.status = newStatus;
   pushHistory(t, 'executed', `Executed ${fmtIDR(data.actualAmount)}${data.method?' via '+data.method:''}`, {amount:data.actualAmount});
   await persist();
+  logActivity({type:'finance.execute', module:'Finance', entity:t.uraian||t.category||'Transaction', entityId:t.id,
+    desc:`Executed ${fmtIDR(data.actualAmount)}${data.method?' via '+data.method:''} — status ${newStatus}`,
+    refs:{transactionId:t.id, employeeId:t.employeeId||null, payrollPlanId:t.payrollPlanId||null, monthKey:t.monthKey||null}});
 }
 async function scheduleTransaction(id, date){
   const t = findTxn(id); if(!t) return;
@@ -4682,6 +4687,7 @@ function renderAbout(main){
 }
 function renderReleaseNotes(main){
   const notes = [
+    {v:'2.6.4 — Release Automation & Payroll Audit Visibility', items:['Release tooling no longer hardcodes the version: build-single-file.js/.ps1 and verify-build.js/.ps1 derive it from a single source of truth (APP_VERSION in js/core/constants.js) via tools/app-version.js, and the portable dist filename (dist/tam-intelligence-os-v<version>.html) follows APP_VERSION automatically; the tooling fails clearly if the version cannot be parsed or the generated filename would not match','New Activity Log (Management → Activity Log): a read-only, cross-module audit trail (payroll generate/review/approve/return/cancel/post/lock/unlock/override, overtime status changes, transaction execution, Smart Import commit, employee/contract deletes) with search, module/event/period filters, newest-first ordering, an empty state and CSV export — incrementally rendered so the search box keeps focus','Uses the existing tam_audit_log_v1 store (the same key the reset record already used) — no new storage key and no SCHEMA_VERSION change (still 6); the newest 500 events are retained and survive a data reset','Payroll audit visibility: Payroll Detail now shows a read-only Payroll Timeline (Generated → Reviewed → Approved → Posted → Executed, plus period lock/unlock) and the Payroll Workspace shows Period Activity — both derived from existing payroll history, the linked transaction and audit records, showing only events that actually occurred (no fabricated timestamps)','Post to Finance now reports a clear posted-vs-skipped summary: each skipped Approved row shows the employee name and the exact blocker reason, stays Approved, and creates no transaction. Blocker rules are unchanged and no duplicate transactions are created','No business calculation, storage key, migration flag or SCHEMA_VERSION (6) changed; no .css files changed']},
     {v:'2.6.3c — Responsive UI Polish', items:['Sidebar icon consistency: the Execution Center icon now renders as monochrome text like every other menu item (it was a colored emoji that drew attention even when inactive) — only the active row background and text color indicate the current page','Responsive Employee, Contract and Payroll detail pages: the two side-by-side cards (e.g. Profile / Active Contract) size to their own content instead of stretching to equal height, and stack vertically when width is limited (125%/150% browser zoom), avoiding overly tall cards','Tightened vertical spacing in the detail cards for higher information density while staying readable; top action buttons (Back / Edit / New Contract) wrap gracefully on narrow widths','UI/CSS presentation only — no business logic, storage, calculations, verification, SCHEMA_VERSION (6) or styles files changed']},
     {v:'2.6.3b — Floating Actions Menu Fix', items:['Fixed: the row Actions menu is no longer clipped by the scrolling table container. It is now a shared floating layer — portaled out to a top-level #menu-root node and positioned with position:fixed via getBoundingClientRect() — so it always renders fully visible above the table','The floating menu auto-flips up or down based on available space, closes on outside click and on Escape, and repositions on window resize/scroll. One shared implementation (openFloatingMenu/closeFloatingMenu) is reused by Employees, Contracts, Payroll, Overtime, Transactions and Execution Center','UI infrastructure only — no business logic, storage key, SCHEMA_VERSION (6) or calculation change']},
     {v:'2.6.3a — Payroll Workspace Hotfix', items:['Fixed: Approve Selected now moves rows from Review to Approved. Approval is a sign-off and is no longer blocked by commit validation — data checks (missing salary, invalid/duplicate contract) run at Post to Finance instead, where blocked rows are skipped and reported. Post to Finance now succeeds after Approve, with no duplicate payroll created','Fixed: the row Actions dropdown now opens upward automatically when there is not enough room below the row, so menu items are never hidden and no scrolling is needed. Applies to all Actions menus (Employees, Contracts, Overtime, Payroll, Transactions, Execution Center)','UI/action-flow only: the payroll calculation engine, storage keys, SCHEMA_VERSION (6) and lifecycle stages are unchanged']},
@@ -4712,6 +4718,203 @@ function renderReleaseNotes(main){
       <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.9;color:var(--text-dim);">${n.items.map(i=>`<li>${escapeHtml(i)}</li>`).join('')}</ul>
     </div>`).join('')}
   `;
+}
+
+/* ============================================================
+   ACTIVITY LOG + AUDIT TRAIL (v2.6.4)
+   A read-only, cross-module view over the existing append-only
+   audit store (tam_audit_log_v1 — the SAME key the Start-Fresh
+   reset record already uses; no new storage key, no SCHEMA_VERSION
+   change). logActivity() is called at the mutation chokepoints
+   (payroll, overtime, finance execution, imports, deletes); this
+   page reads, filters (search / module / type / period), renders
+   incrementally so search focus is preserved, and exports to CSV.
+
+   The audit store deliberately lives in localStorage (like the
+   pre-existing reset record) so it survives a data reset. Entries
+   are normalized to a single shape at read time so both the legacy
+   reset record ({event,ts,note}) and the richer v2.6.4 records
+   ({ts,type,module,entity,entityId,desc,refs}) display cleanly.
+   ============================================================ */
+const AUDIT_LOG_KEY = 'tam_audit_log_v1';
+const AUDIT_LOG_CAP = 500; // keep the newest N records; audit is diagnostic, not unbounded
+
+function readAuditRaw(){
+  try{ const v = JSON.parse(window.localStorage.getItem(AUDIT_LOG_KEY) || '[]'); return Array.isArray(v) ? v : []; }
+  catch(e){ return []; }
+}
+// Append one activity record. MUST never throw — auditing can never break a user action.
+function logActivity(entry){
+  try{
+    if(!entry || typeof entry!=='object') return;
+    const rec = Object.assign({ ts: new Date().toISOString() }, entry);
+    const log = readAuditRaw();
+    log.unshift(rec);
+    window.localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(log.slice(0, AUDIT_LOG_CAP)));
+  }catch(e){ /* audit logging is best-effort only */ }
+}
+// Normalize any stored record (legacy reset OR rich v2.6.4) to one shape.
+function normalizeAuditEntry(e){
+  if(!e || typeof e!=='object') return null;
+  if(e.type){
+    return { ts:e.ts||null, type:e.type, module:e.module||'System', entity:e.entity||'', entityId:e.entityId||'', desc:e.desc||e.note||'', refs:(e.refs&&typeof e.refs==='object')?e.refs:{} };
+  }
+  if(e.event){ // legacy shape: {event, ts, note}
+    return { ts:e.ts||null, type:e.event, module:e.module||'System', entity:e.entity||'', entityId:e.entityId||'', desc:e.note||e.desc||'', refs:{} };
+  }
+  return null;
+}
+// All events, normalized, newest first.
+function getAuditEvents(){
+  return readAuditRaw().map(normalizeAuditEntry).filter(Boolean)
+    .sort((a,b)=> new Date(b.ts||0) - new Date(a.ts||0));
+}
+// Events touching a specific payroll period month key (for the payroll timelines).
+function auditEventsForMonth(monthKey){
+  return getAuditEvents().filter(e=> e.refs && e.refs.monthKey===monthKey);
+}
+
+const AUDIT_TYPE_LABELS = {
+  'reset':'Data Reset',
+  'payroll.generate':'Payroll Generated', 'payroll.review':'Payroll Reviewed', 'payroll.approve':'Payroll Approved',
+  'payroll.return':'Payroll Returned to Draft', 'payroll.cancel':'Payroll Row Cancelled', 'payroll.post':'Payroll Posted to Finance',
+  'payroll.lock':'Payroll Period Locked', 'payroll.unlock':'Payroll Period Unlocked', 'payroll.override':'Salary Overridden',
+  'overtime.approved':'Overtime Approved', 'overtime.reviewed':'Overtime Reviewed', 'overtime.rejected':'Overtime Rejected',
+  'overtime.submitted':'Overtime Submitted', 'overtime.draft':'Overtime Set to Draft', 'overtime.committed-to-payroll':'Overtime Committed to Payroll',
+  'finance.execute':'Transaction Executed', 'import.commit':'Smart Import Committed', 'import.undo':'Smart Import Undone',
+  'employee.delete':'Employee Deleted', 'contract.delete':'Contract Deleted',
+};
+function auditTypeLabel(t){
+  if(AUDIT_TYPE_LABELS[t]) return AUDIT_TYPE_LABELS[t];
+  return String(t||'').replace(/[._-]+/g,' ').replace(/\b\w/g, c=>c.toUpperCase());
+}
+function auditModulePill(m){
+  const map={Payroll:'pill-status-scheduled', Overtime:'pill-status-partial', Finance:'pill-status-completed', Import:'pill-status-planned', Employees:'pill-other', Contracts:'pill-other', System:'pill-status-archived'};
+  return `<span class="pill ${map[m]||'pill-other'}">${escapeHtml(m||'System')}</span>`;
+}
+function auditRelatedChips(refs){
+  const r = refs||{}; const out=[];
+  const shortId = (v)=>{ v=String(v); return v.length>10 ? '…'+v.slice(-6) : v; };
+  if(r.monthKey)       out.push(`<span class="pill pill-other" title="Payroll period">${escapeHtml(r.monthKey)}</span>`);
+  if(r.employeeId)     out.push(`<span class="pill pill-other" title="Employee ${escapeHtml(String(r.employeeId))}">emp ${escapeHtml(shortId(r.employeeId))}</span>`);
+  if(r.payrollPlanId)  out.push(`<span class="pill pill-other" title="Payroll plan ${escapeHtml(String(r.payrollPlanId))}">pay ${escapeHtml(shortId(r.payrollPlanId))}</span>`);
+  if(r.contractId)     out.push(`<span class="pill pill-other" title="Contract ${escapeHtml(String(r.contractId))}">ct ${escapeHtml(shortId(r.contractId))}</span>`);
+  if(r.transactionId)  out.push(`<span class="pill pill-other" title="Transaction ${escapeHtml(String(r.transactionId))}">txn ${escapeHtml(shortId(r.transactionId))}</span>`);
+  if(r.importBatchId)  out.push(`<span class="pill pill-other" title="Import batch ${escapeHtml(String(r.importBatchId))}">imp ${escapeHtml(shortId(r.importBatchId))}</span>`);
+  return out.join(' ') || '<span class="faint">—</span>';
+}
+
+/* ---------- period filter ---------- */
+function activityPeriodCutoff(period){
+  const now = Date.now(), DAY = 86400000;
+  if(period==='7d')  return now - 7*DAY;
+  if(period==='30d') return now - 30*DAY;
+  if(period==='90d') return now - 90*DAY;
+  if(period==='month'){ const d=new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); }
+  return 0; // all time
+}
+
+/* ---------- incremental render (search focus preserved, mirrors v2.6.1 pattern) ---------- */
+let __activityCache = [];
+function activityFiltered(){
+  const f = State.activityFilter;
+  let rows = __activityCache.slice();
+  if(f.module!=='all') rows = rows.filter(e=>e.module===f.module);
+  if(f.type!=='all')   rows = rows.filter(e=>e.type===f.type);
+  const cut = activityPeriodCutoff(f.period);
+  if(cut) rows = rows.filter(e=> e.ts && new Date(e.ts).getTime() >= cut);
+  if(f.search.trim()){
+    const s = normStr(f.search);
+    rows = rows.filter(e=> [e.entity, e.desc, auditTypeLabel(e.type), e.module, e.entityId, e.refs?Object.values(e.refs).join(' '):'']
+      .some(x=> normStr(String(x||'')).includes(s)));
+  }
+  rows.sort((a,b)=> new Date(b.ts||0) - new Date(a.ts||0)); // newest first
+  return rows;
+}
+function activityRowHTML(e){
+  return `<tr>
+    <td class="dim" style="white-space:nowrap;">${e.ts?escapeHtml(new Date(e.ts).toLocaleString('id-ID')):'—'}</td>
+    <td>${auditModulePill(e.module)}</td>
+    <td><b>${escapeHtml(auditTypeLabel(e.type))}</b></td>
+    <td>${e.entity?escapeHtml(e.entity):'<span class="faint">—</span>'}</td>
+    <td class="dim">${e.desc?escapeHtml(e.desc):'—'}</td>
+    <td style="font-size:10px;">${auditRelatedChips(e.refs)}</td>
+  </tr>`;
+}
+function activityBodyHTML(){
+  const rows = activityFiltered();
+  if(!rows.length) return '<tr><td colspan="6" class="empty">No activity matches the current filters.</td></tr>';
+  return rows.map(activityRowHTML).join('');
+}
+function applyActivityFilter(main){
+  const tb = document.getElementById('actRows'); if(!tb) return;
+  tb.innerHTML = activityBodyHTML();
+  const cnt = document.getElementById('actCount'); if(cnt) cnt.textContent = String(activityFiltered().length);
+}
+function renderActivityLog(main){
+  if(!State.activityFilter) State.activityFilter = {search:'', module:'all', type:'all', period:'all'};
+  __activityCache = getAuditEvents();
+  const f = State.activityFilter;
+
+  // Fully empty store (nothing has been recorded yet) — dedicated empty state.
+  if(!__activityCache.length){
+    main.innerHTML = pageHeader('Activity Log','A read-only audit trail of key actions across TAM Intelligence OS. Newest first.')
+      + `<div class="card"><div class="empty">
+        <div class="big">▤</div>
+        <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No activity recorded yet</div>
+        <div>Actions such as generating, approving, posting or locking payroll, executing transactions, committing a Smart Import, or changing overtime status will appear here as they happen. Nothing on this page is sample data.</div>
+      </div></div>`;
+    return;
+  }
+
+  const modules = [...new Set(__activityCache.map(e=>e.module))].sort();
+  const types = [...new Set(__activityCache.map(e=>e.type))].sort((a,b)=>auditTypeLabel(a).localeCompare(auditTypeLabel(b)));
+
+  main.innerHTML = pageHeader('Activity Log', 'A read-only audit trail of key actions across TAM Intelligence OS. Newest first — search, filter and export.')
+    + `<div class="card">
+      <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1.2fr 1fr;margin-bottom:12px;">
+        <div class="field"><label>Search</label><input class="input" id="actSearch" placeholder="entity, description, id" value="${escapeHtml(f.search)}"></div>
+        <div class="field"><label>Module</label><select class="input" id="actModule"><option value="all">All modules</option>${modules.map(m=>`<option value="${escapeHtml(m)}" ${f.module===m?'selected':''}>${escapeHtml(m)}</option>`).join('')}</select></div>
+        <div class="field"><label>Event Type</label><select class="input" id="actType"><option value="all">All events</option>${types.map(t=>`<option value="${escapeHtml(t)}" ${f.type===t?'selected':''}>${escapeHtml(auditTypeLabel(t))}</option>`).join('')}</select></div>
+        <div class="field"><label>Period</label><select class="input" id="actPeriod">
+          <option value="all" ${f.period==='all'?'selected':''}>All time</option>
+          <option value="7d" ${f.period==='7d'?'selected':''}>Last 7 days</option>
+          <option value="30d" ${f.period==='30d'?'selected':''}>Last 30 days</option>
+          <option value="90d" ${f.period==='90d'?'selected':''}>Last 90 days</option>
+          <option value="month" ${f.period==='month'?'selected':''}>This month</option>
+        </select></div>
+      </div>
+      <div class="small-btn-row" style="flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
+        <span class="dim" style="font-size:12px;"><b id="actCount">${activityFiltered().length}</b> event(s) · ${__activityCache.length} total recorded</span>
+        <button class="btn btn-sm" id="actReset">Clear Filters</button>
+        <button class="btn btn-sm" id="actCsv" style="margin-left:auto;">Export CSV</button>
+      </div>
+      <div class="table-wrap" style="max-height:640px;overflow:auto;">
+        <table>
+          <thead><tr><th style="width:150px;">Time</th><th>Module</th><th>Event</th><th>Entity</th><th>Description</th><th>Related</th></tr></thead>
+          <tbody id="actRows">${activityBodyHTML()}</tbody>
+        </table>
+      </div>
+      <p class="hint" style="margin-top:10px;">Read-only. Records are stored privately on this device and are kept even after a data reset. The newest ${AUDIT_LOG_CAP} events are retained.</p>
+    </div>`;
+
+  document.getElementById('actSearch').addEventListener('input', e=>{ State.activityFilter.search=e.target.value; applyActivityFilter(main); });
+  document.getElementById('actModule').addEventListener('change', e=>{ State.activityFilter.module=e.target.value; applyActivityFilter(main); });
+  document.getElementById('actType').addEventListener('change', e=>{ State.activityFilter.type=e.target.value; applyActivityFilter(main); });
+  document.getElementById('actPeriod').addEventListener('change', e=>{ State.activityFilter.period=e.target.value; applyActivityFilter(main); });
+  document.getElementById('actReset').addEventListener('click', ()=>{ State.activityFilter={search:'', module:'all', type:'all', period:'all'}; renderActivityLog(main); });
+  document.getElementById('actCsv').addEventListener('click', exportActivityCsv);
+}
+function exportActivityCsv(){
+  const rows = activityFiltered();
+  const headers = ['Timestamp','Module','Event Type','Event','Entity','Description','Month','Employee ID','Payroll ID','Contract ID','Transaction ID','Import ID'];
+  const lines = [`# ${APP_NAME} v${APP_VERSION} — Activity Log`, headers.join(',')];
+  rows.forEach(e=>{ const r=e.refs||{}; lines.push([
+    e.ts||'', e.module||'', e.type||'', auditTypeLabel(e.type), e.entity||'', e.desc||'',
+    r.monthKey||'', r.employeeId||'', r.payrollPlanId||'', r.contractId||'', r.transactionId||'', r.importBatchId||''
+  ].map(csvSafe).join(','));});
+  downloadBlob(lines.join('\n'), `${FILE_BASE}-activity-log-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv');
+  showSuccess('Activity log exported.');
 }
 
 /* ---- REPORTS ---- */
@@ -5094,7 +5297,9 @@ async function deleteEmployee(id){
   }
   if(!confirm(`Permanently delete ${e.fullName}? This is only allowed because the record has no linked payroll or transactions.`)) return;
   State.employees = State.employees.filter(x=>x.id!==id);
-  await persistEmployees(); toast('Employee deleted.'); render();
+  await persistEmployees();
+  logActivity({type:'employee.delete', module:'Employees', entity:e.fullName, entityId:e.id, desc:`Employee "${e.fullName}" deleted (no linked payroll/transactions)`, refs:{employeeId:e.id}});
+  toast('Employee deleted.'); render();
 }
 
 function renderEmployeeDetail(main){
@@ -5449,7 +5654,9 @@ async function deleteContract(id){
   }
   if(c.status!=='Draft' && !confirm('Permanently delete this contract? Only unused records should be deleted.')) return;
   State.contracts = State.contracts.filter(x=>x.id!==id);
-  await persistContracts(); toast('Contract deleted.'); render();
+  await persistContracts();
+  logActivity({type:'contract.delete', module:'Contracts', entity:c.contractNumber||c.employeeName||'Contract', entityId:c.id, desc:`Contract "${c.contractNumber||'—'}"${c.employeeName?' ('+c.employeeName+')':''} deleted`, refs:{contractId:c.id, employeeId:c.employeeId||null}});
+  toast('Contract deleted.'); render();
 }
 
 // Renewal: old → Renewed, new → Active (or Draft), history preserved, no
@@ -6896,7 +7103,12 @@ async function setOvertimeStatus(id, status){
   if(status==='Approved' && o.approvedAmount==null) o.approvedAmount = o.calculatedAmount;
   o.updatedAt = new Date().toISOString();
   (o.history=o.history||[]).push({event:status.toLowerCase(), ts:o.updatedAt, note:'Status → '+status});
-  await persistOvertime(); showSuccess('Overtime '+status.toLowerCase()+'.'); render();
+  await persistOvertime();
+  const otEmp=empById(o.employeeId); const otName=(otEmp&&otEmp.fullName)||o.employeeName||'Employee';
+  logActivity({type:'overtime.'+status.toLowerCase().replace(/\s+/g,'-'), module:'Overtime', entity:otName, entityId:o.id,
+    desc:`${otName}: overtime ${status}${o.overtimeDate?' ('+o.overtimeDate+')':''}`,
+    refs:{employeeId:o.employeeId, monthKey:o.monthKey}});
+  showSuccess('Overtime '+status.toLowerCase()+'.'); render();
 }
 async function duplicateOvertimeRecord(id){
   const o = overtimeById(id); if(!o) return;
@@ -7801,6 +8013,10 @@ async function commitSmartImport(model){
     counts:{employees:created.employees.length, contracts:created.contracts.length, payrollPlans:created.payrollPlans.length, txns:created.txns.length, skipped, duplicatesSkipped:dupSkipped, contractConflicts, uniqueEmployees:Object.keys(candidateMap).length}, undone:false};
   State.importBatches.unshift(audit);
   await saveAllData();
+  const c=audit.counts;
+  logActivity({type:'import.commit', module:'Import', entity:model.fileName||'Smart Import', entityId:batchId,
+    desc:`Committed — ${c.employees} employee(s), ${c.contracts} contract(s), ${c.payrollPlans} payroll plan(s), ${c.txns} transaction(s)${c.skipped?', '+c.skipped+' skipped':''}`,
+    refs:{importBatchId:batchId}});
   return audit;
 }
 
@@ -8215,6 +8431,9 @@ function generatePayrollForMonth(monthKey){
     pp.plannedAmount = computePayrollPlanned(pp);
     pp.updatedAt = now;
   });
+  logActivity({type:'payroll.generate', module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey,
+    desc:`Generated payroll — ${result.generated} new, ${result.refreshed} refreshed, ${result.excluded.length} excluded`,
+    refs:{monthKey}});
   return result;
 }
 
@@ -8272,6 +8491,10 @@ function payrollCommitBlockers(pp){
   if(dup.length) b.push('duplicate payroll for this month');
   return b;
 }
+// v2.6.4 — map a stored status change to an Activity Log event type.
+function payrollAuditType(status){
+  return status==='Reviewed'?'payroll.review':status==='Ready'?'payroll.approve':status==='Draft'?'payroll.return':status==='Cancelled'?'payroll.cancel':'payroll.edit';
+}
 async function setPayrollStatus(id, status){
   const pp = payrollPlanById(id); if(!pp) return;
   if(isPayrollLocked(pp.monthKey)){ showWarning('This payroll period is locked — unlock it to change status.'); return; }
@@ -8282,6 +8505,9 @@ async function setPayrollStatus(id, status){
   pp.status = status; pp.updatedAt = new Date().toISOString();
   (pp.history=pp.history||[]).push({event:status==='Reviewed'?'reviewed':status==='Ready'?'marked-ready':status==='Cancelled'?'cancelled':'edited', ts:pp.updatedAt, note:'Status → '+status});
   await persistPayrollPlans();
+  logActivity({type:payrollAuditType(status), module:'Payroll', entity:pp.employeeName, entityId:pp.id,
+    desc:`${pp.employeeName} → ${payrollStage(pp)} (status ${status})`,
+    refs:{employeeId:pp.employeeId, payrollPlanId:pp.id, contractId:pp.contractId, monthKey:pp.monthKey}});
 }
 async function bulkPayrollStatus(monthKey, ids, status){
   if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — unlock it to make changes.'); return 0; }
@@ -8290,7 +8516,9 @@ async function bulkPayrollStatus(monthKey, ids, status){
   // finance transactions, so blocked rows can be Approved but will not post.
   let done=0;
   for(const id of ids){ const pp=payrollPlanById(id); if(!pp||pp.status==='Committed') continue; pp.status=status; pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:status.toLowerCase(), ts:pp.updatedAt, note:'Bulk → '+status}); done++; }
-  await persistPayrollPlans(); return done;
+  await persistPayrollPlans();
+  if(done){ const mo=keyToMonthObj(monthKey); logActivity({type:payrollAuditType(status), module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey, desc:`${done} row(s) → ${status} (bulk)`, refs:{monthKey}}); }
+  return done;
 }
 
 /* ---------- salary override (Part 6) ---------- */
@@ -8304,7 +8532,7 @@ function openSalaryOverride(id, main){
     </div><div class="modal-actions"><button type="button" class="btn" id="ovCancel">Cancel</button><button type="submit" class="btn btn-accent">Apply Override</button>${pp.salaryOverride?'<button type="button" class="btn btn-danger" id="ovClear">Clear Override</button>':''}</div></form>`,
     {width:560, onMount:(root)=>{
       root.querySelector('#ovCancel').addEventListener('click', closeModal);
-      const clr=root.querySelector('#ovClear'); if(clr) clr.addEventListener('click', async ()=>{ pp.baseSalary=pp.baseSalarySnapshot; pp.salaryOverride=null; pp.plannedAmount=computePayrollPlanned(pp); pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:'edited',ts:pp.updatedAt,note:'Salary override cleared'}); await persistPayrollPlans(); closeModal(); render(); });
+      const clr=root.querySelector('#ovClear'); if(clr) clr.addEventListener('click', async ()=>{ pp.baseSalary=pp.baseSalarySnapshot; pp.salaryOverride=null; pp.plannedAmount=computePayrollPlanned(pp); pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:'edited',ts:pp.updatedAt,note:'Salary override cleared'}); await persistPayrollPlans(); logActivity({type:'payroll.override', module:'Payroll', entity:pp.employeeName, entityId:pp.id, desc:`Salary override cleared (back to ${fmtIDR(pp.baseSalarySnapshot)})`, refs:{employeeId:pp.employeeId, payrollPlanId:pp.id, contractId:pp.contractId, monthKey:pp.monthKey}}); closeModal(); render(); });
       root.querySelector('#ovForm').addEventListener('submit', async ev=>{
         ev.preventDefault(); const fd=new FormData(ev.target);
         const val=Number(fd.get('salary')); const reason=(fd.get('reason')||'').trim();
@@ -8312,7 +8540,9 @@ function openSalaryOverride(id, main){
         pp.salaryOverride={original:pp.baseSalarySnapshot, overridden:val, reason, ts:new Date().toISOString()};
         pp.baseSalary=val; pp.plannedAmount=computePayrollPlanned(pp); pp.updatedAt=new Date().toISOString();
         (pp.history=pp.history||[]).push({event:'edited', ts:pp.updatedAt, note:`Salary overridden to ${fmtIDR(val)} — ${reason}`});
-        await persistPayrollPlans(); closeModal(); showSuccess('Salary overridden for this payroll only.'); render();
+        await persistPayrollPlans();
+        logActivity({type:'payroll.override', module:'Payroll', entity:pp.employeeName, entityId:pp.id, desc:`Salary overridden to ${fmtIDR(val)} — ${reason}`, refs:{employeeId:pp.employeeId, payrollPlanId:pp.id, contractId:pp.contractId, monthKey:pp.monthKey}});
+        closeModal(); showSuccess('Salary overridden for this payroll only.'); render();
       });
     }});
 }
@@ -8343,26 +8573,35 @@ function commitPayrollPreview(monthKey, ids){
   return s;
 }
 async function commitReadyPayroll(monthKey, ids){
-  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — finance posting cannot run again.'); return {created:0, updated:0, skipped:ids.length, locked:true}; }
+  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — finance posting cannot run again.'); return {created:0, updated:0, skipped:ids.length, posted:[], skippedDetails:[], locked:true}; }
   const mo=keyToMonthObj(monthKey); const plan=ensureMonthlyPlan(monthKey); const now=new Date().toISOString();
   let created=0, updated=0, skipped=0;
+  const posted=[], skippedDetails=[];   // v2.6.4 — per-row outcome for the Post result summary
   for(const id of ids){
-    const pp=payrollPlanById(id); if(!pp || pp.status!=='Ready'){ skipped++; continue; }
-    if(payrollCommitBlockers(pp).length){ skipped++; continue; }
+    const pp=payrollPlanById(id);
+    if(!pp){ skipped++; continue; }
+    // Only Approved rows post. Blocked rows are SKIPPED (never posted), stay Approved, and
+    // the exact reason is reported. Blocker rules are unchanged (payrollCommitBlockers).
+    if(pp.status!=='Ready'){ skipped++; skippedDetails.push({name:pp.employeeName||'—', reasons:['not Approved (current stage: '+payrollStage(pp)+')']}); continue; }
+    const blockers = payrollCommitBlockers(pp);
+    if(blockers.length){ skipped++; skippedDetails.push({name:pp.employeeName, reasons:blockers}); continue; }
     pp.status='Committed'; pp.monthlyPlanId=plan.id; pp.plannedAmount=computePayrollPlanned(pp); pp.committedAt=now; pp.updatedAt=now;
-    let txn = payrollTxnOf(pp);
-    if(!txn){ txn=payrollCommitTxn(pp, mo); State.txns.push(txn); pp.committedTxnId=txn.id; pp.transactionId=txn.id; created++; (pp.history=pp.history||[]).push({event:'transaction-created', ts:now, note:'Planned Gaji transaction created'}); }
+    let txn = payrollTxnOf(pp); let wasCreated=false;
+    if(!txn){ txn=payrollCommitTxn(pp, mo); State.txns.push(txn); pp.committedTxnId=txn.id; pp.transactionId=txn.id; created++; wasCreated=true; (pp.history=pp.history||[]).push({event:'transaction-created', ts:now, note:'Planned Gaji transaction created'}); }
     else if(txn.actual==null){ txn.planned=pp.plannedAmount; txn.hargaSatuan=pp.plannedAmount; txn.overtimeIds=(pp.overtimeIds||[]).slice(); txn.overtimeAmount=num(pp.overtimeAmount); pushHistory(txn,'edited','Payroll re-committed'); updated++; }
     // flip approved overtime → Committed to Payroll (prevent double inclusion)
     (pp.overtimeIds||[]).forEach(oid=>{ const o=overtimeById(oid); if(o && o.status==='Approved'){ o.status='Committed to Payroll'; o.payrollPlanId=pp.id; o.committedTxnId=pp.committedTxnId; o.updatedAt=now; (o.history=o.history||[]).push({event:'committed', ts:now, note:'Committed to payroll'}); } });
     if(pp.committedTxnId && !plan.committedTxnIds.includes(pp.committedTxnId)) plan.committedTxnIds.push(pp.committedTxnId);
     pp.otChanged=false;
+    posted.push({name:pp.employeeName||'—', txnId:pp.committedTxnId, created:wasCreated});
     (pp.history=pp.history||[]).push({event:'committed', ts:now, note:'Committed to monthly plan'});
   }
   if(plan.status==='Draft'||plan.status==='Reviewed') plan.status='Committed';
   plan.committedAt=now; plan.updatedAt=now;
   await persistPayrollPlans(); await persistMonthlyPlans(); await persistOvertime(); await persist();
-  return {created, updated, skipped};
+  logActivity({type:'payroll.post', module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey,
+    desc:`Posted to finance — ${created} created, ${updated} updated, ${skipped} skipped`, refs:{monthKey}});
+  return {created, updated, skipped, posted, skippedDetails};
 }
 
 /* ---------- prepare next month (Part 13) ---------- */
@@ -8448,6 +8687,48 @@ async function setPayrollLock(monthKey, locked){
   if(!State.settings.payrollLocks) State.settings.payrollLocks={};
   if(locked) State.settings.payrollLocks[monthKey]=true; else delete State.settings.payrollLocks[monthKey];
   await saveSettings();
+  const mo=keyToMonthObj(monthKey);
+  logActivity({type:locked?'payroll.lock':'payroll.unlock', module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey,
+    desc:`Payroll period ${locked?'locked':'unlocked'}`, refs:{monthKey}});
+}
+
+/* ---------- payroll audit timeline (v2.6.4) — derived, real events only ----------
+   No new state: the per-plan timeline is derived from the plan's own history[], the
+   linked finance transaction's history, and lock/unlock records in the audit log.
+   Events with no real timestamp are simply omitted (never fabricated). */
+function buildPayrollTimeline(pp){
+  if(!pp) return [];
+  const ev=[]; const hist = pp.history||[];
+  const firstOf = (match)=>{ const h=hist.filter(match).sort((a,b)=>new Date(a.ts||0)-new Date(b.ts||0))[0]; return h?h.ts:null; };
+  const lastOf  = (match)=>{ const h=hist.filter(match).sort((a,b)=>new Date(a.ts||0)-new Date(b.ts||0)).pop(); return h?h.ts:null; };
+  const push=(label, ts, detail)=>{ if(ts) ev.push({label, ts, detail:detail||''}); };
+  push('Generated', firstOf(h=>h.event==='generated'), 'Generated from active contract + approved overtime');
+  push('Reviewed', lastOf(h=>h.event==='reviewed'), 'Marked reviewed');
+  push('Approved', lastOf(h=>h.event==='marked-ready'||h.event==='ready'), 'Approved (ready to post)');
+  push('Posted to Finance', lastOf(h=>h.event==='committed'||h.event==='transaction-created'), 'Planned Gaji transaction created in finance');
+  const txn=payrollTxnOf(pp);
+  if(txn){
+    const exec=(txn.history||[]).filter(h=>h.event==='executed').sort((a,b)=>new Date(a.ts||0)-new Date(b.ts||0)).pop();
+    if(exec) push('Executed', exec.ts, exec.note||'Paid via Execution Center');
+    else if(['completed','archived'].includes(statusOf(txn)) && txn.execution && txn.execution.ts) push('Executed', txn.execution.ts, 'Paid via Execution Center');
+  }
+  // Period lock / unlock come from the audit log for this month (only if recorded).
+  if(typeof auditEventsForMonth==='function'){
+    auditEventsForMonth(pp.monthKey).forEach(e=>{
+      if(e.type==='payroll.lock') push('Period Locked', e.ts, e.desc);
+      else if(e.type==='payroll.unlock') push('Period Unlocked', e.ts, e.desc);
+    });
+  }
+  ev.sort((a,b)=> new Date(a.ts) - new Date(b.ts)); // chronological
+  return ev;
+}
+// Period-level activity for the whole month (generate / post / lock / unlock), newest first.
+function buildPayrollPeriodTimeline(monthKey){
+  if(typeof auditEventsForMonth!=='function') return [];
+  return auditEventsForMonth(monthKey)
+    .filter(e=> ['payroll.generate','payroll.post','payroll.lock','payroll.unlock'].includes(e.type))
+    .map(e=>({label:auditTypeLabel(e.type), ts:e.ts, detail:e.desc}))
+    .sort((a,b)=> new Date(b.ts||0) - new Date(a.ts||0));
 }
 
 /* ============================================================
@@ -8495,6 +8776,7 @@ function renderPayrollWorkspace(main){
   const excludedNow = State.employees.map(e=>({e, reason:payrollExclusionReason(e, monthKey)}))
     .filter(x=>x.reason && x.e.active!==false && x.e.employmentStatus==='Active');
   const health = payrollHealth(monthKey);
+  const periodEvents = buildPayrollPeriodTimeline(monthKey); // v2.6.4 read-only period activity
   const hasRows = plans.length>0;
 
   const kpi = (label, value, sub) => `<div class="card stat-card"><div class="stat-label">${label}</div><div class="stat-value">${value}</div>${sub?`<div class="stat-sub dim">${sub}</div>`:''}</div>`;
@@ -8550,6 +8832,10 @@ function renderPayrollWorkspace(main){
     </div>`:''}
 
     <div id="payArea"></div>
+
+    ${periodEvents.length?`<div class="card" style="margin-top:14px;"><h3>Period Activity <span class="tag">${periodEvents.length}</span></h3>
+      <p class="hint" style="margin-top:-2px;margin-bottom:10px;">Recorded generate / post / lock / unlock events for ${escapeHtml(mo.month)} ${mo.year} — newest first. See the full cross-module trail in Management → Activity Log.</p>
+      ${payrollTimelineHTML(periodEvents)}</div>`:''}
 
     ${excludedNow.length?`<div class="card" style="margin-top:14px;"><h3>Excluded Employees <span class="tag">${excludedNow.length}</span></h3><div class="insight-list">${excludedNow.map(x=>`<div class="insight-item warn"><b>${escapeHtml(x.e.fullName)}</b> — ${escapeHtml(x.reason)}</div>`).join('')}</div></div>`:''}`;
 
@@ -8725,10 +9011,38 @@ function openCommitPayrollModal(monthKey, main){
       root.querySelector('#cpGo').addEventListener('click', async ()=>{
         const res=await commitReadyPayroll(monthKey, readyIds); sel.clear(); closeModal();
         if(res.locked) return;
-        showSuccess(`Posted to finance: ${res.created} transaction(s) created, ${res.updated} updated${res.skipped?', '+res.skipped+' skipped':''}.`, 6000);
+        // v2.6.4 — if any Approved row was skipped, show a clear posted-vs-skipped summary
+        // (employee + exact blocker reason). Blocked rows stay Approved and are NOT posted.
+        if(res.skippedDetails && res.skippedDetails.length){ openPostResultModal(res); }
+        else showSuccess(`Posted to finance: ${res.created} transaction(s) created, ${res.updated} updated.`, 6000);
         render();
       });
     }});
+}
+// v2.6.4 — Post to Finance result summary: posted vs skipped, with the exact blocker reason
+// per skipped row. Read-only, single modal (no chain). Blocker rules are unchanged.
+function openPostResultModal(res){
+  const posted=res.posted||[], skipped=res.skippedDetails||[];
+  const postedHTML = posted.length
+    ? `<div class="hist-list">${posted.map(p=>`<div class="hist-row"><span class="hist-event">Posted</span><span class="hist-note">${escapeHtml(p.name)}${p.created?'':' <span class="faint">(updated existing)</span>'}</span></div>`).join('')}</div>`
+    : '<div class="empty">No rows were posted.</div>';
+  const skippedHTML = skipped.length
+    ? `<div class="insight-list">${skipped.map(s=>`<div class="insight-item warn"><b>${escapeHtml(s.name)}</b> — ${escapeHtml((s.reasons||[]).join('; '))}</div>`).join('')}</div>`
+    : '';
+  openModalHTML(`<h3>Post to Finance — Result</h3>
+    <div style="font-size:12.5px;line-height:1.9;">
+      <div><b style="color:var(--green,#4FAE7C);">${res.created} created</b> · <b>${res.updated} updated</b> · <b style="color:var(--brick);">${skipped.length} skipped</b></div>
+    </div>
+    <div style="margin-top:10px;"><h4 style="margin:0 0 6px;">Posted (${posted.length})</h4>${postedHTML}</div>
+    ${skipped.length?`<div style="margin-top:12px;"><h4 style="margin:0 0 6px;">Skipped — kept Approved, not posted (${skipped.length})</h4>${skippedHTML}
+      <p class="hint" style="margin-top:8px;">These rows stayed Approved and no transaction was created for them. Fix the reason (salary on the Contract, a valid/unique contract, or a non-negative total), then Post to Finance again.</p></div>`:''}
+    <div class="modal-actions"><button type="button" class="btn btn-accent" id="prOk">Done</button></div>`,
+    {width:600, onMount:(root)=>root.querySelector('#prOk').addEventListener('click', closeModal)});
+}
+// Shared read-only timeline markup (reuses the existing .hist-* classes; no CSS change).
+function payrollTimelineHTML(events){
+  if(!events || !events.length) return '<div class="empty">No recorded events yet.</div>';
+  return `<div class="hist-list">${events.map(e=>`<div class="hist-row"><span class="hist-event">${escapeHtml(e.label)}</span><span class="hist-note">${escapeHtml(e.detail||'')}</span><span class="hist-ts faint">${e.ts?new Date(e.ts).toLocaleString('id-ID'):'—'}</span></div>`).join('')}</div>`;
 }
 function exportPayrollCsv(monthKey){
   const plans=payrollPlansForMonth(monthKey, true);
@@ -8768,6 +9082,9 @@ function renderPayrollDetail(main){
         <div style="margin-top:8px;"><button class="btn btn-sm" id="pdExec">Open in Execution Center</button></div>
       </div>`:'<div class="empty">Not posted to finance yet. Approve then Post to Finance to create a Planned transaction.</div>'}</div>
     </div>
+    <div class="card" style="margin-bottom:14px;"><h3>Payroll Timeline</h3>
+      <p class="hint" style="margin-top:-2px;margin-bottom:10px;">Generated → Reviewed → Approved → Posted → Executed, plus period lock/unlock. Only events that actually occurred are shown (real timestamps — nothing is fabricated).</p>
+      ${payrollTimelineHTML(buildPayrollTimeline(p))}</div>
     <div class="card"><h3>Payroll History</h3><div class="hist-list">${(p.history||[]).map(h=>`<div class="hist-row"><span class="hist-event">${escapeHtml((h.event||'').charAt(0).toUpperCase()+(h.event||'').slice(1))}</span><span class="hist-note">${escapeHtml(h.note||'')}</span><span class="hist-ts faint">${h.ts?new Date(h.ts).toLocaleString('id-ID'):'—'}</span></div>`).join('')||'<div class="empty">No history.</div>'}</div></div>`;
   document.getElementById('pdBack').addEventListener('click', ()=>hrNavTo('payroll'));
   const ge=document.getElementById('pdEmp'); if(ge) ge.addEventListener('click', ()=>hrNavTo('employeeDetail',{detailEmpId:emp.id}));

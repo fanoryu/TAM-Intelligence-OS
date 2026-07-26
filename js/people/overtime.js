@@ -128,7 +128,12 @@ async function setOvertimeStatus(id, status){
   if(status==='Approved' && o.approvedAmount==null) o.approvedAmount = o.calculatedAmount;
   o.updatedAt = new Date().toISOString();
   (o.history=o.history||[]).push({event:status.toLowerCase(), ts:o.updatedAt, note:'Status → '+status});
-  await persistOvertime(); showSuccess('Overtime '+status.toLowerCase()+'.'); render();
+  await persistOvertime();
+  const otEmp=empById(o.employeeId); const otName=(otEmp&&otEmp.fullName)||o.employeeName||'Employee';
+  logActivity({type:'overtime.'+status.toLowerCase().replace(/\s+/g,'-'), module:'Overtime', entity:otName, entityId:o.id,
+    desc:`${otName}: overtime ${status}${o.overtimeDate?' ('+o.overtimeDate+')':''}`,
+    refs:{employeeId:o.employeeId, monthKey:o.monthKey}});
+  showSuccess('Overtime '+status.toLowerCase()+'.'); render();
 }
 async function duplicateOvertimeRecord(id){
   const o = overtimeById(id); if(!o) return;

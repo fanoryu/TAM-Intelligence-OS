@@ -108,6 +108,9 @@ function generatePayrollForMonth(monthKey){
     pp.plannedAmount = computePayrollPlanned(pp);
     pp.updatedAt = now;
   });
+  logActivity({type:'payroll.generate', module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey,
+    desc:`Generated payroll — ${result.generated} new, ${result.refreshed} refreshed, ${result.excluded.length} excluded`,
+    refs:{monthKey}});
   return result;
 }
 
@@ -165,6 +168,10 @@ function payrollCommitBlockers(pp){
   if(dup.length) b.push('duplicate payroll for this month');
   return b;
 }
+// v2.6.4 — map a stored status change to an Activity Log event type.
+function payrollAuditType(status){
+  return status==='Reviewed'?'payroll.review':status==='Ready'?'payroll.approve':status==='Draft'?'payroll.return':status==='Cancelled'?'payroll.cancel':'payroll.edit';
+}
 async function setPayrollStatus(id, status){
   const pp = payrollPlanById(id); if(!pp) return;
   if(isPayrollLocked(pp.monthKey)){ showWarning('This payroll period is locked — unlock it to change status.'); return; }
@@ -175,6 +182,9 @@ async function setPayrollStatus(id, status){
   pp.status = status; pp.updatedAt = new Date().toISOString();
   (pp.history=pp.history||[]).push({event:status==='Reviewed'?'reviewed':status==='Ready'?'marked-ready':status==='Cancelled'?'cancelled':'edited', ts:pp.updatedAt, note:'Status → '+status});
   await persistPayrollPlans();
+  logActivity({type:payrollAuditType(status), module:'Payroll', entity:pp.employeeName, entityId:pp.id,
+    desc:`${pp.employeeName} → ${payrollStage(pp)} (status ${status})`,
+    refs:{employeeId:pp.employeeId, payrollPlanId:pp.id, contractId:pp.contractId, monthKey:pp.monthKey}});
 }
 async function bulkPayrollStatus(monthKey, ids, status){
   if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — unlock it to make changes.'); return 0; }
@@ -183,7 +193,9 @@ async function bulkPayrollStatus(monthKey, ids, status){
   // finance transactions, so blocked rows can be Approved but will not post.
   let done=0;
   for(const id of ids){ const pp=payrollPlanById(id); if(!pp||pp.status==='Committed') continue; pp.status=status; pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:status.toLowerCase(), ts:pp.updatedAt, note:'Bulk → '+status}); done++; }
-  await persistPayrollPlans(); return done;
+  await persistPayrollPlans();
+  if(done){ const mo=keyToMonthObj(monthKey); logActivity({type:payrollAuditType(status), module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey, desc:`${done} row(s) → ${status} (bulk)`, refs:{monthKey}}); }
+  return done;
 }
 
 /* ---------- salary override (Part 6) ---------- */
@@ -197,7 +209,7 @@ function openSalaryOverride(id, main){
     </div><div class="modal-actions"><button type="button" class="btn" id="ovCancel">Cancel</button><button type="submit" class="btn btn-accent">Apply Override</button>${pp.salaryOverride?'<button type="button" class="btn btn-danger" id="ovClear">Clear Override</button>':''}</div></form>`,
     {width:560, onMount:(root)=>{
       root.querySelector('#ovCancel').addEventListener('click', closeModal);
-      const clr=root.querySelector('#ovClear'); if(clr) clr.addEventListener('click', async ()=>{ pp.baseSalary=pp.baseSalarySnapshot; pp.salaryOverride=null; pp.plannedAmount=computePayrollPlanned(pp); pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:'edited',ts:pp.updatedAt,note:'Salary override cleared'}); await persistPayrollPlans(); closeModal(); render(); });
+      const clr=root.querySelector('#ovClear'); if(clr) clr.addEventListener('click', async ()=>{ pp.baseSalary=pp.baseSalarySnapshot; pp.salaryOverride=null; pp.plannedAmount=computePayrollPlanned(pp); pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:'edited',ts:pp.updatedAt,note:'Salary override cleared'}); await persistPayrollPlans(); logActivity({type:'payroll.override', module:'Payroll', entity:pp.employeeName, entityId:pp.id, desc:`Salary override cleared (back to ${fmtIDR(pp.baseSalarySnapshot)})`, refs:{employeeId:pp.employeeId, payrollPlanId:pp.id, contractId:pp.contractId, monthKey:pp.monthKey}}); closeModal(); render(); });
       root.querySelector('#ovForm').addEventListener('submit', async ev=>{
         ev.preventDefault(); const fd=new FormData(ev.target);
         const val=Number(fd.get('salary')); const reason=(fd.get('reason')||'').trim();
@@ -205,7 +217,9 @@ function openSalaryOverride(id, main){
         pp.salaryOverride={original:pp.baseSalarySnapshot, overridden:val, reason, ts:new Date().toISOString()};
         pp.baseSalary=val; pp.plannedAmount=computePayrollPlanned(pp); pp.updatedAt=new Date().toISOString();
         (pp.history=pp.history||[]).push({event:'edited', ts:pp.updatedAt, note:`Salary overridden to ${fmtIDR(val)} — ${reason}`});
-        await persistPayrollPlans(); closeModal(); showSuccess('Salary overridden for this payroll only.'); render();
+        await persistPayrollPlans();
+        logActivity({type:'payroll.override', module:'Payroll', entity:pp.employeeName, entityId:pp.id, desc:`Salary overridden to ${fmtIDR(val)} — ${reason}`, refs:{employeeId:pp.employeeId, payrollPlanId:pp.id, contractId:pp.contractId, monthKey:pp.monthKey}});
+        closeModal(); showSuccess('Salary overridden for this payroll only.'); render();
       });
     }});
 }
@@ -236,26 +250,35 @@ function commitPayrollPreview(monthKey, ids){
   return s;
 }
 async function commitReadyPayroll(monthKey, ids){
-  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — finance posting cannot run again.'); return {created:0, updated:0, skipped:ids.length, locked:true}; }
+  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — finance posting cannot run again.'); return {created:0, updated:0, skipped:ids.length, posted:[], skippedDetails:[], locked:true}; }
   const mo=keyToMonthObj(monthKey); const plan=ensureMonthlyPlan(monthKey); const now=new Date().toISOString();
   let created=0, updated=0, skipped=0;
+  const posted=[], skippedDetails=[];   // v2.6.4 — per-row outcome for the Post result summary
   for(const id of ids){
-    const pp=payrollPlanById(id); if(!pp || pp.status!=='Ready'){ skipped++; continue; }
-    if(payrollCommitBlockers(pp).length){ skipped++; continue; }
+    const pp=payrollPlanById(id);
+    if(!pp){ skipped++; continue; }
+    // Only Approved rows post. Blocked rows are SKIPPED (never posted), stay Approved, and
+    // the exact reason is reported. Blocker rules are unchanged (payrollCommitBlockers).
+    if(pp.status!=='Ready'){ skipped++; skippedDetails.push({name:pp.employeeName||'—', reasons:['not Approved (current stage: '+payrollStage(pp)+')']}); continue; }
+    const blockers = payrollCommitBlockers(pp);
+    if(blockers.length){ skipped++; skippedDetails.push({name:pp.employeeName, reasons:blockers}); continue; }
     pp.status='Committed'; pp.monthlyPlanId=plan.id; pp.plannedAmount=computePayrollPlanned(pp); pp.committedAt=now; pp.updatedAt=now;
-    let txn = payrollTxnOf(pp);
-    if(!txn){ txn=payrollCommitTxn(pp, mo); State.txns.push(txn); pp.committedTxnId=txn.id; pp.transactionId=txn.id; created++; (pp.history=pp.history||[]).push({event:'transaction-created', ts:now, note:'Planned Gaji transaction created'}); }
+    let txn = payrollTxnOf(pp); let wasCreated=false;
+    if(!txn){ txn=payrollCommitTxn(pp, mo); State.txns.push(txn); pp.committedTxnId=txn.id; pp.transactionId=txn.id; created++; wasCreated=true; (pp.history=pp.history||[]).push({event:'transaction-created', ts:now, note:'Planned Gaji transaction created'}); }
     else if(txn.actual==null){ txn.planned=pp.plannedAmount; txn.hargaSatuan=pp.plannedAmount; txn.overtimeIds=(pp.overtimeIds||[]).slice(); txn.overtimeAmount=num(pp.overtimeAmount); pushHistory(txn,'edited','Payroll re-committed'); updated++; }
     // flip approved overtime → Committed to Payroll (prevent double inclusion)
     (pp.overtimeIds||[]).forEach(oid=>{ const o=overtimeById(oid); if(o && o.status==='Approved'){ o.status='Committed to Payroll'; o.payrollPlanId=pp.id; o.committedTxnId=pp.committedTxnId; o.updatedAt=now; (o.history=o.history||[]).push({event:'committed', ts:now, note:'Committed to payroll'}); } });
     if(pp.committedTxnId && !plan.committedTxnIds.includes(pp.committedTxnId)) plan.committedTxnIds.push(pp.committedTxnId);
     pp.otChanged=false;
+    posted.push({name:pp.employeeName||'—', txnId:pp.committedTxnId, created:wasCreated});
     (pp.history=pp.history||[]).push({event:'committed', ts:now, note:'Committed to monthly plan'});
   }
   if(plan.status==='Draft'||plan.status==='Reviewed') plan.status='Committed';
   plan.committedAt=now; plan.updatedAt=now;
   await persistPayrollPlans(); await persistMonthlyPlans(); await persistOvertime(); await persist();
-  return {created, updated, skipped};
+  logActivity({type:'payroll.post', module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey,
+    desc:`Posted to finance — ${created} created, ${updated} updated, ${skipped} skipped`, refs:{monthKey}});
+  return {created, updated, skipped, posted, skippedDetails};
 }
 
 /* ---------- prepare next month (Part 13) ---------- */
@@ -341,4 +364,46 @@ async function setPayrollLock(monthKey, locked){
   if(!State.settings.payrollLocks) State.settings.payrollLocks={};
   if(locked) State.settings.payrollLocks[monthKey]=true; else delete State.settings.payrollLocks[monthKey];
   await saveSettings();
+  const mo=keyToMonthObj(monthKey);
+  logActivity({type:locked?'payroll.lock':'payroll.unlock', module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey,
+    desc:`Payroll period ${locked?'locked':'unlocked'}`, refs:{monthKey}});
+}
+
+/* ---------- payroll audit timeline (v2.6.4) — derived, real events only ----------
+   No new state: the per-plan timeline is derived from the plan's own history[], the
+   linked finance transaction's history, and lock/unlock records in the audit log.
+   Events with no real timestamp are simply omitted (never fabricated). */
+function buildPayrollTimeline(pp){
+  if(!pp) return [];
+  const ev=[]; const hist = pp.history||[];
+  const firstOf = (match)=>{ const h=hist.filter(match).sort((a,b)=>new Date(a.ts||0)-new Date(b.ts||0))[0]; return h?h.ts:null; };
+  const lastOf  = (match)=>{ const h=hist.filter(match).sort((a,b)=>new Date(a.ts||0)-new Date(b.ts||0)).pop(); return h?h.ts:null; };
+  const push=(label, ts, detail)=>{ if(ts) ev.push({label, ts, detail:detail||''}); };
+  push('Generated', firstOf(h=>h.event==='generated'), 'Generated from active contract + approved overtime');
+  push('Reviewed', lastOf(h=>h.event==='reviewed'), 'Marked reviewed');
+  push('Approved', lastOf(h=>h.event==='marked-ready'||h.event==='ready'), 'Approved (ready to post)');
+  push('Posted to Finance', lastOf(h=>h.event==='committed'||h.event==='transaction-created'), 'Planned Gaji transaction created in finance');
+  const txn=payrollTxnOf(pp);
+  if(txn){
+    const exec=(txn.history||[]).filter(h=>h.event==='executed').sort((a,b)=>new Date(a.ts||0)-new Date(b.ts||0)).pop();
+    if(exec) push('Executed', exec.ts, exec.note||'Paid via Execution Center');
+    else if(['completed','archived'].includes(statusOf(txn)) && txn.execution && txn.execution.ts) push('Executed', txn.execution.ts, 'Paid via Execution Center');
+  }
+  // Period lock / unlock come from the audit log for this month (only if recorded).
+  if(typeof auditEventsForMonth==='function'){
+    auditEventsForMonth(pp.monthKey).forEach(e=>{
+      if(e.type==='payroll.lock') push('Period Locked', e.ts, e.desc);
+      else if(e.type==='payroll.unlock') push('Period Unlocked', e.ts, e.desc);
+    });
+  }
+  ev.sort((a,b)=> new Date(a.ts) - new Date(b.ts)); // chronological
+  return ev;
+}
+// Period-level activity for the whole month (generate / post / lock / unlock), newest first.
+function buildPayrollPeriodTimeline(monthKey){
+  if(typeof auditEventsForMonth!=='function') return [];
+  return auditEventsForMonth(monthKey)
+    .filter(e=> ['payroll.generate','payroll.post','payroll.lock','payroll.unlock'].includes(e.type))
+    .map(e=>({label:auditTypeLabel(e.type), ts:e.ts, detail:e.desc}))
+    .sort((a,b)=> new Date(b.ts||0) - new Date(a.ts||0));
 }

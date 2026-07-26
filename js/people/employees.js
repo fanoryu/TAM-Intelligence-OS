@@ -164,7 +164,9 @@ async function deleteEmployee(id){
   }
   if(!confirm(`Permanently delete ${e.fullName}? This is only allowed because the record has no linked payroll or transactions.`)) return;
   State.employees = State.employees.filter(x=>x.id!==id);
-  await persistEmployees(); toast('Employee deleted.'); render();
+  await persistEmployees();
+  logActivity({type:'employee.delete', module:'Employees', entity:e.fullName, entityId:e.id, desc:`Employee "${e.fullName}" deleted (no linked payroll/transactions)`, refs:{employeeId:e.id}});
+  toast('Employee deleted.'); render();
 }
 
 function renderEmployeeDetail(main){

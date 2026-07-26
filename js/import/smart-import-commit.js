@@ -280,6 +280,10 @@ async function commitSmartImport(model){
     counts:{employees:created.employees.length, contracts:created.contracts.length, payrollPlans:created.payrollPlans.length, txns:created.txns.length, skipped, duplicatesSkipped:dupSkipped, contractConflicts, uniqueEmployees:Object.keys(candidateMap).length}, undone:false};
   State.importBatches.unshift(audit);
   await saveAllData();
+  const c=audit.counts;
+  logActivity({type:'import.commit', module:'Import', entity:model.fileName||'Smart Import', entityId:batchId,
+    desc:`Committed — ${c.employees} employee(s), ${c.contracts} contract(s), ${c.payrollPlans} payroll plan(s), ${c.txns} transaction(s)${c.skipped?', '+c.skipped+' skipped':''}`,
+    refs:{importBatchId:batchId}});
   return audit;
 }
 

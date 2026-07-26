@@ -1,21 +1,40 @@
 <#
-  verify-build.ps1 — TAM Intelligence OS v2.6.1 (Search Focus & Incremental Rendering Fix)
+  verify-build.ps1 — TAM Intelligence OS (Release Automation, v2.6.4+)
   ---------------------------------------------------------------------------------------
-  v2.6.1 intentionally changes the render PATH for search/filter controls, so the dist JS
-  is no longer byte-identical to v2.5.2 (that was the v2.6.0 golden master). This verifier:
-    * CSS is still untouched -> dist CSS must equal v2.5.2 CSS byte-for-byte.
+  Optional PowerShell fallback for tools/verify-build.js (no Node required). This verifier:
+    * CSS is still untouched -> dist CSS must equal v2.5.2 CSS byte-for-byte (+ the one
+      v2.6.3b floating-menu rule).
     * Build fidelity: dist inlined payloads == concatenated modular source.
+    * Version identity is DERIVED from js/core/constants.js (single source of truth) — the
+      APP_VERSION, <title>, APP_RELEASE_NAME, Release Notes entry and dist filename must
+      agree with it. No version is hardcoded here (v2.6.4 Release Automation).
     * All data-safety invariants unchanged (keys, flags, schema 6, seed, mounts, init).
     * FOCUS FIX present: every search box routes to its apply*Filter (incremental) and no
       longer calls the full page renderer on 'input'.
-  Exits non-zero on any failure.
+  Exits non-zero on any failure. (The Node verifier tools/verify-build.js runs the full
+  superset of checks, including payroll/floating-menu/decomposition/Activity-Log.)
 #>
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 function Read-Lf([string]$p){ [System.IO.File]::ReadAllText($p) }
 
+# ---- Derive the release version from js/core/constants.js (same source the build uses) ----
+function Get-AppMeta {
+  $constants = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot '..\js\core\constants.js'))
+  $vm = [regex]::Match($constants, "const\s+APP_VERSION\s*=\s*'([^']+)'")
+  $rm = [regex]::Match($constants, "const\s+APP_RELEASE_NAME\s*=\s*'([^']+)'")
+  if(-not $vm.Success){ throw 'Could not parse APP_VERSION from js/core/constants.js.' }
+  if(-not $rm.Success){ throw 'Could not parse APP_RELEASE_NAME from js/core/constants.js.' }
+  $ver = $vm.Groups[1].Value
+  if($ver -notmatch '^\d+\.\d+\.\d+[a-z]?$'){ throw "APP_VERSION '$ver' is not a recognized version format." }
+  return [pscustomobject]@{ Version = $ver; ReleaseName = $rm.Groups[1].Value; DistName = "tam-intelligence-os-v$ver.html" }
+}
+$meta = Get-AppMeta
+
 $orig = Read-Lf (Join-Path $root 'tam-intelligence-os-v2.5.2.html')
-$dist = Read-Lf (Join-Path $root 'dist/tam-intelligence-os-v2.6.3c.html')
+$distPath = Join-Path $root ('dist/' + $meta.DistName)
+if(-not (Test-Path $distPath)){ Write-Host ("Expected dist build not found: dist/" + $meta.DistName + " -- run the build first.") -ForegroundColor Red; exit 1 }
+$dist = Read-Lf $distPath
 $LF = "`n"
 $fails = New-Object System.Collections.Generic.List[string]
 $passes = 0
@@ -37,12 +56,12 @@ $origCss = Extract-Style $orig
 $distJs  = Extract-MainScript $dist
 
 # ---- CSS unchanged (v2.6.1 touched no styles) ----
-Write-Host "== CSS vs v2.5.2 (only the v2.6.3a auto-flip rule added) ==" -ForegroundColor Cyan
+Write-Host "== CSS vs v2.5.2 (only the v2.6.3b floating-menu rule added) ==" -ForegroundColor Cyan
 $dash = [char]0x2014
 $cssAnchor = '.actions-dropdown{position:absolute;right:0;top:calc(100% + 4px);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:20;min-width:170px;box-shadow:0 8px 28px rgba(0,0,0,.45);}'
 $cssAdded = $cssAnchor + "`n/* v2.6.3b " + $dash + " floating layer: portaled to #menu-root and positioned with position:fixed`n   via JS (getBoundingClientRect), so it is never clipped by a table's overflow. */`n.actions-dropdown.floating{position:fixed;right:auto;z-index:990;}"
 $expectedCss = $origCss.Replace($cssAnchor, $cssAdded)
-Check ($distCss -eq $expectedCss) 'dist CSS == v2.5.2 CSS + ONLY the v2.6.3a auto-flip rule (no other style change)'
+Check ($distCss -eq $expectedCss) 'dist CSS == v2.5.2 CSS + ONLY the v2.6.3b floating-menu rule (no other style change)'
 
 # ---- build fidelity ----
 $cssFiles = @('tokens.css','base.css','shell.css','components.css','charts.css')
@@ -54,12 +73,13 @@ Write-Host "== BUILD FIDELITY (source -> dist) ==" -ForegroundColor Cyan
 Check ($srcCss.Trim("`n") -eq $distCss) 'concat(css/*.css) == dist CSS payload'
 Check ($srcJs.Trim("`n")  -eq $distJs)  'concat(js/*.js) == dist JS payload'
 
-# ---- version identity ----
-Write-Host "== VERSION IDENTITY ==" -ForegroundColor Cyan
-Check ($dist.Contains("const APP_VERSION = '2.6.3c';")) "APP_VERSION == 2.6.3c"
-Check ($dist.Contains("const APP_RELEASE_NAME = 'Responsive UI Polish';")) "APP_RELEASE_NAME updated"
-Check ($dist.Contains('<title>TAM Intelligence OS v2.6.3c</title>')) "<title> updated to v2.6.3c"
-Check ($dist.Contains("{v:'2.6.3c ")) "Release Notes has a 2.6.3c entry"
+# ---- version identity (derived from constants.js — no hardcoded version) ----
+Write-Host "== VERSION IDENTITY (derived from constants.js) ==" -ForegroundColor Cyan
+Check ($dist.Contains("const APP_VERSION = '" + $meta.Version + "';")) ("APP_VERSION == " + $meta.Version + " (matches constants.js)")
+Check ($dist.Contains("const APP_RELEASE_NAME = '" + $meta.ReleaseName + "';")) ("APP_RELEASE_NAME == '" + $meta.ReleaseName + "'")
+Check ($dist.Contains('<title>TAM Intelligence OS v' + $meta.Version + '</title>')) ("<title> == v" + $meta.Version)
+Check ($dist.Contains("{v:'" + $meta.Version + " ")) ("Release Notes has a " + $meta.Version + " entry")
+Check ($meta.DistName -eq ("tam-intelligence-os-v" + $meta.Version + ".html")) ("generated dist filename derived from APP_VERSION (dist/" + $meta.DistName + ")")
 
 # ---- SCHEMA + storage keys + migration flags unchanged ----
 $mDist = [regex]::Match($dist,'const SCHEMA_VERSION = (\d+);')
