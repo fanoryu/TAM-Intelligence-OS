@@ -1,6 +1,6 @@
 # TAM Intelligence OS — Architecture
 
-**Current release:** v2.6.7 — Enterprise Repository & Delivery Foundation
+**Current release:** v2.6.8 — Payroll Selection and Overtime Drift UX Fixes
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
 CSS/data-safety invariants)
 **Shape today:** a modular source of **44 classic-script JS modules** (in `core/ ui/ finance/
@@ -15,8 +15,9 @@ no bundler. `SCHEMA_VERSION` is 6.
 > render), **§9** (v2.6.2 decomposition into the feature-folder tree — the current 44-module
 > layout), **§10** (v2.6.3 Payroll workspace), **§11** (v2.6.4 release automation + audit
 > visibility), **§12** (v2.6.5 Smart Import scroll preservation), **§13** (v2.6.6 company
-> settings checklist fix) and **§14** (v2.6.7 repository governance & delivery — no runtime
-> change). Where an early section says "20 files", read §9 for the current structure.
+> settings checklist fix), **§14** (v2.6.7 repository governance & delivery — no runtime
+> change) and **§15** (v2.6.8 generic payroll bulk-selection model + immediate overtime-drift
+> visibility). Where an early section says "20 files", read §9 for the current structure.
 
 ---
 
@@ -383,6 +384,41 @@ only fabricated samples under `samples/`). README gains CI/release/version/propr
 
 These files live **outside** the module load order and the build inlining, so `verify-build.js`
 (build fidelity, CSS golden master, decomposition, `index.html` ↔ `module-order.js`) is unaffected.
+
+---
+
+## 15. v2.6.8 — Payroll selection & overtime drift UX (no schema/CSS/calculation change)
+
+Two targeted UX/correctness fixes in `js/people/payroll-workspace.js` and
+`js/people/payroll-ops-engine.js` (plus one banner call in `js/people/overtime.js`). The runtime
+identity changes to `APP_VERSION` 2.6.8 / `APP_RELEASE_NAME` "Payroll Selection and Overtime Drift
+UX Fixes". No `SCHEMA_VERSION` (still 6), storage key, migration flag, backup format, module load
+order, or `.css` change; payroll status rules and committed-payroll immutability are unchanged.
+
+**Generic bulk-selection model (Issue 1).** The payroll selection set is now stage-agnostic — it
+simply holds the rows the user picked. Each bulk action declares its own eligible stages in one
+registry, `PAYROLL_BULK_ACTIONS` (`review` → Draft; `approve` → Draft/Review; `post` → Approved),
+and `partitionPayrollSelection(ids, action)` splits a selection into `{eligible, skipped}` with a
+per-row reason (`payrollActionSkipReason`). Select All / the header checkbox select **all** visible
+rows; the selected count is the actual number selected; each action auto-disables when the period
+has no row eligible for **that** action and reports eligible / skipped / reason on run. Adding a
+future action (Export, Delete, …) means adding one registry entry — the selection model does not
+change. Post to Finance reuses the same partition and merges ineligible-stage skips with the
+existing commit blockers in its result modal.
+
+**Overtime drift visibility (Issue 2).** `payrollOvertimeDrift(pp)` is a derived, read-only
+comparison (reusing `approvedOvertimeForMonth` + `sameIdSet`) between the approved overtime that
+currently applies to a plan's employee/month and the set the plan captured. `payrollDriftBannerHTML`
+renders one reusable warning from that source of truth in three places (Overtime page, Payroll
+Workspace, Payroll Detail): Draft/Review/Approved → "regenerate to include the updated overtime";
+Posted/Executed → the original payroll is unchanged and a supplemental payment will be required
+(with a **disabled** "Supplemental Payment (Coming in a future release)" placeholder). Because the
+warning is recomputed at render with no stored flag, it appears immediately (no Generate click),
+survives reload, and never duplicates. Posted/Executed payroll totals and transactions are never
+modified.
+
+Both changes are confined to the payroll/overtime render + engine helpers; `verify-build.js` (build
+fidelity, CSS golden master, decomposition, audit features) is unaffected and stays at 109 checks.
 
 ---
 

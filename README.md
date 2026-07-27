@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.6.7-blue)
+![Version](https://img.shields.io/badge/version-2.6.8-blue)
 ![Status](https://img.shields.io/badge/license-proprietary%20%26%20confidential-red)
 
 Integrated Management Intelligence for **PT Total Asset Manajemen**.
@@ -10,21 +10,22 @@ Integrated Management Intelligence for **PT Total Asset Manajemen**.
 > **Proprietary & confidential.** This repository is private and not open source — see
 > [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md). Do not commit real company data.
 
-Current release: **v2.6.7 — Enterprise Repository & Delivery Foundation**
+Current release: **v2.6.8 — Payroll Selection and Overtime Drift UX Fixes**
 (lineage: **v2.6.0** modular split; **v2.6.1** search-box focus; **v2.6.2** module
 decomposition + Git; **v2.6.3** Payroll operational workspace; **v2.6.3a** Approve→Post
 lifecycle fix; **v2.6.3b** floating Actions menu; **v2.6.3c** responsive detail pages +
 consistent sidebar icons; **v2.6.4** version-derived release tooling + read-only Activity
 Log and payroll audit timeline; **v2.6.5** Smart Import review selection no longer jumps
 scroll; **v2.6.6** onboarding "Configure company settings" step completes correctly;
-**v2.6.7** GitHub CI/release automation + repository governance — no app-behavior change).
+**v2.6.7** GitHub CI/release automation + repository governance — no app-behavior change;
+**v2.6.8** generic payroll bulk-selection model + immediate overtime-drift visibility).
 
 Two supported outputs:
 
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` + `js/` (44 modules in `core/ ui/ finance/ people/ import/ analytics/`) loaded as ordered **classic scripts** (shared global scope, no ES modules) | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.7.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.8.html` |
 
 ---
 
@@ -116,6 +117,17 @@ data-safety/focus subset; the Node verifier is the full superset.
 
 ## What each recent release changed (and did not)
 
+- **v2.6.8 — Payroll Selection and Overtime Drift UX Fixes.** Payroll Workspace selection is now
+  **generic (stage-agnostic)**: Select All and the header checkbox select all visible rows, and
+  each bulk action owns its eligibility and reports **eligible / skipped / reason** (Review → Draft,
+  Approve → Draft/Review, Post → Approved) via one registry (`PAYROLL_BULK_ACTIONS`) +
+  `partitionPayrollSelection()`. **Overtime drift** approved after payroll exists now surfaces an
+  immediate warning — no Generate click required — on the Overtime page, Payroll Workspace and
+  Payroll Detail (Draft/Review/Approved → "regenerate"; Posted/Executed → original payroll
+  unchanged, supplemental payment required, disabled placeholder). Derived from existing
+  overtime-comparison logic, so it survives reload and never duplicates. Posted/Executed payroll
+  stays immutable. No payroll status rule, storage key, `SCHEMA_VERSION` (6), backup format,
+  migration or `.css` change.
 - **v2.6.7 — Enterprise Repository & Delivery Foundation.** Engineering/governance only — **no
   application behavior change** (runtime byte-identical to v2.6.6 apart from the version). Added
   GitHub Actions **CI** (build + verify on every push/PR to `main`) and a **tag-triggered release
@@ -234,7 +246,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.6.7.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.6.8.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery (v2.6.7)
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
