@@ -71,8 +71,8 @@ no storage keys, no migration flags, and does not change SCHEMA_VERSION (6)**.
   (documented, accepted security warning); it is unchanged by this release.
 
 ## Git Information
-- Commit: _pending approval (not committed)_
-- Tag: _pending approval (not tagged)_
+- Commit: c36925df9eea617bfb7ff47d2129c7046681fbd6
+- Tag: v2.6.8
 - Branch: main
 
 ## Release Asset
