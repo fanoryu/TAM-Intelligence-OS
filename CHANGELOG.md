@@ -1,5 +1,56 @@
 # Changelog
 
+## 2.6.8 — Payroll Selection and Overtime Drift UX Fixes
+
+**Type:** Targeted UX/correctness fixes in the Payroll Workspace and Overtime modules. **No change
+to payroll status rules, committed-payroll immutability, business calculations, storage keys,
+migration flags, SCHEMA_VERSION (6), backup format, or `.css` files.**
+
+### Changed — Generic payroll bulk-selection model (Issue 1)
+- **Selection is now stage-agnostic.** Select All and the header checkbox select **all visible
+  rows**, and the selected count is the **actual** number of selected rows. Every visible stage is
+  selectable, so a future action (Export, Delete, …) can reuse the same selection.
+- **Each bulk action owns its eligibility** via a single registry (`PAYROLL_BULK_ACTIONS`) and
+  `partitionPayrollSelection(ids, action)`:
+  - **Review** → eligible **Draft**
+  - **Approve** → eligible **Draft, Review**
+  - **Post** → eligible **Approved**
+- **Every action reports eligible / skipped / reason.** This removes the original confusion
+  (*"16 selected → 0 approved"*): e.g. *"Approved 3 payroll(s). 2 skipped — 1 already at Posted
+  stage; 1 already at Executed stage."* Post to Finance now also reports rows skipped because they
+  are not at the Approved stage, alongside any commit blockers.
+- The header "select all shown" checkbox stays synchronized with the visible rows (checked /
+  indeterminate / unchecked / disabled when none); each action auto-disables when the period has no
+  row eligible for **that** action; a helper hint and per-button tooltips document each action's
+  eligible stages.
+
+### Fixed — Overtime drift visibility (Issue 2)
+- Approving overtime after payroll already exists now shows an **immediate** warning — with **no
+  need to click Generate Payroll first** — on the **Overtime page**, the **Payroll Workspace**, and
+  **Payroll Detail**.
+  - Draft / Review / Approved payroll: *"Overtime approved. Regenerate payroll to include the
+    updated overtime."*
+  - Posted / Executed payroll: *"Approved overtime was added after payroll was posted. The original
+    payroll remains unchanged. A supplemental payment will be required."* plus a **disabled**
+    "Supplemental Payment (Coming in a future release)" placeholder.
+- The warning is **derived** from the existing overtime-comparison logic
+  (`approvedOvertimeForMonth` + `sameIdSet`) via a new read-only `payrollOvertimeDrift(pp)` — so it
+  appears immediately, **survives reload, and never duplicates**. No stored flag is added.
+
+### Guarantees
+- Posted and Executed payroll stays fully immutable — payroll totals and posted/executed
+  transactions are never modified. Supplemental Payment itself is intentionally **deferred**.
+
+### Changed
+- `APP_VERSION` → `2.6.8`, `APP_RELEASE_NAME` → "Payroll Selection and Overtime Drift UX Fixes".
+
+### Validation
+- Build + verify: `node tools/build-single-file.js` → `dist/tam-intelligence-os-v2.6.8.html`;
+  `node tools/verify-build.js` → all checks pass. Modular source and portable dist boot with **zero
+  console errors**.
+
+---
+
 ## 2.6.7 — Enterprise Repository & Delivery Foundation
 
 **Type:** Engineering, repository governance, CI, and release automation. **No business feature,

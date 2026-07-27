@@ -221,6 +221,7 @@ function renderOvertime(main){
       `<button class="btn btn-accent" id="addOt">+ Add Overtime</button><button class="btn" id="otSheet">Monthly Worksheet</button><button class="btn" id="otCsv">Export CSV</button>`)
     + `
     <div class="insight-item" style="margin-bottom:14px;display:block;">This calculation follows the internal method configured in TAM Intelligence OS. Verify separately when statutory payroll compliance calculations are required.</div>
+    ${payrollDriftBannerHTML(State.payrollPlans)}
     <div class="grid grid-4" style="margin-bottom:14px;">
       <div class="card stat-card"><div class="stat-label">Records Shown</div><div class="stat-value" id="otStatShown">${rows.length}</div></div>
       <div class="card stat-card"><div class="stat-label">Total Overtime Hours</div><div class="stat-value" id="otStatHours">${totalHours.toLocaleString('id-ID',{maximumFractionDigits:2})}</div></div>

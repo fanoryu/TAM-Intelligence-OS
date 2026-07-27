@@ -324,6 +324,43 @@ function payrollStage(pp){
   return 'Draft';
 }
 function payrollStagePill(pp){ return hrStatusBadge(payrollStage(pp), PAYROLL_STAGE_META); }
+/* v2.6.8 (Issue 1) — GENERIC bulk-selection model.
+   The selection set is stage-agnostic: it simply holds the rows the user picked.
+   Each bulk action declares its OWN eligible stages here, so a row that is not
+   eligible for one action (e.g. a Posted row for Approve) can still be selected and
+   acted on by another action (e.g. a future Export). Adding a new action = adding one
+   entry below; no change to the selection model. This is display/selection only — no
+   payroll status rule and no committed-payroll immutability changes. */
+const PAYROLL_BULK_ACTIONS = {
+  review:  { label:'Review',  eligibleLabel:'Draft',            eligible:(p)=>payrollStage(p)==='Draft' },
+  approve: { label:'Approve', eligibleLabel:'Draft and Review', eligible:(p)=>['Draft','Review'].includes(payrollStage(p)) },
+  post:    { label:'Post',    eligibleLabel:'Approved',         eligible:(p)=>payrollStage(p)==='Approved' },
+};
+// Human-readable reason a selected row is skipped by a given action (for eligible/skipped reporting).
+function payrollActionSkipReason(action, stage){
+  if(action==='post' && (stage==='Draft' || stage==='Review')) return `not yet Approved (currently ${stage})`;
+  return `already at ${stage} stage`;
+}
+// Partition a set of selected ids for one action into { eligible:[ids], skipped:[{id,name,stage,reason}] }.
+function partitionPayrollSelection(ids, action){
+  const spec = PAYROLL_BULK_ACTIONS[action];
+  const eligible=[], skipped=[];
+  (ids||[]).forEach(id=>{ const p=payrollPlanById(id); if(!p) return;
+    if(spec.eligible(p)) eligible.push(id);
+    else { const stage=payrollStage(p); skipped.push({id, name:p.employeeName||'—', stage, reason:payrollActionSkipReason(action, stage)}); }
+  });
+  return {eligible, skipped};
+}
+// Compact "2 already at Posted stage; 1 not yet Approved (currently Draft)" summary.
+function payrollSkipSummary(skipped){
+  const byReason={};
+  (skipped||[]).forEach(s=>{ byReason[s.reason]=(byReason[s.reason]||0)+1; });
+  return Object.entries(byReason).map(([r,n])=>`${n} ${r}`).join('; ');
+}
+// Does the active period contain any row eligible for this action? (drives button disabling)
+function payrollPeriodHasEligible(monthKey, action){
+  return payrollPlansForMonth(monthKey).some(PAYROLL_BULK_ACTIONS[action].eligible);
+}
 function payrollStageCounts(monthKey){
   const c={Draft:0, Review:0, Approved:0, Posted:0, Executed:0};
   payrollPlansForMonth(monthKey).forEach(p=>{ const s=payrollStage(p); if(c[s]!=null) c[s]++; });
@@ -406,4 +443,66 @@ function buildPayrollPeriodTimeline(monthKey){
     .filter(e=> ['payroll.generate','payroll.post','payroll.lock','payroll.unlock'].includes(e.type))
     .map(e=>({label:auditTypeLabel(e.type), ts:e.ts, detail:e.desc}))
     .sort((a,b)=> new Date(b.ts||0) - new Date(a.ts||0));
+}
+
+/* ============================================================
+   OVERTIME DRIFT VISIBILITY (v2.6.8, Issue 2)
+   Derived, read-only comparison between the approved overtime that
+   currently applies to a payroll plan's employee/month and the set the
+   plan actually captured at generation/commit. Reuses the existing
+   overtime comparison logic (approvedOvertimeForMonth + sameIdSet).
+   No stored flag and no schema/storage/migration change: the warning is
+   recomputed at render, so it appears immediately after an overtime
+   approval (no Generate click required) and survives reload without
+   duplicating. Posted/Executed payroll stays immutable — totals, posted
+   and executed transactions are never touched; this only surfaces that a
+   supplemental payment will be needed. Supplemental Payment itself is not
+   implemented in v2.6.8 (disabled placeholder only). */
+const OT_DRIFT_MSG_UNCOMMITTED = 'Overtime approved. Regenerate payroll to include the updated overtime.';
+// Returns null when the plan's captured overtime still matches the currently approved
+// overtime, otherwise a small descriptor of the drift (committed vs not, amount added).
+function payrollOvertimeDrift(pp){
+  if(!pp || pp.status==='Cancelled') return null;
+  const current = approvedOvertimeForMonth(pp.employeeId, pp.monthKey);
+  const stored  = pp.overtimeIds||[];
+  if(sameIdSet(stored, current.ids)) return null;   // in sync — no drift
+  const stage = payrollStage(pp);
+  const committed = (stage==='Posted' || stage==='Executed');
+  const addedIds   = current.ids.filter(id=>!stored.includes(id));
+  const removedIds = stored.filter(id=>!current.ids.includes(id));
+  const addedAmount = addedIds.reduce((s,id)=>{ const o=overtimeById(id); return s + (o?num(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount):0); }, 0);
+  return {stage, committed, addedIds, removedIds, addedAmount};
+}
+function payrollPlansWithDrift(plans){
+  return (plans||[]).filter(p=>p && p.status!=='Cancelled')
+    .map(p=>({pp:p, drift:payrollOvertimeDrift(p)}))
+    .filter(x=>x.drift);
+}
+// Reusable warning banner for overtime drift across a set of plans (Overtime page,
+// Payroll Workspace, Payroll Detail all render this from the same source of truth).
+function payrollDriftBannerHTML(plans){
+  const rows = payrollPlansWithDrift(plans);
+  if(!rows.length) return '';
+  const uncommitted = rows.filter(x=>!x.drift.committed);
+  const committed   = rows.filter(x=> x.drift.committed);
+  const item = x=>`<div class="insight-item warn"><b>${escapeHtml(x.pp.employeeName||'—')}</b> — ${escapeHtml(x.pp.month)} ${x.pp.year}${x.drift.addedAmount?`: +${fmtIDR(x.drift.addedAmount)} approved overtime`:''} <span class="faint">(${escapeHtml(payrollStage(x.pp))})</span></div>`;
+  let html='';
+  if(uncommitted.length){
+    html += `<div class="card ot-drift-banner" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+      <h3>Overtime approved — payroll not yet updated <span class="tag">${uncommitted.length}</span></h3>
+      <p style="margin:4px 0 8px;">${OT_DRIFT_MSG_UNCOMMITTED}</p>
+      <div class="insight-list">${uncommitted.map(item).join('')}</div>
+    </div>`;
+  }
+  if(committed.length){
+    html += `<div class="card ot-drift-banner" style="margin-bottom:14px;border-left:3px solid var(--brick);">
+      <h3>Approved overtime added after payroll was posted <span class="tag">${committed.length}</span></h3>
+      <p style="margin:4px 0 2px;">Approved overtime was added after payroll was posted.</p>
+      <p style="margin:0 0 2px;">The original payroll remains unchanged.</p>
+      <p style="margin:0 0 8px;"><b>A supplemental payment will be required.</b></p>
+      <div class="insight-list">${committed.map(item).join('')}</div>
+      <button class="btn" disabled title="Supplemental Payment — coming in a future release" style="margin-top:10px;">Supplemental Payment (Coming in a future release)</button>
+    </div>`;
+  }
+  return html;
 }

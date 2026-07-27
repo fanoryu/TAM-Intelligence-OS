@@ -45,6 +45,11 @@ function renderPayrollWorkspace(main){
   const health = payrollHealth(monthKey);
   const periodEvents = buildPayrollPeriodTimeline(monthKey); // v2.6.4 read-only period activity
   const hasRows = plans.length>0;
+  // v2.6.8 — each bulk action owns its eligibility; buttons disable only when the period
+  // has no row eligible for THAT action (selection itself stays generic).
+  const canReviewAny  = plans.some(PAYROLL_BULK_ACTIONS.review.eligible);
+  const canApproveAny = plans.some(PAYROLL_BULK_ACTIONS.approve.eligible);
+  const canPostAny    = plans.some(PAYROLL_BULK_ACTIONS.post.eligible);
 
   const kpi = (label, value, sub) => `<div class="card stat-card"><div class="stat-label">${label}</div><div class="stat-value">${value}</div>${sub?`<div class="stat-sub dim">${sub}</div>`:''}</div>`;
 
@@ -67,9 +72,9 @@ function renderPayrollWorkspace(main){
       </div>
       <div class="small-btn-row" style="flex-wrap:wrap;gap:8px;">
         <button class="btn btn-accent" id="genPay" ${locked?'disabled':''}>Generate Payroll</button>
-        <button class="btn" id="actReview" ${locked?'disabled':''}>Review Selected</button>
-        <button class="btn" id="actApprove" ${locked?'disabled':''}>Approve Selected</button>
-        <button class="btn btn-accent" id="actPost" ${locked?'disabled':''}>Post to Finance</button>
+        <button class="btn" id="actReview" ${locked||!canReviewAny?'disabled':''} title="Review applies only to Draft payroll. Any other selected rows are skipped and reported.">Review Selected</button>
+        <button class="btn" id="actApprove" ${locked||!canApproveAny?'disabled':''} title="Approve applies only to Draft and Review payroll. Any other selected rows are skipped and reported.">Approve Selected</button>
+        <button class="btn btn-accent" id="actPost" ${locked||!canPostAny?'disabled':''} title="Post applies only to Approved payroll. Any other selected rows are skipped and reported.">Post to Finance</button>
       </div>
     </div>
 
@@ -90,6 +95,8 @@ function renderPayrollWorkspace(main){
       <h3>Payroll Health <span class="tag">${health.length}</span></h3>
       <div class="insight-list">${health.slice(0,24).map(h=>`<div class="insight-item ${h.sev==='warn'?'warn':''}"><b>${escapeHtml(h.title)}</b> — ${escapeHtml(h.detail)}</div>`).join('')}</div>
     </div>`:''}
+
+    ${payrollDriftBannerHTML(plans)}
 
     ${hasRows?`<div class="grid grid-4" style="margin-bottom:14px;">
       <div class="chart-mini-stat"><div class="lbl">Employees</div><div class="val">${summary.count}</div></div>
@@ -123,17 +130,26 @@ function renderPayrollWorkspace(main){
   });
 
   const sel = payrollSelSet(monthKey);
-  const selIds=()=>[...sel];
-  const ar=document.getElementById('actReview'); if(ar) ar.addEventListener('click', async ()=>{
-    const ids=selIds(); if(!ids.length){ showWarning('Select one or more rows first.'); return; }
-    if(!confirmAction(`Mark ${ids.length} selected row(s) as Reviewed?`)) return;
-    const n=await bulkPayrollStatus(monthKey, ids, 'Reviewed'); if(n) showSuccess(n+' row(s) moved to Review.'); renderPayrollWorkspace(main);
-  });
-  const aa=document.getElementById('actApprove'); if(aa) aa.addEventListener('click', async ()=>{
-    const ids=selIds(); if(!ids.length){ showWarning('Select one or more rows first.'); return; }
-    if(!confirmAction(`Approve ${ids.length} selected row(s)? Approved payroll can then be posted to finance.`)) return;
-    const n=await bulkPayrollStatus(monthKey, ids, 'Ready'); showSuccess(n+' row(s) approved.'); renderPayrollWorkspace(main);
-  });
+  // v2.6.8 (Issue 1) — GENERIC selection: the set simply represents the rows the user
+  // picked. Only prune rows that have left the worksheet (removed or Cancelled). Every
+  // visible stage stays selectable; each action filters to its own eligible subset.
+  [...sel].forEach(id=>{ const p=payrollPlanById(id); if(!p || payrollStage(p)==='Cancelled') sel.delete(id); });
+  // Shared runner: partition the current selection for `action`, act on the eligible
+  // rows, and report eligible / skipped / reason.
+  const runBulkStatus=async (action, targetStatus, verbPast)=>{
+    const all=[...sel];
+    if(!all.length){ showWarning('Select one or more rows first.'); return; }
+    const {eligible, skipped}=partitionPayrollSelection(all, action);
+    const spec=PAYROLL_BULK_ACTIONS[action];
+    if(!eligible.length){ showWarning(`No selected rows are eligible for ${spec.label}.\n${spec.label} applies only to ${spec.eligibleLabel} payroll.${skipped.length?`\nSkipped: ${payrollSkipSummary(skipped)}.`:''}`); return; }
+    if(!confirmAction(`${spec.label} ${eligible.length} eligible row(s)?${skipped.length?` (${skipped.length} selected row(s) will be skipped.)`:''}`)) return;
+    const n=await bulkPayrollStatus(monthKey, eligible, targetStatus);
+    let msg=`${verbPast} ${n} payroll(s).`;
+    if(skipped.length) msg+=`\n${skipped.length} skipped — ${payrollSkipSummary(skipped)}.`;
+    showSuccess(msg); renderPayrollWorkspace(main);
+  };
+  const ar=document.getElementById('actReview'); if(ar) ar.addEventListener('click', ()=>runBulkStatus('review','Reviewed','Reviewed'));
+  const aa=document.getElementById('actApprove'); if(aa) aa.addEventListener('click', ()=>runBulkStatus('approve','Ready','Approved'));
   const ap=document.getElementById('actPost'); if(ap) ap.addEventListener('click', ()=>openCommitPayrollModal(monthKey, main));
 
   const area=document.getElementById('payArea');
@@ -163,8 +179,23 @@ function payrollRowsFiltered(monthKey){
 function payrollWorksheetBodyHTML(monthKey, sel){
   return payrollRowsFiltered(monthKey).map(p=>payrollWorksheetRowHTML(p, sel)).join('') || '<tr><td colspan="9" class="empty">No payroll rows match.</td></tr>';
 }
+// v2.6.8 (Issue 1) — the header "select all shown" checkbox syncs with ALL visible rows
+// (the selection model is generic): checked when all are selected, indeterminate when
+// some are, unchecked/disabled when there are none.
+function syncPayrollHeaderCheckbox(monthKey, sel){
+  const cb=document.getElementById('pfAll'); if(!cb) return;
+  const rows=payrollRowsFiltered(monthKey);
+  const selN=rows.filter(p=>sel.has(p.id)).length;
+  cb.checked = rows.length>0 && selN===rows.length;
+  cb.indeterminate = selN>0 && selN<rows.length;
+  cb.disabled = rows.length===0;
+}
 function bindPayrollRows(area, monthKey, main, sel){
-  const updCount=()=>{ const el=document.getElementById('pbSelCount'); if(el) el.textContent = sel.size?`${sel.size} selected`:''; };
+  // Selected count = the actual number of selected rows (generic selection model).
+  const updCount=()=>{
+    const el=document.getElementById('pbSelCount'); if(el) el.textContent = sel.size?`${sel.size} selected`:'';
+    syncPayrollHeaderCheckbox(monthKey, sel);
+  };
   area.querySelectorAll('[data-psel]').forEach(cb=>cb.addEventListener('change', e=>{ const id=e.target.dataset.psel; if(e.target.checked) sel.add(id); else sel.delete(id); updCount(); }));
   area.querySelectorAll('[data-pact]').forEach(b=>b.addEventListener('click', async ()=>{
     const id=b.dataset.pid, act=b.dataset.pact;
@@ -197,8 +228,9 @@ function renderPayrollWorksheet(area, monthKey, main){
       <div class="field"><label>Stage</label><select class="input" id="pfStatus"><option value="all">All stages</option>${PAYROLL_STAGES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
     </div>
     <div class="small-btn-row" style="flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
-      <button class="btn btn-sm" id="pbSelAll">Select All</button>
+      <button class="btn btn-sm" id="pbSelAll" title="Selects all visible rows. Each bulk action applies to its own eligible stages (Review → Draft, Approve → Draft/Review, Post → Approved) and reports skipped rows.">Select All</button>
       <span class="dim" id="pbSelCount" style="font-size:12px;"></span>
+      <span class="faint" id="pbSelHelp" style="font-size:11px;" title="Select any rows. Review applies to Draft; Approve to Draft and Review; Post to Approved. Ineligible selected rows are skipped and reported per action.">ⓘ Each action applies to its own eligible stages</span>
       <button class="btn btn-sm" id="pbCsv" style="margin-left:auto;">Export CSV</button>
     </div>
     <div class="table-wrap" style="max-height:600px;overflow:auto;">
@@ -217,6 +249,8 @@ function renderPayrollWorksheet(area, monthKey, main){
   document.getElementById('pfSearch').addEventListener('input', e=>{ f.search=e.target.value; applyPayrollFilter(area, monthKey, main); });
   document.getElementById('pfDept').addEventListener('change', e=>{ f.department=e.target.value; applyPayrollFilter(area, monthKey, main); });
   document.getElementById('pfStatus').addEventListener('change', e=>{ f.status=e.target.value; applyPayrollFilter(area, monthKey, main); });
+  // Select All / header checkbox select ALL visible rows (generic selection). Each bulk
+  // action filters the selection to its own eligible stages and reports the rest.
   document.getElementById('pbSelAll').addEventListener('click', ()=>{ payrollRowsFiltered(monthKey).forEach(p=>sel.add(p.id)); applyPayrollFilter(area, monthKey, main); });
   const allCb=document.getElementById('pfAll'); if(allCb) allCb.addEventListener('change', e=>{ const rows=payrollRowsFiltered(monthKey); if(e.target.checked) rows.forEach(p=>sel.add(p.id)); else rows.forEach(p=>sel.delete(p.id)); applyPayrollFilter(area, monthKey, main); });
   document.getElementById('pbCsv').addEventListener('click', ()=>exportPayrollCsv(monthKey));
@@ -226,10 +260,15 @@ function payrollWorksheetRowHTML(p, sel){
   const stage=payrollStage(p);
   const posted=(stage==='Posted'||stage==='Executed');
   const canReview=stage==='Draft', canApprove=(stage==='Draft'||stage==='Review'), canDraft=(stage==='Review'||stage==='Approved');
-  const flags=(p.missingSalary?'<span class="pill pill-status-cancelled">no salary</span> ':'')+(p.missingSchedule?'<span class="pill pill-status-partial">no schedule</span> ':'')+(p.otChanged?'<span class="pill pill-status-partial" title="Approved overtime changed since generation">OT changed</span> ':'');
+  // v2.6.8 (Issue 2) — live overtime-drift pill, shown immediately (no Generate click needed).
+  const drift=payrollOvertimeDrift(p);
+  const driftPill = drift ? (drift.committed
+    ? '<span class="pill pill-status-cancelled" title="Approved overtime added after this payroll was posted — a supplemental payment is required">OT after posting</span> '
+    : '<span class="pill pill-status-partial" title="Approved overtime changed since this payroll — regenerate to include it">OT drift</span> ') : '';
+  const flags=(p.missingSalary?'<span class="pill pill-status-cancelled">no salary</span> ':'')+(p.missingSchedule?'<span class="pill pill-status-partial">no schedule</span> ':'')+driftPill+(p.otChanged?'<span class="pill pill-status-partial" title="Approved overtime changed since generation">OT changed</span> ':'');
   const otCell = `${fmtIDR(p.overtimeAmount)}${num(p.overtimeHours)?` <span class="faint">(${num(p.overtimeHours)}h)</span>`:''}`;
   return `<tr>
-    <td><input type="checkbox" data-psel="${p.id}" ${sel.has(p.id)?'checked':''} ${posted?'disabled':''}></td>
+    <td><input type="checkbox" data-psel="${p.id}" ${sel.has(p.id)?'checked':''}></td>
     <td><button class="linklike" data-pact="detail" data-pid="${p.id}"><b>${escapeHtml(p.employeeName||'—')}</b></button>${flags?`<div class="faint" style="font-size:10px;">${flags}</div>`:''}</td>
     <td class="dim">${escapeHtml(p.contractNumber||'—')}</td>
     <td>${escapeHtml(p.contractProgress||'—')}</td>
@@ -258,9 +297,19 @@ function openPayrollOvertimeBreakdown(id){
 function openCommitPayrollModal(monthKey, main){
   if(isPayrollLocked(monthKey)){ showWarning('This period is locked — finance posting cannot run again.'); return; }
   const sel=payrollSelSet(monthKey);
-  let ids=[...sel]; if(!ids.length) ids=payrollPlansForMonth(monthKey).filter(p=>p.status==='Ready').map(p=>p.id);
-  const readyIds=ids.filter(id=>{ const p=payrollPlanById(id); return p&&p.status==='Ready'; });
-  if(!readyIds.length){ showWarning('No Approved payroll to post. Only Approved rows can be posted — approve rows first.'); return; }
+  // v2.6.8 — Post owns its eligibility (Approved). With an explicit selection, partition it
+  // and carry the ineligible rows through as reported skips; with no selection, fall back to
+  // every Approved row in the period (nothing to report as a selection skip).
+  let readyIds, selectionSkips=[];
+  if(sel.size){
+    const part=partitionPayrollSelection([...sel], 'post');
+    readyIds=part.eligible;
+    selectionSkips=part.skipped.map(x=>({name:x.name, reasons:[x.reason]}));
+    if(!readyIds.length){ showWarning(`No selected rows are eligible for Post.\nPost applies only to Approved payroll.${part.skipped.length?`\nSkipped: ${payrollSkipSummary(part.skipped)}.`:''}`); return; }
+  } else {
+    readyIds=payrollPlansForMonth(monthKey).filter(p=>p.status==='Ready').map(p=>p.id);
+    if(!readyIds.length){ showWarning('No Approved payroll to post. Only Approved rows can be posted — approve rows first.'); return; }
+  }
   const s=commitPayrollPreview(monthKey, readyIds);
   openModalHTML(`<h3>Post Approved Payroll to Finance</h3>
     <div style="font-size:12.5px;line-height:1.95;">
@@ -278,9 +327,10 @@ function openCommitPayrollModal(monthKey, main){
       root.querySelector('#cpGo').addEventListener('click', async ()=>{
         const res=await commitReadyPayroll(monthKey, readyIds); sel.clear(); closeModal();
         if(res.locked) return;
-        // v2.6.4 — if any Approved row was skipped, show a clear posted-vs-skipped summary
-        // (employee + exact blocker reason). Blocked rows stay Approved and are NOT posted.
-        if(res.skippedDetails && res.skippedDetails.length){ openPostResultModal(res); }
+        // v2.6.4/2.6.8 — report posted vs skipped. Skips are the pre-post selection skips
+        // (rows not at the Approved stage) plus any commit blockers, each with its reason.
+        res.skippedDetails=[...selectionSkips, ...(res.skippedDetails||[])];
+        if(res.skippedDetails.length){ openPostResultModal(res); }
         else showSuccess(`Posted to finance: ${res.created} transaction(s) created, ${res.updated} updated.`, 6000);
         render();
       });
@@ -301,8 +351,8 @@ function openPostResultModal(res){
       <div><b style="color:var(--green,#4FAE7C);">${res.created} created</b> · <b>${res.updated} updated</b> · <b style="color:var(--brick);">${skipped.length} skipped</b></div>
     </div>
     <div style="margin-top:10px;"><h4 style="margin:0 0 6px;">Posted (${posted.length})</h4>${postedHTML}</div>
-    ${skipped.length?`<div style="margin-top:12px;"><h4 style="margin:0 0 6px;">Skipped — kept Approved, not posted (${skipped.length})</h4>${skippedHTML}
-      <p class="hint" style="margin-top:8px;">These rows stayed Approved and no transaction was created for them. Fix the reason (salary on the Contract, a valid/unique contract, or a non-negative total), then Post to Finance again.</p></div>`:''}
+    ${skipped.length?`<div style="margin-top:12px;"><h4 style="margin:0 0 6px;">Skipped — not posted (${skipped.length})</h4>${skippedHTML}
+      <p class="hint" style="margin-top:8px;">No transaction was created for these rows and their stage is unchanged. Post applies only to Approved payroll; blocked Approved rows stay Approved — fix the reason (salary on the Contract, a valid/unique contract, or a non-negative total), then Post to Finance again.</p></div>`:''}
     <div class="modal-actions"><button type="button" class="btn btn-accent" id="prOk">Done</button></div>`,
     {width:600, onMount:(root)=>root.querySelector('#prOk').addEventListener('click', closeModal)});
 }
@@ -327,6 +377,7 @@ function renderPayrollDetail(main){
   const recs=(p.overtimeIds||[]).map(overtimeById).filter(Boolean);
   main.innerHTML = pageHeader(p.employeeName||'Payroll', `${escapeHtml(p.month)} ${p.year} · ${escapeHtml(p.contractNumber||'—')} · ${escapeHtml(p.contractProgress||'')}`,
       `<button class="btn" id="pdBack">← Payroll Workspace</button>${emp?`<button class="btn" id="pdEmp">Employee</button>`:''}${ct?`<button class="btn" id="pdCt">Contract</button>`:''}${txn?`<button class="btn" id="pdTxn">Transaction</button>`:''}`)
+    + payrollDriftBannerHTML([p])
     + `<div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
       <div class="card"><h3>Payroll <span class="tag">read-only</span></h3><div style="font-size:13px;line-height:1.75;">
         <div>Employee: <b>${escapeHtml(p.employeeName||'—')}</b></div>
