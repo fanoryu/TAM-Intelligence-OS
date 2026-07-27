@@ -1,6 +1,6 @@
 # TAM Intelligence OS — Architecture
 
-**Current release:** v2.6.6 — Company Settings Checklist Fix
+**Current release:** v2.6.7 — Enterprise Repository & Delivery Foundation
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
 CSS/data-safety invariants)
 **Shape today:** a modular source of **44 classic-script JS modules** (in `core/ ui/ finance/
@@ -14,9 +14,9 @@ no bundler. `SCHEMA_VERSION` is 6.
 > project as it stands today is described by the release sections: **§8** (v2.6.1 incremental
 > render), **§9** (v2.6.2 decomposition into the feature-folder tree — the current 44-module
 > layout), **§10** (v2.6.3 Payroll workspace), **§11** (v2.6.4 release automation + audit
-> visibility), **§12** (v2.6.5 Smart Import scroll preservation) and **§13** (v2.6.6 company
-> settings checklist fix). Where an early section says "20 files", read §9 for the current
-> structure.
+> visibility), **§12** (v2.6.5 Smart Import scroll preservation), **§13** (v2.6.6 company
+> settings checklist fix) and **§14** (v2.6.7 repository governance & delivery — no runtime
+> change). Where an early section says "20 files", read §9 for the current structure.
 
 ---
 
@@ -354,6 +354,35 @@ function companySettingsConfigured(s){
 - **Refresh without reload.** The Settings form's submit handler already calls `render()` after
   `saveSettings()`, so the dashboard checklist recomputes from the new persisted settings the
   next time it renders — no browser reload required.
+
+---
+
+## 14. v2.6.7 — Repository governance & delivery (no runtime change)
+
+An **engineering/governance** release. The application runtime is byte-identical to v2.6.6 apart
+from the version identity (`APP_VERSION` 2.6.7, `APP_RELEASE_NAME`, the `<title>`, the additive
+Release Notes entry, and the regenerated dist). No `SCHEMA_VERSION`, storage key, migration flag,
+calculation, backup format, module load order, or `.css` change.
+
+**Delivery automation** (both derive the version from `constants.js` via `tools/app-version.js`,
+matching the local tooling — a single source of truth):
+
+- `.github/workflows/ci.yml` — on push / PR to `main` and on demand: `build-single-file.js` →
+  `verify-build.js` (109 checks) → confirm the version-derived dist exists → upload it as an
+  artifact. No `npm install` (the app has no dependencies).
+- `.github/workflows/release.yml` — on `v*` tags: rebuild, verify, re-derive the version, and
+  **refuse to publish unless the tag equals `v<APP_VERSION>`** and the portable HTML exists; then
+  create/refresh the GitHub Release idempotently and upload the asset.
+
+**Governance & docs** (non-runtime files): issue templates + `config.yml`, `pull_request_template.md`,
+`CODEOWNERS` (@fanoryu), `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE-NOTICE.md`
+(proprietary), `.github/RELEASE_TEMPLATE.md`, `RELEASE_NOTES.md`, and `docs/{QA-CHECKLIST,
+RELEASE-PROCESS,DATA-SAFETY}.md`. Hardened `.gitignore`/`.gitattributes` (secrets, `.env`, local
+backups, uploaded evidence, real workbooks kept out of version control; a sample-data policy allows
+only fabricated samples under `samples/`). README gains CI/release/version/proprietary badges.
+
+These files live **outside** the module load order and the build inlining, so `verify-build.js`
+(build fidelity, CSS golden master, decomposition, `index.html` ↔ `module-order.js`) is unaffected.
 
 ---
 

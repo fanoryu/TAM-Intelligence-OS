@@ -1,21 +1,30 @@
 # TAM Intelligence OS — Modular Frontend Architecture
 
+[![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
+![Version](https://img.shields.io/badge/version-2.6.7-blue)
+![Status](https://img.shields.io/badge/license-proprietary%20%26%20confidential-red)
+
 Integrated Management Intelligence for **PT Total Asset Manajemen**.
 
-Current release: **v2.6.6 — Company Settings Checklist Fix**
+> **Proprietary & confidential.** This repository is private and not open source — see
+> [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md). Do not commit real company data.
+
+Current release: **v2.6.7 — Enterprise Repository & Delivery Foundation**
 (lineage: **v2.6.0** modular split; **v2.6.1** search-box focus; **v2.6.2** module
 decomposition + Git; **v2.6.3** Payroll operational workspace; **v2.6.3a** Approve→Post
 lifecycle fix; **v2.6.3b** floating Actions menu; **v2.6.3c** responsive detail pages +
 consistent sidebar icons; **v2.6.4** version-derived release tooling + read-only Activity
 Log and payroll audit timeline; **v2.6.5** Smart Import review selection no longer jumps
-scroll; **v2.6.6** onboarding "Configure company settings" step completes correctly).
+scroll; **v2.6.6** onboarding "Configure company settings" step completes correctly;
+**v2.6.7** GitHub CI/release automation + repository governance — no app-behavior change).
 
 Two supported outputs:
 
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` + `js/` (44 modules in `core/ ui/ finance/ people/ import/ analytics/`) loaded as ordered **classic scripts** (shared global scope, no ES modules) | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.6.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.7.html` |
 
 ---
 
@@ -107,6 +116,15 @@ data-safety/focus subset; the Node verifier is the full superset.
 
 ## What each recent release changed (and did not)
 
+- **v2.6.7 — Enterprise Repository & Delivery Foundation.** Engineering/governance only — **no
+  application behavior change** (runtime byte-identical to v2.6.6 apart from the version). Added
+  GitHub Actions **CI** (build + verify on every push/PR to `main`) and a **tag-triggered release
+  workflow** that re-derives the version, refuses to publish unless the tag equals `v<APP_VERSION>`,
+  and uploads the portable HTML. Added repository governance — issue/PR templates, `CODEOWNERS`,
+  `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE-NOTICE.md` (proprietary),
+  release-notes templates, and `docs/` (QA checklist, release process, data safety) — plus hardened
+  `.gitignore`/`.gitattributes` and README badges. No storage key, `SCHEMA_VERSION` (6), calculation,
+  backup-format, module-order, or `.css` change.
 - **v2.6.6 — Company Settings Checklist Fix.** The onboarding "Configure company settings" step
   now completes as soon as a meaningful company profile is saved. Completion is derived purely
   from persisted settings via `companySettingsConfigured()` — true when the Company Name **or**
@@ -216,10 +234,19 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.6.6.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.6.7.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
-.gitignore  README.md  ARCHITECTURE.md  CHANGELOG.md
+.github/                           Repository governance & delivery (v2.6.7)
+  workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
+  workflows/release.yml            Tag-triggered (v*) GitHub Release; publishes portable HTML
+  ISSUE_TEMPLATE/                  bug_report.yml, feature_request.yml, config.yml
+  pull_request_template.md  CODEOWNERS  RELEASE_TEMPLATE.md
+docs/                              QA-CHECKLIST.md, RELEASE-PROCESS.md, DATA-SAFETY.md
+SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  LICENSE-NOTICE.md  RELEASE_NOTES.md
+.gitignore  .gitattributes  README.md  ARCHITECTURE.md  CHANGELOG.md
 ```
 
 See **ARCHITECTURE.md** for full file-by-file provenance, load order, and the decomposition
-map (§9).
+map (§9). See **CONTRIBUTING.md**, **docs/RELEASE-PROCESS.md**, and **docs/QA-CHECKLIST.md** for
+the contributor and release workflow, and **SECURITY.md** / **docs/DATA-SAFETY.md** for data
+handling.

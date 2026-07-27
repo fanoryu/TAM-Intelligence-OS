@@ -1,5 +1,44 @@
 # Changelog
 
+## 2.6.7 — Enterprise Repository & Delivery Foundation
+
+**Type:** Engineering, repository governance, CI, and release automation. **No business feature,
+calculation, payroll/overtime/finance/import/execution logic, storage key, migration flag,
+SCHEMA_VERSION (6), backup format, module load order, or `.css` change.** The application runtime is
+byte-identical to v2.6.6 apart from the version identity.
+
+### Added
+- **GitHub Actions CI** (`.github/workflows/ci.yml`): build + verify (109 checks) on every push and
+  pull request to `main` and on demand; confirms the version-derived dist exists and uploads it as
+  an artifact. No dependencies installed.
+- **Release workflow** (`.github/workflows/release.yml`): tag-triggered (`v*`); rebuilds, verifies,
+  re-derives the version, refuses to publish unless the tag equals `v<APP_VERSION>` and the portable
+  HTML exists, and creates/updates the GitHub Release with the portable HTML asset (idempotent).
+- **Governance:** issue templates (bug/feature) + `config.yml`, pull request template, `CODEOWNERS`,
+  `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE-NOTICE.md` (proprietary),
+  `.github/RELEASE_TEMPLATE.md`, `RELEASE_NOTES.md`, and `docs/{QA-CHECKLIST,RELEASE-PROCESS,
+  DATA-SAFETY}.md`.
+- **README badges:** CI status, latest release, version, proprietary status.
+
+### Changed
+- `APP_VERSION` → `2.6.7`, `APP_RELEASE_NAME` → "Enterprise Repository & Delivery Foundation".
+- Hardened `.gitignore`/`.gitattributes`: keep secrets, `.env`, local backups, uploaded evidence,
+  and real workbooks out of version control; documented a sample-data policy (fabricated samples
+  only, under `samples/`).
+
+### Security
+- Private vulnerability reporting via GitHub Security Advisories; blank public issues disabled.
+- **Open finding:** the real company workbook `Rencana Penggunaan Dana Juli 2026.xlsx` is currently
+  tracked in git history. It is **not** removed automatically; safe removal (`git rm --cached` and a
+  history purge) is recommended pending an ownership decision.
+
+### Validation
+- Build + verify: `node tools/build-single-file.js` → `dist/tam-intelligence-os-v2.6.7.html`;
+  `node tools/verify-build.js` → **109/109**. Modular source and portable dist boot with **zero
+  console errors**. Workflow/template YAML syntax-validated locally; GitHub Actions runs on push.
+
+---
+
 ## 2.6.6 — Company Settings Checklist Fix
 
 **Type:** Targeted onboarding bug fix. **No change to company data, storage keys, SCHEMA_VERSION

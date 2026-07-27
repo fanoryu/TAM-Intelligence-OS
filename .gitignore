@@ -1,21 +1,72 @@
 # TAM Intelligence OS — version control ignores
 # The app itself needs no dependencies; Node is used only for build/verify tooling.
 
+# ---------------------------------------------------------------------------
 # Node tooling
+# ---------------------------------------------------------------------------
 node_modules/
 npm-debug.log*
+yarn-error.log*
 *.log
 
-# Build scratch (NOT the release HTML — see below)
+# ---------------------------------------------------------------------------
+# Secrets & credentials — NEVER commit these
+# ---------------------------------------------------------------------------
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+*.credentials
+*credentials*
+*secret*
+*token*.txt
+.npmrc
+
+# ---------------------------------------------------------------------------
+# SAMPLE-DATA POLICY — no real company data in the repository
+# ---------------------------------------------------------------------------
+# Real payroll/employee/contract workbooks, Complete Backup JSON exports, and any
+# uploaded evidence/attachments must NOT be committed. Only clearly-fabricated sample
+# data is allowed, and it must live under samples/ with an obvious placeholder name.
+#
+# Ignore real-data artifacts anywhere in the tree:
+*.xlsx
+*.xlsm
+*.csv
+*-backup*.json
+*complete-backup*.json
+*-pre-reset-backup*.json
+tam-*-settings.json
+uploads/
+evidence/
+private/
+backups-local/
+# ...but allow explicitly-fabricated samples committed on purpose:
+!samples/**
+
+# ---------------------------------------------------------------------------
+# Build scratch (NOT the release HTML — see the intentionally-tracked block below)
+# ---------------------------------------------------------------------------
 dist/*.tmp
 
+# ---------------------------------------------------------------------------
 # Editor / OS noise
+# ---------------------------------------------------------------------------
 .vscode/settings.json
+.vscode/*.log
+.idea/
+*.swp
 .claude/settings.local.json
 .DS_Store
 Thumbs.db
 
-# --- Intentionally tracked ---
+# ---------------------------------------------------------------------------
+# Intentionally tracked (do NOT ignore)
+# ---------------------------------------------------------------------------
 # The portable single-file release IS version-controlled. dist/*.tmp above is scratch only;
-# dist/*.html must stay in the repo, so it is deliberately NOT ignored.
+# dist/*.html must stay in the repo, so it is deliberately un-ignored here.
+!dist/
 !dist/*.html
