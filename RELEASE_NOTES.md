@@ -68,7 +68,7 @@ from the version identity.
 - The tracked company workbook requires an ownership decision before publishing.
 
 ## Git Information
-- Commit: _pending approval_
+- Commit: 97b1eec
 - Tag: v2.6.7
 - Branch: main
 
