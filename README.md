@@ -2,20 +2,20 @@
 
 Integrated Management Intelligence for **PT Total Asset Manajemen**.
 
-Current release: **v2.6.5 — Smart Import Selection Scroll Preservation**
+Current release: **v2.6.6 — Company Settings Checklist Fix**
 (lineage: **v2.6.0** modular split; **v2.6.1** search-box focus; **v2.6.2** module
 decomposition + Git; **v2.6.3** Payroll operational workspace; **v2.6.3a** Approve→Post
 lifecycle fix; **v2.6.3b** floating Actions menu; **v2.6.3c** responsive detail pages +
 consistent sidebar icons; **v2.6.4** version-derived release tooling + read-only Activity
 Log and payroll audit timeline; **v2.6.5** Smart Import review selection no longer jumps
-scroll).
+scroll; **v2.6.6** onboarding "Configure company settings" step completes correctly).
 
 Two supported outputs:
 
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` + `js/` (44 modules in `core/ ui/ finance/ people/ import/ analytics/`) loaded as ordered **classic scripts** (shared global scope, no ES modules) | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.5.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.6.html` |
 
 ---
 
@@ -107,6 +107,14 @@ data-safety/focus subset; the Node verifier is the full superset.
 
 ## What each recent release changed (and did not)
 
+- **v2.6.6 — Company Settings Checklist Fix.** The onboarding "Configure company settings" step
+  now completes as soon as a meaningful company profile is saved. Completion is derived purely
+  from persisted settings via `companySettingsConfigured()` — true when the Company Name **or**
+  Product Name is non-default (non-empty) **or** an Opening Cash Balance is set. Previously it
+  ignored Product Name and only credited a non-default Company Name or a set cash balance, so
+  saving Settings often left the step unchecked. Unchanged shipped defaults and theme-only saves
+  do not count; optional blank fields never block it. No company data, storage key,
+  `SCHEMA_VERSION` (6), calculation or `.css` change.
 - **v2.6.5 — Smart Import Selection Scroll Preservation.** Fixed the Smart Import review jump:
   toggling a row checkbox is now **fully incremental** (updates only `model.items[].selected`
   and the live "N selected" counter — no `smartCounts` value depends on selection, so nothing
@@ -208,7 +216,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.6.5.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.6.6.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .gitignore  README.md  ARCHITECTURE.md  CHANGELOG.md
 ```

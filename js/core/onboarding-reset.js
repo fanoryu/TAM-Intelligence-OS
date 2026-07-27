@@ -15,10 +15,26 @@ function bindActionEmptyState(main){
   main.querySelectorAll('[data-empty-nav]').forEach(b=>b.addEventListener('click', ()=>{ State.view=b.dataset.emptyNav; render(); }));
 }
 
-/* ---------- first-run onboarding checklist (Part 2) ---------- */
+/* ---------- first-run onboarding checklist (Part 2) ----------
+   v2.6.6 — "Configure company settings" completion is derived purely from PERSISTED
+   settings (tam_settings_v1), never from transient UI state, so it stays correct across
+   navigation and reload. The company profile counts as configured when the user has made at
+   least one meaningful change to the company identity: a non-default Company Name OR a
+   non-default Product Name OR an Opening Cash Balance that has been set. Unchanged shipped
+   defaults do NOT count (a fresh install is "not configured"), and a theme-only save does not
+   count (Appearance is not a company-identity field). Optional blank fields never block it. */
+function companySettingsConfigured(s){
+  s = s || (typeof State!=='undefined' && State.settings) || {};
+  const name = (s.companyName||'').trim();
+  const product = (s.productName||'').trim();
+  const nameSet = !!name && name !== COMPANY_NAME_DEFAULT;      // intentional, non-default company name
+  const productSet = !!product && product !== APP_NAME;         // intentional, non-default product name
+  const cashSet = s.openingCashBalance != null;                 // opening cash balance supplied
+  return nameSet || productSet || cashSet;
+}
 function onboardingSteps(){
   return [
-    {label:'Configure company settings', done: State.settings.companyName!==COMPANY_NAME_DEFAULT || State.settings.openingCashBalance!=null, view:'settings'},
+    {label:'Configure company settings', done: companySettingsConfigured(State.settings), view:'settings'},
     {label:'Add employees', done: State.employees.length>0, view:'employees'},
     {label:'Add employee contracts', done: State.contracts.length>0, view:'contracts'},
     {label:'Configure employee work schedules', done: State.employees.some(e=>readSchedule(e))||State.contracts.some(c=>readSchedule(c)), view:'employees'},

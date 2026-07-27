@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.6.6 — Company Settings Checklist Fix
+
+**Type:** Targeted onboarding bug fix. **No change to company data, storage keys, SCHEMA_VERSION
+(6), calculations, or `.css` files.**
+
+### Fixed
+- **The onboarding "Configure company settings" step now completes when you save a meaningful
+  company profile.** Previously the check ignored the Product Name field and treated the shipped
+  default company name as unconfigured, so saving Settings often left the step unchecked.
+
+### How
+- Completion is derived purely from persisted settings (`tam_settings_v1`) via a new
+  `companySettingsConfigured()` helper: **configured** when the Company Name **or** Product Name
+  is non-empty and non-default, **or** an Opening Cash Balance has been set.
+- Because it is derived from persisted state (not transient UI), the step is correct immediately
+  after saving and remains correct after navigation and browser reload. The Settings save already
+  re-renders, so the dashboard checklist refreshes without a full reload.
+- Unchanged shipped defaults do not count (fresh install stays "not configured"); a theme-only
+  save does not count (Appearance is not a company-identity field); optional blank fields never
+  block completion.
+
+### Validation
+- Node build + verify: **109/109 checks pass**; PowerShell fallback derives the same version.
+  In the running app (modular source + dist): fresh untouched defaults → not completed; changing
+  Company Name and saving via the real Settings form → completed immediately and the dashboard
+  checklist shows "✓ Configure company settings" without a reload; the value persists and the
+  step remains completed after a real browser reload; Product-Name-only and Opening-Cash-only
+  each also complete it; a theme-only change does not; **zero console errors**.
+
+---
+
 ## 2.6.5 — Smart Import Selection Scroll Preservation
 
 **Type:** Targeted UX bug fix. **No change to import parsing, employee/contract matching, payroll

@@ -26,8 +26,8 @@
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.6.5';
-const APP_RELEASE_NAME = 'Smart Import Selection Scroll Preservation';
+const APP_VERSION = '2.6.6';
+const APP_RELEASE_NAME = 'Company Settings Checklist Fix';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';

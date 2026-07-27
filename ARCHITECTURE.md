@@ -1,6 +1,6 @@
 # TAM Intelligence OS — Architecture
 
-**Current release:** v2.6.5 — Smart Import Selection Scroll Preservation
+**Current release:** v2.6.6 — Company Settings Checklist Fix
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
 CSS/data-safety invariants)
 **Shape today:** a modular source of **44 classic-script JS modules** (in `core/ ui/ finance/
@@ -14,8 +14,9 @@ no bundler. `SCHEMA_VERSION` is 6.
 > project as it stands today is described by the release sections: **§8** (v2.6.1 incremental
 > render), **§9** (v2.6.2 decomposition into the feature-folder tree — the current 44-module
 > layout), **§10** (v2.6.3 Payroll workspace), **§11** (v2.6.4 release automation + audit
-> visibility) and **§12** (v2.6.5 Smart Import scroll preservation). Where an early section
-> says "20 files", read §9 for the current structure.
+> visibility), **§12** (v2.6.5 Smart Import scroll preservation) and **§13** (v2.6.6 company
+> settings checklist fix). Where an early section says "20 files", read §9 for the current
+> structure.
 
 ---
 
@@ -316,6 +317,43 @@ A re-render was pure waste.
 
 Selection state and the visible checkbox set continue to survive tab switches because selection
 lives in `model.items[].selected` and every render reads it back.
+
+---
+
+## 13. v2.6.6 — Company settings checklist fix
+
+A one-line-of-logic fix in `js/core/onboarding-reset.js`. No storage, schema, calculation or CSS
+change; no company data is reset or modified.
+
+**Bug.** The onboarding "Configure company settings" step used
+`State.settings.companyName !== COMPANY_NAME_DEFAULT || State.settings.openingCashBalance != null`.
+It ignored the **Product Name** field entirely and treated the shipped default company name as
+"not configured", so a user who saved Settings while keeping the default company name (which is
+the real company's name) and without entering an opening cash balance never saw the step check —
+even after saving.
+
+**Fix.** Completion is derived from persisted settings via a small pure helper:
+
+```js
+function companySettingsConfigured(s){
+  s = s || State.settings || {};
+  const name = (s.companyName||'').trim();
+  const product = (s.productName||'').trim();
+  return (!!name && name !== COMPANY_NAME_DEFAULT)   // intentional, non-default company name
+      || (!!product && product !== APP_NAME)         // intentional, non-default product name
+      || (s.openingCashBalance != null);             // opening cash balance supplied
+}
+```
+
+- **Derived, persisted, reload-safe.** It reads only `tam_settings_v1` fields, so the state is
+  correct immediately after `saveSettings()` and after navigation/reload — no transient UI flag.
+- **Meaningful change, not just any save.** Unchanged shipped defaults return `false` (a fresh
+  install stays "not configured"), and a theme-only save leaves the identity at defaults so it
+  also returns `false` — Appearance is not a company-identity field. Any one of the three
+  identity signals is enough, so optional blank fields never block completion.
+- **Refresh without reload.** The Settings form's submit handler already calls `render()` after
+  `saveSettings()`, so the dashboard checklist recomputes from the new persisted settings the
+  next time it renders — no browser reload required.
 
 ---
 
