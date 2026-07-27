@@ -1,6 +1,6 @@
 # TAM Intelligence OS — Architecture
 
-**Current release:** v2.6.4 — Release Automation & Payroll Audit Visibility
+**Current release:** v2.6.5 — Smart Import Selection Scroll Preservation
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
 CSS/data-safety invariants)
 **Shape today:** a modular source of **44 classic-script JS modules** (in `core/ ui/ finance/
@@ -13,8 +13,9 @@ no bundler. `SCHEMA_VERSION` is 6.
 > how the original cut was derived. Section 2 is the original 20-file map (historical). The
 > project as it stands today is described by the release sections: **§8** (v2.6.1 incremental
 > render), **§9** (v2.6.2 decomposition into the feature-folder tree — the current 44-module
-> layout), **§10** (v2.6.3 Payroll workspace) and **§11** (v2.6.4 release automation + audit
-> visibility). Where an early section says "20 files", read §9 for the current structure.
+> layout), **§10** (v2.6.3 Payroll workspace), **§11** (v2.6.4 release automation + audit
+> visibility) and **§12** (v2.6.5 Smart Import scroll preservation). Where an early section
+> says "20 files", read §9 for the current structure.
 
 ---
 
@@ -275,6 +276,46 @@ worksheetSave`) all refuse when the target month is locked.
 
 **Health** (`payrollHealth`) is deterministic — contract-expiry, ±20% period-over-period,
 high-overtime, and missing-contract rules — no AI, no external calls.
+
+---
+
+## 12. v2.6.5 — Smart Import selection scroll preservation
+
+A targeted UX fix in `js/import/smart-import-ui.js`. No change to parsing, matching, payroll
+generation, transaction creation, duplicate prevention, storage, `SCHEMA_VERSION`, audit or CSS.
+
+**Root cause.** Every review checkbox `change` called `renderSmartImport(main)`, which does
+`main.innerHTML = …`. That rebuilds the review `.table-wrap` (a `max-height:520px; overflow:auto`
+scroller), so its `scrollTop` reset to 0 and the list jumped to the top on every toggle.
+
+**Key insight.** `smartCounts(model)` derives every stat card and tab count from `actions.*`,
+`reviewRequired` and match status — **never from `item.selected`**. So toggling a row's selection
+changes nothing on screen except that row's own checkbox (already toggled natively by the click).
+A re-render was pure waste.
+
+**Fix, by control:**
+
+- **Row selection** (`[data-sisel]` change) — fully incremental: set `model.items[idx].selected`
+  and call `updateSmartSelectionCount(model)` (updates only the new live "N selected" indicator).
+  No re-render → the scroll container is never rebuilt → scroll position and keyboard focus are
+  preserved natively.
+- **Select All Safe / Unselect All** — also incremental: flip `selected` on the model, then
+  `syncSmartCheckboxes(main, model)` sets each visible checkbox's `checked`/`disabled` in place.
+  No re-render.
+- **Skip Conflicts** and **column-mapping override** — these change `actions.skip` (moving rows
+  between buckets, changing counts and disabled state) or rebuild the whole model, so a re-render
+  is genuinely required. They run inside `preserveSmartImportView(main, mutate)`, which captures
+  the `.table-wrap` `scrollTop`/`scrollLeft`, the `window` scroll, and the focused control's
+  identity (`data-sisel`/`data-simap`/`data-sitab`); runs the mutation/render; then restores scroll
+  and focus. Restoration is scheduled on **both** `requestAnimationFrame` (primary; matches the
+  sidebar-scroll pattern) and a guarded `setTimeout` backstop (so it still runs when the tab is
+  hidden and rAF is paused), runs once (a `done` flag), forces a reflow (`void scrollHeight`) so the
+  `scrollTop` assignment sticks, and calls `focus({preventScroll:true})` so nothing is scrolled
+  into view.
+- **Review tab switch** is intentional navigation and is left to start the new tab at the top.
+
+Selection state and the visible checkbox set continue to survive tab switches because selection
+lives in `model.items[].selected` and every render reads it back.
 
 ---
 

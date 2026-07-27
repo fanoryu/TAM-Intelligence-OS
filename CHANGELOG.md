@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.6.5 — Smart Import Selection Scroll Preservation
+
+**Type:** Targeted UX bug fix. **No change to import parsing, employee/contract matching, payroll
+generation, transaction creation, duplicate prevention, storage keys, SCHEMA_VERSION (6), audit
+behavior, or `.css` files.**
+
+### Fixed
+- **Smart Import review no longer jumps to the top when you select/unselect a row.** Previously
+  every checkbox change re-rendered the whole wizard (`main.innerHTML = …`), rebuilding the
+  scrolling table container and resetting its `scrollTop` to 0.
+
+### How
+- **Root cause:** `smartCounts` derives all stat cards and tab counts from `actions.*` /
+  `reviewRequired` / match status — never from `selected` — so the per-row re-render was
+  unnecessary.
+- **Row selection is now fully incremental:** it updates only `model.items[].selected` and a new
+  live "N selected" counter; the wizard is not re-rendered, so scroll position and keyboard focus
+  are preserved natively.
+- **Select All Safe / Unselect All** sync the visible checkboxes in place (no re-render).
+- **Skip Conflicts** and **column-mapping overrides** still re-render (they change buckets/counts
+  or rebuild the model), but now run through `preserveSmartImportView`, which captures the
+  `.table-wrap` + window scroll and the focused control and restores them after layout via a
+  guarded `requestAnimationFrame` + `setTimeout` backstop, using `focus({preventScroll:true})`.
+- Switching review tabs is intentional navigation and still starts at the top; selection survives
+  tab switches (it lives in the model).
+
+### Validation
+- Node build + verify: **109/109 checks pass**; PowerShell fallback: **53/53** (version derived
+  from `constants.js`). Real workbook (`Rencana Penggunaan Dana Juli 2026.xlsx`, **152 rows across
+  11 months**) driven through the actual pipeline: selecting 1 then 6 rows near the bottom moved
+  `scrollTop` by **0 px**, window scroll unchanged, focus stayed on the checkbox; Select All Safe /
+  Unselect All 0 px; Skip Conflicts (23 rows, a real re-render that rebuilt the scroll container)
+  restored `scrollTop` exactly. Commit still works (18 employees / 25 contracts / 129 plans / 129
+  transactions), duplicate prevention still skips re-imports (77 duplicates skipped), Activity Log
+  still records `import.commit`. Modular source and dist boot with **zero console errors**.
+
+---
+
 ## 2.6.4 — Release Automation & Payroll Audit Visibility
 
 **Type:** Release tooling + read-only audit features. **No business logic, storage key,

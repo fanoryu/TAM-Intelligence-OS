@@ -2,19 +2,20 @@
 
 Integrated Management Intelligence for **PT Total Asset Manajemen**.
 
-Current release: **v2.6.4 — Release Automation & Payroll Audit Visibility**
+Current release: **v2.6.5 — Smart Import Selection Scroll Preservation**
 (lineage: **v2.6.0** modular split; **v2.6.1** search-box focus; **v2.6.2** module
 decomposition + Git; **v2.6.3** Payroll operational workspace; **v2.6.3a** Approve→Post
 lifecycle fix; **v2.6.3b** floating Actions menu; **v2.6.3c** responsive detail pages +
 consistent sidebar icons; **v2.6.4** version-derived release tooling + read-only Activity
-Log and payroll audit timeline).
+Log and payroll audit timeline; **v2.6.5** Smart Import review selection no longer jumps
+scroll).
 
 Two supported outputs:
 
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` + `js/` (44 modules in `core/ ui/ finance/ people/ import/ analytics/`) loaded as ordered **classic scripts** (shared global scope, no ES modules) | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.4.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.5.html` |
 
 ---
 
@@ -106,6 +107,16 @@ data-safety/focus subset; the Node verifier is the full superset.
 
 ## What each recent release changed (and did not)
 
+- **v2.6.5 — Smart Import Selection Scroll Preservation.** Fixed the Smart Import review jump:
+  toggling a row checkbox is now **fully incremental** (updates only `model.items[].selected`
+  and the live "N selected" counter — no `smartCounts` value depends on selection, so nothing
+  else needs to change and the wizard is not re-rendered). Select All Safe / Unselect All sync
+  the visible checkboxes in place. Skip Conflicts and column-mapping overrides still re-render
+  (they change buckets/counts or rebuild the model) but preserve the review list's scroll
+  position and the focused control via a guarded `requestAnimationFrame` + `setTimeout` restore
+  using `focus({preventScroll:true})`. No change to import parsing, employee/contract matching,
+  payroll generation, transaction creation, duplicate prevention, storage, `SCHEMA_VERSION` (6),
+  audit behavior or `.css`.
 - **v2.6.4 — Release Automation & Payroll Audit Visibility.** The build/verify tooling
   (Node + PowerShell) now derives the version from a single source of truth (`APP_VERSION`
   in `constants.js`) via `tools/app-version.js` — no hardcoded version, and the dist filename
@@ -197,7 +208,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.6.4.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.6.5.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .gitignore  README.md  ARCHITECTURE.md  CHANGELOG.md
 ```

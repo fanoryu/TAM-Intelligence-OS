@@ -54,6 +54,56 @@ function renderColumnMappingCard(model){
     ${body?`<div style="margin-top:10px;">${body}</div>`:'<p class="hint" style="margin:8px 0 0;">Review how each source column/field maps to Employee, Contract, Progress, and Salary before importing.</p>'}
   </div>`;
 }
+/* ---------- v2.6.5 — Smart Import selection helpers (scroll/focus preservation) ---------- */
+// Rows that will actually be committed (selected and not skipped).
+function smartSelectedCount(model){ return model ? model.items.filter(i=>i.selected && !i.actions.skip).length : 0; }
+// Incrementally refresh only the "N selected" indicator — no re-render, no scroll change.
+function updateSmartSelectionCount(model){
+  const el = document.getElementById('siSelCount');
+  if(el) el.textContent = smartSelectedCount(model)+' selected';
+}
+// Sync the currently-visible row checkboxes to the model in place (used by Select All / Unselect All).
+function syncSmartCheckboxes(main, model){
+  main.querySelectorAll('[data-sisel]').forEach(cb=>{
+    const it = model.items[+cb.dataset.sisel]; if(!it) return;
+    cb.checked = !!(it.selected && !it.actions.skip);
+    cb.disabled = !!it.actions.skip;
+  });
+}
+// Run a mutation that re-renders the wizard while preserving the review list's scroll position
+// (both the inner .table-wrap and the window) and the focused control — restored AFTER layout via
+// requestAnimationFrame, using focus({preventScroll:true}) so nothing is scrolled into view.
+function preserveSmartImportView(main, mutate){
+  const wrapBefore = main.querySelector('.table-wrap');
+  const st = wrapBefore ? wrapBefore.scrollTop : 0;
+  const sl = wrapBefore ? wrapBefore.scrollLeft : 0;
+  const winY = (typeof window!=='undefined') ? (window.scrollY || window.pageYOffset || 0) : 0;
+  const act = document.activeElement;
+  let focusKey = null;
+  if(act && act.dataset){
+    if(act.dataset.sisel!=null) focusKey = {attr:'data-sisel', val:act.dataset.sisel};
+    else if(act.dataset.simap!=null) focusKey = {attr:'data-simap', val:act.dataset.simap};
+    else if(act.dataset.sitab!=null) focusKey = {attr:'data-sitab', val:act.dataset.sitab};
+  }
+  mutate();
+  // Restore after the new DOM is laid out. Primary path is requestAnimationFrame (matches the
+  // sidebar-scroll pattern); a guarded setTimeout backstop also runs it once even when the tab
+  // is hidden (rAF is paused while hidden). Reading scrollHeight forces layout first so the
+  // scrollTop assignment sticks instead of clamping against a stale height.
+  let done = false;
+  const restore = ()=>{
+    if(done) return; done = true;
+    const wrapAfter = main.querySelector('.table-wrap');
+    if(wrapAfter){ void wrapAfter.scrollHeight; wrapAfter.scrollTop = st; wrapAfter.scrollLeft = sl; }
+    if(typeof window!=='undefined' && typeof window.scrollTo==='function') window.scrollTo(0, winY);
+    if(focusKey){
+      const el = main.querySelector(`[${focusKey.attr}="${focusKey.val}"]`);
+      if(el){ try{ el.focus({preventScroll:true}); }catch(_e){ try{ el.focus(); }catch(_e2){} } }
+    }
+  };
+  if(typeof requestAnimationFrame==='function') requestAnimationFrame(restore);
+  setTimeout(restore, 0);
+}
 function renderSmartImport(main){
   const model = State.smartImport;
   if(!model){ State.view='add'; render(); return; }
@@ -76,11 +126,12 @@ function renderSmartImport(main){
     ${renderColumnMappingCard(model)}
     <div class="card">
       <div class="chart-range-chips" style="margin-bottom:12px;">${tabs.map(([k,l,n])=>`<button class="btn btn-sm ${activeTab===k?'btn-accent':''}" data-sitab="${k}">${l} (${n})</button>`).join('')}</div>
-      <div class="small-btn-row" style="flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <div class="small-btn-row" style="flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
         <button class="btn btn-sm" id="siSelectSafe">Select All Safe</button>
         <button class="btn btn-sm" id="siUnselect">Unselect All</button>
         <button class="btn btn-sm" id="siSkipConflicts">Skip Conflicts</button>
         <button class="btn btn-sm" id="siReviewOnly">Review Only</button>
+        <span class="dim" id="siSelCount" style="font-size:12px;margin-left:auto;">${smartSelectedCount(model)} selected</span>
         <button class="btn btn-accent" id="siCommit">Commit Selected</button>
       </div>
       <div class="table-wrap" style="max-height:520px;overflow-y:auto;">
@@ -112,17 +163,45 @@ function renderSmartImport(main){
   if(mapToggle) mapToggle.addEventListener('click', ()=>{ State.smartShowMapping = !State.smartShowMapping; renderSmartImport(main); });
   const rawToggle = document.getElementById('siRawToggle');
   if(rawToggle) rawToggle.addEventListener('click', ()=>{ State.smartShowRaw = !State.smartShowRaw; renderSmartImport(main); });
+  // Column-mapping override rebuilds the whole model → a full re-render is unavoidable, so
+  // preserve the list scroll position and the focused mapping <select> across it (v2.6.5).
   main.querySelectorAll('[data-simap]').forEach(sel=>sel.addEventListener('change', ()=>{
-    const overm = {};
-    main.querySelectorAll('[data-simap]').forEach(s=>{ const v=s.value; if(v!==''){ overm[s.dataset.simap] = +v; } });
-    const fresh = rebuildSmartImportFromOverride(model, overm);
-    State.smartImport = fresh; renderSmartImport(main);
+    preserveSmartImportView(main, ()=>{
+      const overm = {};
+      main.querySelectorAll('[data-simap]').forEach(s=>{ const v=s.value; if(v!==''){ overm[s.dataset.simap] = +v; } });
+      const fresh = rebuildSmartImportFromOverride(model, overm);
+      State.smartImport = fresh; renderSmartImport(main);
+    });
   }));
+  // Switching review tabs is an intentional navigation — starting the new tab at the top is fine.
   main.querySelectorAll('[data-sitab]').forEach(b=>b.addEventListener('click', ()=>{ State.smartTab=b.dataset.sitab; renderSmartImport(main); }));
-  main.querySelectorAll('[data-sisel]').forEach(cb=>cb.addEventListener('change', e=>{ model.items[+e.target.dataset.sisel].selected=e.target.checked; renderSmartImport(main); }));
-  document.getElementById('siSelectSafe').addEventListener('click', ()=>{ model.items.forEach(i=>{ i.selected = !i.reviewRequired && !i.actions.skip; }); renderSmartImport(main); });
-  document.getElementById('siUnselect').addEventListener('click', ()=>{ model.items.forEach(i=>i.selected=false); renderSmartImport(main); });
-  document.getElementById('siSkipConflicts').addEventListener('click', ()=>{ model.items.forEach(i=>{ if(i.ctMatch.status==='Conflict'||i.ctMatch.missingInfo){ i.actions.skip=true; i.selected=false; } }); renderSmartImport(main); });
+  // v2.6.5 — ROW SELECTION IS FULLY INCREMENTAL. Toggling a row changes only model.items[].selected
+  // (no smartCounts value depends on `selected`), so we update the model + the selection counter
+  // and DO NOT re-render. The scroll container is never rebuilt, so scroll position and keyboard
+  // focus stay exactly where they were. This is the fix for the report.
+  main.querySelectorAll('[data-sisel]').forEach(cb=>cb.addEventListener('change', e=>{
+    const it = model.items[+e.target.dataset.sisel]; if(!it) return;
+    it.selected = e.target.checked && !it.actions.skip;
+    updateSmartSelectionCount(model);
+  }));
+  // Select All Safe / Unselect All only flip `selected` (no bucket/count/visible-set change), so
+  // they too are incremental: sync the visible checkboxes in place, update the counter, no re-render.
+  document.getElementById('siSelectSafe').addEventListener('click', ()=>{
+    model.items.forEach(i=>{ i.selected = !i.reviewRequired && !i.actions.skip; });
+    syncSmartCheckboxes(main, model); updateSmartSelectionCount(model);
+  });
+  document.getElementById('siUnselect').addEventListener('click', ()=>{
+    model.items.forEach(i=>i.selected=false);
+    syncSmartCheckboxes(main, model); updateSmartSelectionCount(model);
+  });
+  // Skip Conflicts changes actions.skip → it moves rows between buckets, disables their checkboxes
+  // and changes the summary counts, so a re-render IS needed. Preserve the scroll position across it.
+  document.getElementById('siSkipConflicts').addEventListener('click', ()=>{
+    preserveSmartImportView(main, ()=>{
+      model.items.forEach(i=>{ if(i.ctMatch.status==='Conflict'||i.ctMatch.missingInfo){ i.actions.skip=true; i.selected=false; } });
+      renderSmartImport(main);
+    });
+  });
   document.getElementById('siReviewOnly').addEventListener('click', ()=>{ State.smartTab='conflicts'; renderSmartImport(main); });
   document.getElementById('siCommit').addEventListener('click', async ()=>{
     const sel = model.items.filter(i=>i.selected && !i.actions.skip);
