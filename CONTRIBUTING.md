@@ -1,6 +1,6 @@
 # Contributing to TAM Intelligence OS
 
-This is proprietary internal software for **PT Total Asset Manajemen** (see `LICENSE-NOTICE.md`).
+This is proprietary internal software for **PT Total Asset Manajemen** (see `PROPRIETARY-LICENSE-NOTICE.md`).
 Contributions are limited to authorized collaborators. This guide is the contract for how changes
 are made, verified, and released.
 

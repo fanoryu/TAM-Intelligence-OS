@@ -13,7 +13,7 @@ dependencies.
 ![Repository](https://img.shields.io/badge/repository-private-lightgrey)
 
 > **Proprietary & confidential.** This repository is private and **not** open source — see
-> [`LICENSE`](LICENSE) and [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md). Do not commit real company,
+> [`LICENSE`](LICENSE) and [`PROPRIETARY-LICENSE-NOTICE.md`](PROPRIETARY-LICENSE-NOTICE.md). Do not commit real company,
 > employee, payroll, or backup data.
 
 ---
@@ -199,7 +199,7 @@ tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for 
   ISSUE_TEMPLATE/                  bug_report.yml, feature_request.yml, config.yml
   pull_request_template.md  CODEOWNERS  RELEASE_TEMPLATE.md
 docs/                              QA-CHECKLIST.md, RELEASE-PROCESS.md, DATA-SAFETY.md
-LICENSE  LICENSE-NOTICE.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md
+LICENSE  PROPRIETARY-LICENSE-NOTICE.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md
 RELEASE_NOTES.md  README.md  ARCHITECTURE.md  CHANGELOG.md
 .gitignore  .gitattributes
 ```
@@ -340,7 +340,7 @@ Each document owns one responsibility; they cross-reference rather than repeat o
 | [`RELEASE_NOTES.md`](RELEASE_NOTES.md) | Release summaries | The summary for the current release |
 
 Supporting documents: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) (collaborator conduct),
-[`LICENSE`](LICENSE) / [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md) (proprietary terms), and
+[`LICENSE`](LICENSE) / [`PROPRIETARY-LICENSE-NOTICE.md`](PROPRIETARY-LICENSE-NOTICE.md) (proprietary terms), and
 [`docs/`](docs/) — [`QA-CHECKLIST.md`](docs/QA-CHECKLIST.md),
 [`RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md), [`DATA-SAFETY.md`](docs/DATA-SAFETY.md).
 
@@ -390,7 +390,7 @@ These are candidate directions, not commitments.
 ## License and security
 
 - **License:** proprietary and confidential — see [`LICENSE`](LICENSE) and
-  [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md). Not open source; all rights reserved by PT Total Asset
+  [`PROPRIETARY-LICENSE-NOTICE.md`](PROPRIETARY-LICENSE-NOTICE.md). Not open source; all rights reserved by PT Total Asset
   Manajemen.
 - **Security:** report vulnerabilities privately via GitHub Security Advisories — never in a public
   issue, and never with real data. See [`SECURITY.md`](SECURITY.md).

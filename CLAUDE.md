@@ -21,7 +21,7 @@ TAM Intelligence OS is a **proprietary, client-side, single-page** finance, payr
 application for **PT Total Asset Manajemen**. It runs entirely in the browser with **no backend, no
 database, and no runtime dependencies**. All data is stored locally on the user's device.
 
-- It is **not** open source. See [`LICENSE`](LICENSE) and [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md).
+- It is **not** open source. See [`LICENSE`](LICENSE) and [`PROPRIETARY-LICENSE-NOTICE.md`](PROPRIETARY-LICENSE-NOTICE.md).
 - It handles **confidential** finance, payroll, employee, and contract data. Treat all data as
   sensitive by default.
 

@@ -66,7 +66,7 @@ byte-identical to v2.6.6 apart from the version identity.
   re-derives the version, refuses to publish unless the tag equals `v<APP_VERSION>` and the portable
   HTML exists, and creates/updates the GitHub Release with the portable HTML asset (idempotent).
 - **Governance:** issue templates (bug/feature) + `config.yml`, pull request template, `CODEOWNERS`,
-  `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE-NOTICE.md` (proprietary),
+  `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `PROPRIETARY-LICENSE-NOTICE.md` (proprietary),
   `.github/RELEASE_TEMPLATE.md`, `RELEASE_NOTES.md`, and `docs/{QA-CHECKLIST,RELEASE-PROCESS,
   DATA-SAFETY}.md`.
 - **README badges:** CI status, latest release, version, proprietary status.

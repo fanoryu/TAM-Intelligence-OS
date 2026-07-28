@@ -477,7 +477,7 @@ matching the local tooling — a single source of truth):
   create/refresh the GitHub Release idempotently and upload the asset.
 
 **Governance & docs** (non-runtime files): issue templates + `config.yml`, `pull_request_template.md`,
-`CODEOWNERS` (@fanoryu), `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE-NOTICE.md`
+`CODEOWNERS` (@fanoryu), `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `PROPRIETARY-LICENSE-NOTICE.md`
 (proprietary), `.github/RELEASE_TEMPLATE.md`, `RELEASE_NOTES.md`, and `docs/{QA-CHECKLIST,
 RELEASE-PROCESS,DATA-SAFETY}.md`. Hardened `.gitignore`/`.gitattributes` (secrets, `.env`, local
 backups, uploaded evidence, real workbooks kept out of version control; a sample-data policy allows
