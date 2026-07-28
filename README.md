@@ -324,21 +324,28 @@ Never commit real company/personal data. Full guidance: [`docs/DATA-SAFETY.md`](
 
 ---
 
-## Documentation index
+## Repository documentation
 
-| Document | Purpose |
-|---|---|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Module map, load order, per-release provenance, diagrams |
-| [`CHANGELOG.md`](CHANGELOG.md) | Full version history |
-| [`RELEASE_NOTES.md`](RELEASE_NOTES.md) | Notes for the current release |
-| [`SECURITY.md`](SECURITY.md) | Vulnerability reporting and data-handling policy |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contributor contract and workflow |
-| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Expected conduct for collaborators |
-| [`LICENSE`](LICENSE) | Proprietary license (all rights reserved) |
-| [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md) | Extended proprietary/confidentiality terms |
-| [`docs/QA-CHECKLIST.md`](docs/QA-CHECKLIST.md) | Pre-release QA checklist |
-| [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) | Step-by-step release procedure |
-| [`docs/DATA-SAFETY.md`](docs/DATA-SAFETY.md) | Data-safety invariants and handling rules |
+Each document owns one responsibility; they cross-reference rather than repeat one another.
+
+| Document | Role | Read it for |
+|---|---|---|
+| [`README.md`](README.md) | Public overview | What the product is, how to run/build it, where everything lives (this file) |
+| [`CLAUDE.md`](CLAUDE.md) | Engineering constitution | The timeless, version-agnostic rules for changing this codebase; the approval matrix and Definition of Done |
+| [`AI_CONTEXT.md`](AI_CONTEXT.md) | Repository knowledge | The current state — modules, workflows, decisions, limitations, glossary — for fast onboarding |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Technical implementation | The module map, load order, per-release provenance, and diagrams |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contribution workflow | The step-by-step contributor contract (baseline, build, verify, QA, RC, approvals) |
+| [`SECURITY.md`](SECURITY.md) | Security policy | How to report vulnerabilities privately and the data-handling expectations |
+| [`CHANGELOG.md`](CHANGELOG.md) | Historical changes | The full version-by-version history |
+| [`RELEASE_NOTES.md`](RELEASE_NOTES.md) | Release summaries | The summary for the current release |
+
+Supporting documents: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) (collaborator conduct),
+[`LICENSE`](LICENSE) / [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md) (proprietary terms), and
+[`docs/`](docs/) — [`QA-CHECKLIST.md`](docs/QA-CHECKLIST.md),
+[`RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md), [`DATA-SAFETY.md`](docs/DATA-SAFETY.md).
+
+New to the repository? Start with **AI_CONTEXT.md** for context, then **CLAUDE.md** before making
+changes.
 
 ---
 
