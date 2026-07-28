@@ -26,8 +26,8 @@
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.6.8';
-const APP_RELEASE_NAME = 'Payroll Selection and Overtime Drift UX Fixes';
+const APP_VERSION = '2.6.9';
+const APP_RELEASE_NAME = 'Enterprise Banking Foundation';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
@@ -48,7 +48,47 @@ const STATUS_META = {
   archived:  {label:'Archived',  color:'#96A1BA', dot:'⚪', pill:'pill-status-archived'},
 };
 const PAYMENT_METHODS = ['Cash','Bank Transfer','QRIS','Virtual Account','Credit Card','Other'];
+// Legacy company-account strings (v2.5.x). Retained for backward compatibility with
+// transactions/recurring rows that stored one of these strings; v2.6.9 introduces the
+// structured Company Bank Accounts store (tam_company_accounts_v1) that supersedes it.
 const BANK_ACCOUNTS = ['Mandiri Operational','Mandiri Payroll','BCA','BSI','Cash'];
+
+/* ============================================================
+   INDONESIAN BANK MASTER (v2.6.9) — single source of truth.
+   A static, reusable reference list (NOT company accounts). Grouped by
+   type and alphabetically sorted within each group; "Other Bank" is the
+   catch-all. This is a constant (no storage key, no schema change): it is
+   reference data, so there is exactly one array and no duplication.
+   Company Bank Accounts (tam_company_accounts_v1) reference a bank by name
+   from this master; Employee banking selects its bank from here too.
+   ============================================================ */
+const BANK_MASTER_GROUPS = [
+  { group:'State Banks', banks:[
+    'Bank Mandiri','Bank Negara Indonesia (BNI)','Bank Rakyat Indonesia (BRI)','Bank Tabungan Negara (BTN)',
+  ]},
+  { group:'Private', banks:[
+    'Bank Bukopin','Bank Mega','Bank Sinarmas','BCA','CIMB Niaga','Danamon','Maybank Indonesia','OCBC','Panin Bank','Permata',
+  ]},
+  { group:'Digital', banks:[
+    'Allo Bank','Bank Jago','Bank Neo Commerce','Bank Raya Indonesia','Bank Saqu','blu by BCA Digital','SeaBank Indonesia','Superbank',
+  ]},
+  { group:'Islamic (Syariah)', banks:[
+    'Bank Aladin Syariah','Bank Mega Syariah','Bank Muamalat','Bank Panin Dubai Syariah','Bank Syariah Indonesia','Bank Victoria Syariah','BCA Syariah',
+  ]},
+  { group:'Regional (BPD)', banks:[
+    'Bank BJB','Bank DKI','Bank Jateng','Bank Jatim','Bank Kaltimtara','Bank Lampung','Bank Nagari','Bank NTB Syariah','Bank Papua','Bank Riau Kepri Syariah','Bank Sulselbar','Bank Sumsel Babel','Bank Sumut',
+  ]},
+  { group:'International', banks:[
+    'Bank of China Indonesia','Citibank Indonesia','HSBC Indonesia','Standard Chartered Indonesia','UOB Indonesia',
+  ]},
+  { group:'Other', banks:['Other Bank'] },
+];
+// Flat, de-duplicated list derived from the grouped master (single source — no second array).
+const INDONESIAN_BANKS = BANK_MASTER_GROUPS.reduce((acc,g)=>{ g.banks.forEach(b=>{ if(!acc.includes(b)) acc.push(b); }); return acc; }, []);
+
+/* Company Bank Account (v2.6.9) enums — structured, user-managed accounts. */
+const COMPANY_ACCOUNT_PURPOSES = ['Operational','Payroll','Tax','Savings','Petty Cash','Other'];
+const COMPANY_ACCOUNT_STATUSES = ['Active','Inactive','Archived'];
 
 /* ---------- People & Contracts lifecycle (v2.2.0) ---------- */
 const EMPLOYMENT_STATUSES = ['Active','Inactive','On Leave','Resigned','Terminated'];

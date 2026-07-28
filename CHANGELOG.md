@@ -1,5 +1,55 @@
 # Changelog
 
+## 2.6.9 — Enterprise Banking Foundation
+
+**Type:** Banking data model + UI. Adds **one** additive storage key (`tam_company_accounts_v1`).
+**No** `SCHEMA_VERSION` change (still 6); no storage key renamed/removed; no payroll/finance
+calculation or committed-data change. Supplemental Payment is **not** in this release (planned for
+v2.7.0).
+
+### Added
+- **Indonesian Bank Master** (`BANK_MASTER_GROUPS` / `INDONESIAN_BANKS` in `js/core/constants.js`) —
+  a single, reusable, grouped (State / Private / Digital / Islamic / Regional / International +
+  "Other Bank"), alphabetically-sorted constant. Reference data only: **no storage key, no
+  duplicated arrays**.
+- **Company Bank Accounts** — a new **Settings → Bank Accounts** page (create / edit / deactivate /
+  archive / search / filter). Model: `{ id, label, bankName, holder, accountNumber, purpose, status }`
+  in the new store `tam_company_accounts_v1`. Purposes: Operational / Payroll / Tax / Savings /
+  Petty Cash / Other; statuses: Active / Inactive / Archived. **Account numbers are masked** in all
+  lists (last 4 only); no PIN/OTP/password/token is stored. Only **Active** accounts appear in
+  transaction dropdowns, shown as **"Label — Bank"**.
+- **Employee banking** — the employee **Bank** is chosen from the Bank Master; new **Account Holder**
+  field; employee account numbers masked in the profile view.
+- Activity Log types `bankaccount.create` / `bankaccount.edit` / `bankaccount.status` (reuse the
+  existing `tam_audit_log_v1` — no new audit key).
+
+### Changed
+- Bank dropdowns in Add/Execute transaction, the transactions filter, recurring expenses, and the
+  default-bank setting now list only **Active company accounts** (legacy string values still resolve).
+- Complete Backup / Restore now include `companyAccounts`; older backups without it restore cleanly.
+- `APP_VERSION` → `2.6.9`, `APP_RELEASE_NAME` → "Enterprise Banking Foundation".
+- Verifier: known storage keys **13 → 14** (the new key is checked in the current build; the 13
+  legacy keys are still checked against the v2.5.2 golden master). New checks: 14-key count, seed
+  flag present, Bank Master is a constant. **114 checks** total.
+
+### Backward compatibility & migration
+- Employee legacy bank values map correctly (Mandiri → Bank Mandiri, BSI → Bank Syariah Indonesia,
+  …); unknown free-text banks are preserved as a "(current)" option. **No bulk data migration.**
+- One-time, **guarded, non-destructive** seed (`tam_migrated_bankaccts_v269`) converts the five
+  legacy bank strings into Active company accounts **only when the install already has data** — a
+  fresh install stays **empty** (invariant preserved).
+
+### Not in this release
+- **Supplemental Payment** (lifecycle, finance/execution, storage, Activity Log, timelines) —
+  planned for **v2.7.0**. The v2.6.8 overtime-drift warning and its disabled placeholder are
+  unchanged.
+
+### Validation
+- `node tools/build-single-file.js` → `dist/tam-intelligence-os-v2.6.9.html`;
+  `node tools/verify-build.js` → **114/114**. Modular + portable boot with **zero console errors**.
+
+---
+
 ## 2.6.8 — Payroll Selection and Overtime Drift UX Fixes
 
 **Type:** Targeted UX/correctness fixes in the Payroll Workspace and Overtime modules. **No change

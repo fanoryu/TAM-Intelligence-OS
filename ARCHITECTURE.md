@@ -1,6 +1,6 @@
 # TAM Intelligence OS — Architecture
 
-**Current release:** v2.6.8 — Payroll Selection and Overtime Drift UX Fixes
+**Current release:** v2.6.9 — Enterprise Banking Foundation
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
 CSS/data-safety invariants)
 **Shape today:** a modular source of **44 classic-script JS modules** (in `core/ ui/ finance/
@@ -16,8 +16,10 @@ no bundler. `SCHEMA_VERSION` is 6.
 > layout), **§10** (v2.6.3 Payroll workspace), **§11** (v2.6.4 release automation + audit
 > visibility), **§12** (v2.6.5 Smart Import scroll preservation), **§13** (v2.6.6 company
 > settings checklist fix), **§14** (v2.6.7 repository governance & delivery — no runtime
-> change) and **§15** (v2.6.8 generic payroll bulk-selection model + immediate overtime-drift
-> visibility). Where an early section says "20 files", read §9 for the current structure.
+> change), **§15** (v2.6.8 generic payroll bulk-selection model + immediate overtime-drift
+> visibility) and **§16** (v2.6.9 Enterprise Banking Foundation — Bank Master, Company Bank
+> Accounts, employee banking). Where an early section says "20 files", read §9 for the current
+> structure.
 
 ---
 
@@ -119,6 +121,39 @@ flowchart LR
 
 CI (`ci.yml`) runs build + verify on every push/PR to `main` and uploads the portable HTML as an
 artifact. The release job publishes nothing unless every guardrail passes.
+
+---
+
+## 16. v2.6.9 — Enterprise Banking Foundation (one additive storage key; SCHEMA 6)
+
+Adds structured banking without touching payroll/finance calculations or committed data. Files:
+`js/core/constants.js` (Bank Master + account enums), `js/core/utils.js` (`maskAccountNumber`),
+`js/core/domain-services.js` (company-account helpers + dropdown options), `js/core/hr-persistence-portability.js`
+(new store + backup/restore + guarded seed), `js/core/state-load-migrations.js` (seed wired into
+init), `js/ui/settings-about.js` (Bank Accounts page + modal), `js/ui/shell-render.js` (nav +
+dispatch), `js/ui/activity-log.js` (audit labels), `js/people/employees.js` (bank from master +
+Account Holder), and the transaction/recurring dropdowns.
+
+- **Indonesian Bank Master** is a constant (`BANK_MASTER_GROUPS` / `INDONESIAN_BANKS`) — grouped,
+  alphabetized, single source of truth. **No storage key**; reference data only.
+- **Company Bank Accounts** are a new persistent store `tam_company_accounts_v1` (the **14th** key;
+  the 13 legacy keys are unchanged). Model: `{ id, label, bankName, holder, accountNumber, purpose,
+  status }`. Account numbers are **masked** in all lists (`maskAccountNumber`, last 4 only); the full
+  value appears only in the edit field. Only **Active** accounts feed transaction/payroll dropdowns,
+  displayed as "Label — Bank". The stored transaction value remains the account **label string**, so
+  legacy `bankAccount` strings keep resolving.
+- **Employee banking** selects its bank from the master (legacy short names mapped, unknown values
+  preserved) and gains an Account Holder field; `bankAccountNumber` and the legacy `bankAccount` are
+  kept in sync on save.
+- **Backward compatibility:** a one-time, guarded, non-destructive seed (`tam_migrated_bankaccts_v269`)
+  converts the five legacy bank strings into Active company accounts **only on installs that already
+  have data** — a fresh install stays empty (the empty-seed invariant holds). Complete Backup /
+  Restore include `companyAccounts`; older backups without it restore cleanly.
+- **`SCHEMA_VERSION` is unchanged (6)** — the new store is additive with an empty default; no existing
+  data is transformed. The verifier's known-key count moves **13 → 14** and gains checks for the new
+  key, the seed flag, and that the Bank Master is a constant (114 checks total).
+- **Supplemental Payment is out of scope** here (planned for v2.7.0); the v2.6.8 overtime-drift
+  warning and its disabled placeholder are unchanged.
 
 ---
 

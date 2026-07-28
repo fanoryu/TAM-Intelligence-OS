@@ -107,8 +107,9 @@ function openEmployeeModal(id){
         <div class="field"><label>Join Date</label><input class="input" type="date" name="joinDate" value="${escapeHtml(v.joinDate||'')}"></div>
         <div class="field"><label>Contract Type</label><select class="input" name="contractType">${CONTRACT_TYPES.map(s=>`<option ${v.contractType===s?'selected':''}>${s}</option>`).join('')}</select></div>
         <div class="field"><label>Monthly Base Salary (Rp)</label><input class="input" type="number" step="any" name="monthlyBaseSalary" value="${v.monthlyBaseSalary??''}"></div>
-        <div class="field"><label>Bank Name</label><input class="input" name="bankName" value="${escapeHtml(v.bankName||'')}"></div>
-        <div class="field"><label>Bank Account Number</label><input class="input" name="bankAccountNumber" value="${escapeHtml(v.bankAccountNumber||'')}"></div>
+        <div class="field"><label>Bank</label><select class="input" name="bankName">${employeeBankSelectHTML(v.bankName)}</select></div>
+        <div class="field"><label>Account Holder</label><input class="input" name="bankAccountHolder" value="${escapeHtml(v.bankAccountHolder||v.accountHolder||'')}" placeholder="Name on the account"></div>
+        <div class="field"><label>Bank Account Number</label><input class="input" name="bankAccountNumber" value="${escapeHtml(v.bankAccountNumber||v.bankAccount||'')}" autocomplete="off"></div>
         <div class="field"><label>Email</label><input class="input" type="email" name="email" value="${escapeHtml(v.email||'')}"></div>
         <div class="field"><label>Phone</label><input class="input" name="phone" value="${escapeHtml(v.phone||'')}"></div>
         <div class="field" style="grid-column:span 2;"><label>Notes</label><textarea class="input" name="notes">${escapeHtml(v.notes||'')}</textarea></div>
@@ -134,6 +135,10 @@ function openEmployeeModal(id){
         const sal=fd.get('monthlyBaseSalary'); rec.monthlyBaseSalary=(sal===''||sal==null)?null:Number(sal);
         rec.bankName=(fd.get('bankName')||'').trim();
         rec.bankAccountNumber=(fd.get('bankAccountNumber')||'').trim();
+        rec.bankAccountHolder=(fd.get('bankAccountHolder')||'').trim();
+        // v2.6.9 — keep the legacy `bankAccount` field (used by Smart Import / dedup) in
+        // sync with the canonical `bankAccountNumber` so both readers stay consistent.
+        rec.bankAccount=rec.bankAccountNumber;
         rec.email=(fd.get('email')||'').trim();
         rec.phone=(fd.get('phone')||'').trim();
         rec.notes=(fd.get('notes')||'').trim();
@@ -202,7 +207,7 @@ function renderEmployeeDetail(main){
           <div>Contract Type: <b>${escapeHtml(e.contractType||'—')}</b></div>
           <div>Join Date: <b>${fmtDateID(e.joinDate)}</b></div>
           <div>Monthly Base Salary: <b class="mono">${fmtIDR(e.monthlyBaseSalary)}</b></div>
-          <div>Bank: <b>${escapeHtml(e.bankName||'—')}</b> ${escapeHtml(e.bankAccountNumber||'')}</div>
+          <div>Bank: <b>${escapeHtml(normalizeBankName(e.bankName)||'—')}</b> <span class="mono">${escapeHtml(maskAccountNumber(e.bankAccountNumber||e.bankAccount))}</span>${(e.bankAccountHolder||e.accountHolder)?` · <span class="dim">${escapeHtml(e.bankAccountHolder||e.accountHolder)}</span>`:''}</div>
           <div>Email: <b>${escapeHtml(e.email||'—')}</b></div>
           <div>Phone: <b>${escapeHtml(e.phone||'—')}</b></div>
           ${e.notes?`<div class="dim" style="margin-top:6px;">${escapeHtml(e.notes)}</div>`:''}
@@ -284,6 +289,19 @@ function renderEmployeeDetail(main){
 }
 
 /* ---------- generic HR actions menu (mirrors the finance actions menu) ---------- */
+// v2.6.9 — employee Bank <select> sourced from the Bank Master. Legacy short names
+// (Mandiri, BCA, BNI, BSI, …) map to their canonical master entry; any other existing
+// free-text value is preserved as a leading "(current)" option so nothing is lost and
+// no bulk data migration occurs (the stored value only changes if the user re-saves).
+function employeeBankSelectHTML(current){
+  const cur = (current||'').trim();
+  const mapped = normalizeBankName(cur);
+  const inMaster = INDONESIAN_BANKS.includes(mapped);
+  const custom = (cur && !inMaster) ? `<option value="${escapeHtml(cur)}" selected>${escapeHtml(cur)} (current)</option>` : '';
+  const selected = inMaster ? mapped : '';
+  return `<option value="" ${cur?'':'selected'}>— select —</option>${custom}`
+    + BANK_MASTER_GROUPS.map(g=>`<optgroup label="${escapeHtml(g.group)}">${g.banks.map(b=>`<option ${b===selected?'selected':''}>${escapeHtml(b)}</option>`).join('')}</optgroup>`).join('');
+}
 function hrActionsMenu(kind, id, items){
   return `<div class="actions-menu">
     <button class="btn btn-sm actions-toggle" data-hr-actions="${kind}:${id}">Actions ▾</button>
@@ -320,6 +338,10 @@ function bindHRActions(main){
     else if(a==='padj-edit') openAdjustmentModal(id);
     else if(a==='padj-toggle') toggleAdjustment(id);
     else if(a==='padj-delete') deleteAdjustment(id);
+    else if(a==='cacc-edit') openCompanyAccountModal(id);
+    else if(a==='cacc-activate') setCompanyAccountStatus(id, 'Active');
+    else if(a==='cacc-deactivate') setCompanyAccountStatus(id, 'Inactive');
+    else if(a==='cacc-archive') setCompanyAccountStatus(id, 'Archived');
     else if(a==='prow-detail') hrNavTo('payrollDetail',{detailPayrollId:id});
     else if(a==='prow-review') { await setPayrollStatus(id,'Reviewed'); render(); }
     else if(a==='prow-ready') { await setPayrollStatus(id,'Ready'); render(); }

@@ -30,6 +30,7 @@ async function loadState(){
   await migrateToOvertimeSchema();
   await migrateToPayrollOpsSchema();
   await migrateToDedupSchema();
+  await migrateSeedCompanyAccounts();
   // v2.5.2 — treat the app as carrying data ONLY when a meaningful business
   // dataset has real records. Empty arrays, settings, migration flags, schema
   // version, empty backups/audits and UI prefs never count (fresh-install fix).

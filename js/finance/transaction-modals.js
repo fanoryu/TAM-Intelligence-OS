@@ -23,7 +23,7 @@ function renderExecuteModal(){
             <div class="field"><label>Execution Date</label><input class="input" type="date" name="executionDate" value="${escapeHtml(t.txnDate||today)}"></div>
             <div class="field"><label>Actual Amount (Rp)</label><input class="input" type="number" step="any" name="actualAmount" value="${defAmt}"></div>
             <div class="field"><label>Payment Method</label><select class="input" name="method">${PAYMENT_METHODS.map(m=>`<option ${m===State.settings.defaultPaymentMethod?'selected':''}>${m}</option>`).join('')}</select></div>
-            <div class="field"><label>Bank Account</label><select class="input" name="bank">${BANK_ACCOUNTS.map(b=>`<option ${b===State.settings.defaultBank?'selected':''}>${b}</option>`).join('')}</select></div>
+            <div class="field"><label>Bank Account</label><select class="input" name="bank">${companyAccountOptionsHTML(State.settings.defaultBank)}</select></div>
             <div class="field"><label>Reference Number</label><input class="input" name="reference" placeholder="e.g. TRX-000123"></div>
             <div class="field"><label>Attachment</label><input class="input" type="text" name="attachment" placeholder="(coming soon)" disabled></div>
             <div class="field" style="grid-column:span 2;"><label>Notes</label><textarea class="input" name="notes" placeholder="Optional notes"></textarea></div>

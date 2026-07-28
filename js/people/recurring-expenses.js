@@ -57,7 +57,7 @@ function openRecurringModal(id){
         <div class="field"><label>End Month (optional)</label><input class="input" name="endMonth" value="${escapeHtml(v.endMonth||'')}" placeholder="blank = ongoing"></div>
         <div class="field"><label>Vendor</label><input class="input" name="vendor" value="${escapeHtml(v.vendor||'')}"></div>
         <div class="field"><label>Payment Method</label><select class="input" name="paymentMethod"><option value="">—</option>${PAYMENT_METHODS.map(m=>`<option ${v.paymentMethod===m?'selected':''}>${m}</option>`).join('')}</select></div>
-        <div class="field"><label>Bank Account</label><select class="input" name="bankAccount"><option value="">—</option>${BANK_ACCOUNTS.map(b=>`<option ${v.bankAccount===b?'selected':''}>${b}</option>`).join('')}</select></div>
+        <div class="field"><label>Bank Account</label><select class="input" name="bankAccount">${companyAccountOptionsHTML(v.bankAccount, {blankOption:true})}</select></div>
         <div class="field" style="grid-column:span 2;"><label>Notes</label><textarea class="input" name="notes">${escapeHtml(v.notes||'')}</textarea></div>
       </div>
       <div class="modal-actions"><button type="button" class="btn" id="reCancel">Cancel</button><button type="submit" class="btn btn-accent">${isNew?'Create':'Save'}</button></div>

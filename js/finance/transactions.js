@@ -93,8 +93,7 @@ function renderTransactions(main){
         </div>
         <div class="field"><label>Bank Account</label>
           <select id="fBank" class="input">
-            <option value="all" ${f.bank==='all'?'selected':''}>All accounts</option>
-            ${BANK_ACCOUNTS.map(b=>`<option value="${b}" ${f.bank===b?'selected':''}>${b}</option>`).join('')}
+            ${companyAccountOptionsHTML(f.bank, {allOption:true})}
           </select>
         </div>
         <div class="field"><label>Budget</label>

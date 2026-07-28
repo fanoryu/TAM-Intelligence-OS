@@ -10,9 +10,11 @@ The verifier (`node tools/verify-build.js`) enforces these; a release must not b
 change is an **intentional, documented migration**:
 
 - **`SCHEMA_VERSION = 6`** — the persisted-data schema version.
-- **Storage keys** (13) — e.g. `tam_txns_v1`, `tam_settings_v1`, `tam_employees_v1`,
-  `tam_contracts_v1`, `tam_payroll_plans_v1`, `tam_overtime_records_v1`, `tam_audit_log_v1`, etc.
-- **Migration flags** — e.g. `tam_migrated_hr_v22`, `tam_migrated_overtime_v23`, `tam_v23_ack`, etc.
+- **Storage keys** (14) — e.g. `tam_txns_v1`, `tam_settings_v1`, `tam_employees_v1`,
+  `tam_contracts_v1`, `tam_payroll_plans_v1`, `tam_overtime_records_v1`, `tam_audit_log_v1`, and
+  (added in v2.6.9, additive) `tam_company_accounts_v1` for structured Company Bank Accounts.
+- **Migration flags** — e.g. `tam_migrated_hr_v22`, `tam_migrated_overtime_v23`, `tam_v23_ack`,
+  and `tam_migrated_bankaccts_v269` (one-time company-account seed), etc.
 - **Empty seed data** — the shipped build contains no records (`<script id="seed-data">[]</script>`).
 - **Backup format** — the Complete Backup JSON shape used by export/restore.
 

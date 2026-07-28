@@ -99,6 +99,7 @@ const NAV_GROUPS = [
   ]},
   {id:'system', label:'System', items:[
     {id:'settings', label:'Settings', ic:'⚙'},
+    {id:'bankaccounts', label:'Bank Accounts', ic:'▦'},
     {id:'about', label:'About', ic:'ℹ'},
     {id:'releasenotes', label:'Release Notes', ic:'▤'},
   ]},
@@ -202,6 +203,7 @@ function renderView(main){
   if(State.view==='reports') return renderReports(main);
   if(State.view==='activity') return renderActivityLog(main);
   if(State.view==='settings') return renderSettings(main);
+  if(State.view==='bankaccounts') return renderBankAccounts(main);
   if(State.view==='about') return renderAbout(main);
   if(State.view==='releasenotes') return renderReleaseNotes(main);
   return renderExecutiveDashboard(main);

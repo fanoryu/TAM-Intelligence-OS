@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TAM Intelligence OS v2.6.8</title>
+<title>TAM Intelligence OS v2.6.9</title>
 <meta name="theme-color" content="#0E1420">
 <meta name="color-scheme" content="dark light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -358,8 +358,8 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.6.8';
-const APP_RELEASE_NAME = 'Payroll Selection and Overtime Drift UX Fixes';
+const APP_VERSION = '2.6.9';
+const APP_RELEASE_NAME = 'Enterprise Banking Foundation';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
@@ -380,7 +380,47 @@ const STATUS_META = {
   archived:  {label:'Archived',  color:'#96A1BA', dot:'⚪', pill:'pill-status-archived'},
 };
 const PAYMENT_METHODS = ['Cash','Bank Transfer','QRIS','Virtual Account','Credit Card','Other'];
+// Legacy company-account strings (v2.5.x). Retained for backward compatibility with
+// transactions/recurring rows that stored one of these strings; v2.6.9 introduces the
+// structured Company Bank Accounts store (tam_company_accounts_v1) that supersedes it.
 const BANK_ACCOUNTS = ['Mandiri Operational','Mandiri Payroll','BCA','BSI','Cash'];
+
+/* ============================================================
+   INDONESIAN BANK MASTER (v2.6.9) — single source of truth.
+   A static, reusable reference list (NOT company accounts). Grouped by
+   type and alphabetically sorted within each group; "Other Bank" is the
+   catch-all. This is a constant (no storage key, no schema change): it is
+   reference data, so there is exactly one array and no duplication.
+   Company Bank Accounts (tam_company_accounts_v1) reference a bank by name
+   from this master; Employee banking selects its bank from here too.
+   ============================================================ */
+const BANK_MASTER_GROUPS = [
+  { group:'State Banks', banks:[
+    'Bank Mandiri','Bank Negara Indonesia (BNI)','Bank Rakyat Indonesia (BRI)','Bank Tabungan Negara (BTN)',
+  ]},
+  { group:'Private', banks:[
+    'Bank Bukopin','Bank Mega','Bank Sinarmas','BCA','CIMB Niaga','Danamon','Maybank Indonesia','OCBC','Panin Bank','Permata',
+  ]},
+  { group:'Digital', banks:[
+    'Allo Bank','Bank Jago','Bank Neo Commerce','Bank Raya Indonesia','Bank Saqu','blu by BCA Digital','SeaBank Indonesia','Superbank',
+  ]},
+  { group:'Islamic (Syariah)', banks:[
+    'Bank Aladin Syariah','Bank Mega Syariah','Bank Muamalat','Bank Panin Dubai Syariah','Bank Syariah Indonesia','Bank Victoria Syariah','BCA Syariah',
+  ]},
+  { group:'Regional (BPD)', banks:[
+    'Bank BJB','Bank DKI','Bank Jateng','Bank Jatim','Bank Kaltimtara','Bank Lampung','Bank Nagari','Bank NTB Syariah','Bank Papua','Bank Riau Kepri Syariah','Bank Sulselbar','Bank Sumsel Babel','Bank Sumut',
+  ]},
+  { group:'International', banks:[
+    'Bank of China Indonesia','Citibank Indonesia','HSBC Indonesia','Standard Chartered Indonesia','UOB Indonesia',
+  ]},
+  { group:'Other', banks:['Other Bank'] },
+];
+// Flat, de-duplicated list derived from the grouped master (single source — no second array).
+const INDONESIAN_BANKS = BANK_MASTER_GROUPS.reduce((acc,g)=>{ g.banks.forEach(b=>{ if(!acc.includes(b)) acc.push(b); }); return acc; }, []);
+
+/* Company Bank Account (v2.6.9) enums — structured, user-managed accounts. */
+const COMPANY_ACCOUNT_PURPOSES = ['Operational','Payroll','Tax','Savings','Petty Cash','Other'];
+const COMPANY_ACCOUNT_STATUSES = ['Active','Inactive','Archived'];
 
 /* ---------- People & Contracts lifecycle (v2.2.0) ---------- */
 const EMPLOYMENT_STATUSES = ['Active','Inactive','On Leave','Resigned','Terminated'];
@@ -487,6 +527,15 @@ function normStr(s){ return (s||'').toString().trim().toLowerCase().replace(/\s+
 function monthLabel(m){ return m.month + ' ' + m.year; }
 function monthKeySort(a,b){ return a.year-b.year || a.monthNum-b.monthNum; }
 function escapeHtml(s){ return (s===null||s===undefined)?'':String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// v2.6.9 — mask a bank account number for display (keeps last 4 digits/chars).
+// The full value is only ever shown inside its own edit field, never in lists,
+// tables, tooltips, or exports.
+function maskAccountNumber(n){
+  const s = (n===null||n===undefined) ? '' : String(n).trim();
+  if(!s) return '—';
+  if(s.length<=4) return '••'+s;
+  return '•••• '+s.slice(-4);
+}
 function toast(msg, ms){
   const root = document.getElementById('toast-root');
   const el = document.createElement('div');
@@ -1127,6 +1176,7 @@ async function loadState(){
   await migrateToOvertimeSchema();
   await migrateToPayrollOpsSchema();
   await migrateToDedupSchema();
+  await migrateSeedCompanyAccounts();
   // v2.5.2 — treat the app as carrying data ONLY when a meaningful business
   // dataset has real records. Empty arrays, settings, migration flags, schema
   // version, empty backups/audits and UI prefs never count (fresh-install fix).
@@ -1208,6 +1258,40 @@ async function saveSettings(){
 async function persist(){
   const ok = await StorageAdapter.set('tam_txns_v1', JSON.stringify(State.txns));
   if(!ok) console.error('persist: transactions were not persisted');
+}
+
+/* ---------- Company Bank Accounts + Bank Master helpers (v2.6.9) ----------
+   Company accounts are user-managed records (tam_company_accounts_v1). The Bank
+   Master (BANK_MASTER_GROUPS / INDONESIAN_BANKS in constants.js) is static
+   reference data. Transactions store a company account's label string in the
+   existing `bankAccount` field, so legacy string values keep resolving. */
+function companyAccountById(id){ return (State.companyAccounts||[]).find(a=>a.id===id) || null; }
+function companyAccountByLabel(label){ if(!label) return null; return (State.companyAccounts||[]).find(a=>a.label===label) || null; }
+function activeCompanyAccounts(){ return (State.companyAccounts||[]).filter(a=>a.status==='Active'); }
+function companyAccountLabel(a){ if(!a) return '—'; return a.bankName ? (a.label+' — '+a.bankName) : a.label; }
+// Legacy short bank name -> Bank Master canonical name (display/mapping only; no data rewrite).
+const LEGACY_BANK_NAME_MAP = { 'Mandiri':'Bank Mandiri', 'BCA':'BCA', 'BNI':'Bank Negara Indonesia (BNI)', 'BRI':'Bank Rakyat Indonesia (BRI)', 'BSI':'Bank Syariah Indonesia', 'BTN':'Bank Tabungan Negara (BTN)' };
+function normalizeBankName(name){ const n=(name||'').trim(); if(!n) return ''; return LEGACY_BANK_NAME_MAP[n] || n; }
+// Resolve a transaction's stored bankAccount string (a company-account label, or a
+// legacy BANK_ACCOUNTS string) to a friendly display. Unknown/legacy values pass through.
+function resolveBankAccountDisplay(value){ if(!value) return '—'; const a=companyAccountByLabel(value); return a ? companyAccountLabel(a) : value; }
+// v2.6.9 — <option> list of ACTIVE company accounts for transaction / payroll / recurring
+// dropdowns. Option value = the account label (a string, backward-compatible with the
+// legacy stored value). A `selected` value not among the active accounts is preserved as a
+// leading "(current)" option so existing rows never lose their recorded account.
+// opts: { allOption:true (filters), blankOption:true (optional field) }.
+function companyAccountOptionsHTML(selected, opts){
+  opts = opts||{};
+  const sel = (selected==null)?'':String(selected);
+  const active = activeCompanyAccounts();
+  const labels = active.map(a=>a.label);
+  let html = '';
+  if(opts.allOption) html += `<option value="all" ${sel==='all'?'selected':''}>All accounts</option>`;
+  if(opts.blankOption) html += `<option value="" ${sel===''?'selected':''}>—</option>`;
+  if(sel && sel!=='all' && sel!=='' && !labels.includes(sel)) html += `<option value="${escapeHtml(sel)}" selected>${escapeHtml(sel)} (current)</option>`;
+  html += active.map(a=>`<option value="${escapeHtml(a.label)}" ${a.label===sel?'selected':''}>${escapeHtml(companyAccountLabel(a))}</option>`).join('');
+  if(!html) html = `<option value="">— no active accounts (add in Bank Accounts) —</option>`;
+  return html;
 }
 
 /* ---------- derived data ---------- */
@@ -1872,6 +1956,7 @@ const NAV_GROUPS = [
   ]},
   {id:'system', label:'System', items:[
     {id:'settings', label:'Settings', ic:'⚙'},
+    {id:'bankaccounts', label:'Bank Accounts', ic:'▦'},
     {id:'about', label:'About', ic:'ℹ'},
     {id:'releasenotes', label:'Release Notes', ic:'▤'},
   ]},
@@ -1975,6 +2060,7 @@ function renderView(main){
   if(State.view==='reports') return renderReports(main);
   if(State.view==='activity') return renderActivityLog(main);
   if(State.view==='settings') return renderSettings(main);
+  if(State.view==='bankaccounts') return renderBankAccounts(main);
   if(State.view==='about') return renderAbout(main);
   if(State.view==='releasenotes') return renderReleaseNotes(main);
   return renderExecutiveDashboard(main);
@@ -2408,7 +2494,7 @@ function renderExecuteModal(){
             <div class="field"><label>Execution Date</label><input class="input" type="date" name="executionDate" value="${escapeHtml(t.txnDate||today)}"></div>
             <div class="field"><label>Actual Amount (Rp)</label><input class="input" type="number" step="any" name="actualAmount" value="${defAmt}"></div>
             <div class="field"><label>Payment Method</label><select class="input" name="method">${PAYMENT_METHODS.map(m=>`<option ${m===State.settings.defaultPaymentMethod?'selected':''}>${m}</option>`).join('')}</select></div>
-            <div class="field"><label>Bank Account</label><select class="input" name="bank">${BANK_ACCOUNTS.map(b=>`<option ${b===State.settings.defaultBank?'selected':''}>${b}</option>`).join('')}</select></div>
+            <div class="field"><label>Bank Account</label><select class="input" name="bank">${companyAccountOptionsHTML(State.settings.defaultBank)}</select></div>
             <div class="field"><label>Reference Number</label><input class="input" name="reference" placeholder="e.g. TRX-000123"></div>
             <div class="field"><label>Attachment</label><input class="input" type="text" name="attachment" placeholder="(coming soon)" disabled></div>
             <div class="field" style="grid-column:span 2;"><label>Notes</label><textarea class="input" name="notes" placeholder="Optional notes"></textarea></div>
@@ -2726,8 +2812,7 @@ function renderTransactions(main){
         </div>
         <div class="field"><label>Bank Account</label>
           <select id="fBank" class="input">
-            <option value="all" ${f.bank==='all'?'selected':''}>All accounts</option>
-            ${BANK_ACCOUNTS.map(b=>`<option value="${b}" ${f.bank===b?'selected':''}>${b}</option>`).join('')}
+            ${companyAccountOptionsHTML(f.bank, {allOption:true})}
           </select>
         </div>
         <div class="field"><label>Budget</label>
@@ -3012,6 +3097,7 @@ const HR_KEYS = {
   importBatches: 'tam_import_batches_v1',      // v2.4.0 Smart Import audit + undo
   payrollAdjustments: 'tam_payroll_adjustments_v1', // v2.5.0 recurring payroll adjustments
   employeeMerges: 'tam_employee_merges_v1',    // v2.5.2 employee dedup/merge audit
+  companyAccounts: 'tam_company_accounts_v1',   // v2.6.9 structured Company Bank Accounts
 };
 async function loadHRData(){
   for(const [stateKey, storeKey] of Object.entries(HR_KEYS)){
@@ -3036,6 +3122,44 @@ async function persistMonthlyPlans(){ return persistHR('monthlyPlans'); }
 async function persistOvertime(){ return persistHR('overtimeRecords'); }
 async function persistPayrollAdjustments(){ return persistHR('payrollAdjustments'); }
 async function persistEmployeeMerges(){ return persistHR('employeeMerges'); }
+async function persistCompanyAccounts(){ return persistHR('companyAccounts'); }
+// v2.6.9 — one-time, guarded, non-destructive seed of structured Company Bank Accounts
+// from the legacy BANK_ACCOUNTS strings, for backward compatibility (existing
+// transactions store one of those strings in `bankAccount`, and the seeded accounts'
+// labels match those strings so they keep resolving). A FRESH install stays EMPTY —
+// nothing is seeded unless the install already carries business data. Existing account
+// data is never overwritten. No schema/storage-shape change.
+async function migrateSeedCompanyAccounts(){
+  try{
+    const flagRes = await StorageAdapter.get('tam_migrated_bankaccts_v269');
+    if(flagRes && flagRes.value) return;
+    if(!Array.isArray(State.companyAccounts)) State.companyAccounts = [];
+    const hasData = (State.txns&&State.txns.length) || (State.employees&&State.employees.length)
+      || (State.recurringExpenses&&State.recurringExpenses.length) || (State.monthlyPlans&&State.monthlyPlans.length);
+    if(State.companyAccounts.length===0 && hasData){
+      const now = new Date().toISOString();
+      // Metadata for the known legacy labels; the label list itself is the single source
+      // of truth (BANK_ACCOUNTS in constants.js) so the two never drift.
+      const META = {
+        'Mandiri Operational':{bankName:'Bank Mandiri', purpose:'Operational'},
+        'Mandiri Payroll':    {bankName:'Bank Mandiri', purpose:'Payroll'},
+        'BCA':                {bankName:'BCA', purpose:'Operational'},
+        'BSI':                {bankName:'Bank Syariah Indonesia', purpose:'Payroll'},
+        'Cash':               {bankName:'', purpose:'Petty Cash'},
+      };
+      BANK_ACCOUNTS.forEach(label=>{
+        const m = META[label] || {bankName:'', purpose:'Other'};
+        State.companyAccounts.push({
+          id:uid('cacc'), label, bankName:m.bankName, holder:'', accountNumber:'',
+          purpose:m.purpose, status:'Active', notes:'Seeded from legacy bank list (v2.6.9)',
+          createdAt:now, updatedAt:now,
+        });
+      });
+      await persistCompanyAccounts();
+    }
+    await StorageAdapter.set('tam_migrated_bankaccts_v269','done');
+  }catch(e){ console.error('migrateSeedCompanyAccounts error', e); }
+}
 // Part 13 — one-time, guarded, non-destructive upgrade to the v2.5.2 dedup schema.
 // Ensures the merge-audit array exists and takes a safety backup. NEVER merges
 // existing duplicates automatically — they are only detected and surfaced.
@@ -3160,6 +3284,7 @@ function buildCompleteBackup(){
     overtimeRecords: State.overtimeRecords,
     importBatches: State.importBatches,
     payrollAdjustments: State.payrollAdjustments,
+    companyAccounts: State.companyAccounts,
   };
 }
 // Validates an uploaded complete-backup object. Returns {ok, errors, info}
@@ -3185,6 +3310,7 @@ function validateCompleteBackup(data){
     backupCount: Array.isArray(data.backups) ? data.backups.length : 0,
     employeeCount: Array.isArray(data.employees) ? data.employees.length : 0,
     overtimeCount: Array.isArray(data.overtimeRecords) ? data.overtimeRecords.length : 0,
+    companyAccountCount: Array.isArray(data.companyAccounts) ? data.companyAccounts.length : 0,
     schemaVersion: (data.schemaVersion===undefined||data.schemaVersion===null) ? 'not recorded' : String(data.schemaVersion),
     sourceApp: data.app || 'unknown', sourceVersion: data.version || 'unknown',
     exportedAt: data.exportedAt || null,
@@ -3208,7 +3334,7 @@ async function restoreCompleteBackup(data){
   });
   if(data.settings) State.settings = {...DEFAULT_SETTINGS, ...data.settings, schemaVersion: SCHEMA_VERSION};
   // People & Contracts + Overtime datasets (present in v2.2+/v2.3+ backups; absent → keep current).
-  ['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments'].forEach(k=>{
+  ['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts'].forEach(k=>{
     if(Array.isArray(data[k])) State[k] = JSON.parse(JSON.stringify(data[k]));
   });
   // Safety backup goes first so it survives the 25-backup cap.
@@ -3216,7 +3342,7 @@ async function restoreCompleteBackup(data){
   await persist();
   await saveSettings();
   await saveBackups();
-  await Promise.all(['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments'].map(persistHR));
+  await Promise.all(['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts'].map(persistHR));
   // Restored data already carries lifecycle fields (or got them above) — don't re-run migration.
   await StorageAdapter.set('tam_migrated_exec_v21', 'done');
   await StorageAdapter.set('tam_migrated_hr_v22', 'done');
@@ -4407,7 +4533,7 @@ function renderSettings(main){
             <select class="input" name="defaultPaymentMethod">${PAYMENT_METHODS.map(m=>`<option ${s.defaultPaymentMethod===m?'selected':''}>${m}</option>`).join('')}</select>
           </div>
           <div class="field"><label>Default Bank</label>
-            <select class="input" name="defaultBank">${BANK_ACCOUNTS.map(b=>`<option ${s.defaultBank===b?'selected':''}>${b}</option>`).join('')}</select>
+            <select class="input" name="defaultBank">${companyAccountOptionsHTML(s.defaultBank)}</select>
           </div>
           <div class="field"><label>Auto-archive completed transactions</label>
             <select class="input" name="autoArchiveCompleted"><option value="no" ${!s.autoArchiveCompleted?'selected':''}>No</option><option value="yes" ${s.autoArchiveCompleted?'selected':''}>Yes</option></select>
@@ -4666,6 +4792,128 @@ function buildIntegrityHTML(res){
   if(!res.findings.length) return head + `<div class="insight-item good" style="display:block;">No integrity issues detected. All records have valid IDs, links, dates, and amounts.</div>`;
   return head + `<div class="insight-list">${res.findings.map(f=>`<div class="insight-item ${f.severity==='critical'?'warn':f.severity==='warning'?'warn':''}">${severityPill(f.severity)} <span style="margin-left:6px;">${escapeHtml(f.message)}</span></div>`).join('')}</div>`;
 }
+/* ============================================================
+   COMPANY BANK ACCOUNTS (v2.6.9) — structured, user-managed accounts.
+   Separate from the Bank Master (reference data) and from Employee banking.
+   Account numbers are stored in full but ALWAYS masked in lists/tables; the
+   full value appears only inside its own edit field. Only Active accounts feed
+   transaction/payroll dropdowns. No PIN/OTP/password/token is ever stored.
+   ============================================================ */
+const COMPANY_ACCOUNT_STATUS_META = {
+  'Active':   {pill:'pill-status-completed'},
+  'Inactive': {pill:'pill-status-archived'},
+  'Archived': {pill:'pill-status-cancelled'},
+};
+function bankAccountsFiltered(){
+  const f = State.bankAccountFilter || {search:'', purpose:'all', status:'all'};
+  let rows = (State.companyAccounts||[]).slice();
+  if(f.status!=='all') rows = rows.filter(a=>a.status===f.status);
+  if(f.purpose!=='all') rows = rows.filter(a=>(a.purpose||'')===f.purpose);
+  if(f.search.trim()){ const s=normStr(f.search); rows = rows.filter(a=>[a.label,a.bankName,a.holder,a.purpose].some(x=>normStr(x||'').includes(s))); }
+  rows.sort((a,b)=>String(a.label||'').localeCompare(String(b.label||'')));
+  return rows;
+}
+function bankAccountRowsHTML(){
+  const rows = bankAccountsFiltered();
+  return rows.map(a=>`<tr>
+      <td><b>${escapeHtml(a.label||'—')}</b></td>
+      <td class="dim">${escapeHtml(a.bankName||'—')}</td>
+      <td>${escapeHtml(a.holder||'—')}</td>
+      <td class="mono">${escapeHtml(maskAccountNumber(a.accountNumber))}</td>
+      <td>${escapeHtml(a.purpose||'—')}</td>
+      <td>${hrStatusBadge(a.status||'Active', COMPANY_ACCOUNT_STATUS_META)}</td>
+      <td>${hrActionsMenu('cacc', a.id, [
+        ['cacc-edit','Edit'],
+        a.status!=='Active'?['cacc-activate','Set Active']:null,
+        a.status==='Active'?['cacc-deactivate','Deactivate']:null,
+        a.status!=='Archived'?['cacc-archive','Archive']:null,
+      ])}</td>
+    </tr>`).join('') || `<tr><td colspan="7" class="empty">No bank accounts match. Click “+ New Bank Account”.</td></tr>`;
+}
+function applyBankAccountFilter(main){
+  const tb = document.getElementById('caccRows'); if(!tb) return;
+  tb.innerHTML = bankAccountRowsHTML();
+  const el = document.getElementById('caccShown'); if(el) el.textContent = bankAccountsFiltered().length;
+  bindHRActions(main);
+}
+function renderBankAccounts(main){
+  if(!State.bankAccountFilter) State.bankAccountFilter = {search:'', purpose:'all', status:'all'};
+  const f = State.bankAccountFilter;
+  const all = State.companyAccounts||[];
+  const activeN = all.filter(a=>a.status==='Active').length;
+  main.innerHTML = pageHeader('Bank Accounts',
+      'Company bank accounts used across finance and payroll. Only Active accounts appear in transaction dropdowns. Account numbers are stored masked in lists — never a PIN, OTP, password, or token.',
+      `<button class="btn btn-accent" id="caccNew">+ New Bank Account</button>`)
+    + `<div class="grid grid-4" style="margin-bottom:14px;">
+        <div class="card stat-card"><div class="stat-label">Accounts</div><div class="stat-value">${all.length}</div><div class="stat-sub dim">${activeN} active</div></div>
+        <div class="card stat-card"><div class="stat-label">Shown</div><div class="stat-value" id="caccShown">${bankAccountsFiltered().length}</div></div>
+      </div>
+      <div class="card">
+        <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1fr;margin-bottom:12px;">
+          <div class="field"><label>Search (label, bank, holder)</label><input class="input" id="caccSearch" placeholder="Search…" value="${escapeHtml(f.search)}"></div>
+          <div class="field"><label>Purpose</label><select class="input" id="caccPurpose"><option value="all">All purposes</option>${COMPANY_ACCOUNT_PURPOSES.map(p=>`<option ${f.purpose===p?'selected':''}>${p}</option>`).join('')}</select></div>
+          <div class="field"><label>Status</label><select class="input" id="caccStatus"><option value="all">All statuses</option>${COMPANY_ACCOUNT_STATUSES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+        </div>
+        <div class="table-wrap" style="max-height:560px;overflow:auto;">
+          <table>
+            <thead><tr><th>Label</th><th>Bank</th><th>Account Holder</th><th>Account Number</th><th>Purpose</th><th>Status</th><th></th></tr></thead>
+            <tbody id="caccRows">${bankAccountRowsHTML()}</tbody>
+          </table>
+        </div>
+        <p class="hint" style="margin-top:10px;">Display format is “Label — Bank”. Deactivate to hide an account from new transactions without losing history; Archive to retire it. Existing transactions that referenced an account keep their recorded value.</p>
+      </div>`;
+  document.getElementById('caccNew').addEventListener('click', ()=>openCompanyAccountModal(null));
+  document.getElementById('caccSearch').addEventListener('input', e=>{ State.bankAccountFilter.search=e.target.value; applyBankAccountFilter(main); });
+  document.getElementById('caccPurpose').addEventListener('change', e=>{ State.bankAccountFilter.purpose=e.target.value; applyBankAccountFilter(main); });
+  document.getElementById('caccStatus').addEventListener('change', e=>{ State.bankAccountFilter.status=e.target.value; applyBankAccountFilter(main); });
+  bindHRActions(main);
+}
+function bankMasterOptionsHTML(selected){
+  return BANK_MASTER_GROUPS.map(g=>`<optgroup label="${escapeHtml(g.group)}">${g.banks.map(b=>`<option ${b===selected?'selected':''}>${escapeHtml(b)}</option>`).join('')}</optgroup>`).join('');
+}
+function openCompanyAccountModal(id){
+  const a = id ? companyAccountById(id) : null;
+  const isNew = !a;
+  const v = a || {label:'', bankName:'', holder:'', accountNumber:'', purpose:'Operational', status:'Active', notes:''};
+  openModalHTML(`<h3>${isNew?'New Bank Account':'Edit Bank Account'}</h3>
+    <form id="caccForm"><div class="form-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="field"><label>Account Label</label><input class="input" name="label" value="${escapeHtml(v.label||'')}" required placeholder="e.g. Mandiri Payroll"></div>
+      <div class="field"><label>Bank</label><select class="input" name="bankName"><option value="">— select —</option>${bankMasterOptionsHTML(v.bankName)}</select></div>
+      <div class="field"><label>Account Holder</label><input class="input" name="holder" value="${escapeHtml(v.holder||'')}" placeholder="Name on the account"></div>
+      <div class="field"><label>Account Number</label><input class="input" name="accountNumber" value="${escapeHtml(v.accountNumber||'')}" placeholder="Full number (masked in lists)" autocomplete="off"></div>
+      <div class="field"><label>Purpose</label><select class="input" name="purpose">${COMPANY_ACCOUNT_PURPOSES.map(p=>`<option ${v.purpose===p?'selected':''}>${p}</option>`).join('')}</select></div>
+      <div class="field"><label>Status</label><select class="input" name="status">${COMPANY_ACCOUNT_STATUSES.map(s=>`<option ${v.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field" style="grid-column:span 2;"><label>Notes</label><input class="input" name="notes" value="${escapeHtml(v.notes||'')}"></div>
+    </div>
+    <p class="hint" style="margin-top:6px;">Do not enter a PIN, OTP, password, or access token here — store only the account number. It is masked everywhere except this field.</p>
+    <div class="modal-actions"><button type="button" class="btn" id="caccCancel">Cancel</button><button type="submit" class="btn btn-accent">${isNew?'Create':'Save'}</button></div></form>`,
+    {width:640, onMount:(root)=>{
+      root.querySelector('#caccCancel').addEventListener('click', closeModal);
+      root.querySelector('#caccForm').addEventListener('submit', async ev=>{
+        ev.preventDefault(); const fd=new FormData(ev.target);
+        const label=(fd.get('label')||'').trim();
+        if(!label){ showWarning('An account label is required.'); return; }
+        const now=new Date().toISOString();
+        const rec = a || {id:uid('cacc'), createdAt:now};
+        rec.label=label; rec.bankName=(fd.get('bankName')||'').trim(); rec.holder=(fd.get('holder')||'').trim();
+        rec.accountNumber=(fd.get('accountNumber')||'').trim(); rec.purpose=fd.get('purpose'); rec.status=fd.get('status');
+        rec.notes=(fd.get('notes')||'').trim(); rec.updatedAt=now;
+        if(isNew) State.companyAccounts.push(rec);
+        await persistCompanyAccounts();
+        logActivity({type:isNew?'bankaccount.create':'bankaccount.edit', module:'Bank Accounts', entity:rec.label, entityId:rec.id,
+          desc:`${isNew?'Created':'Updated'} company account ${rec.label}${rec.bankName?' ('+rec.bankName+')':''}`, refs:{companyAccountId:rec.id}});
+        closeModal(); showSuccess('Bank account saved.'); render();
+      });
+    }});
+}
+async function setCompanyAccountStatus(id, status){
+  const a = companyAccountById(id); if(!a) return;
+  if(status==='Archived' && !confirmAction(`Archive “${a.label}”? It will be hidden from new transactions. Existing history is unchanged.`)) return;
+  a.status=status; a.updatedAt=new Date().toISOString();
+  await persistCompanyAccounts();
+  logActivity({type:'bankaccount.status', module:'Bank Accounts', entity:a.label, entityId:a.id, desc:`Company account ${a.label} → ${status}`, refs:{companyAccountId:a.id}});
+  showSuccess(`Account ${status.toLowerCase()}.`); render();
+}
 function renderAbout(main){
   main.innerHTML = `
     <div class="page-head"><div><h1>About</h1></div></div>
@@ -4687,6 +4935,7 @@ function renderAbout(main){
 }
 function renderReleaseNotes(main){
   const notes = [
+    {v:'2.6.9 — Enterprise Banking Foundation', items:['Indonesian Bank Master: a single, reusable reference list of Indonesian banks grouped by type (State, Private, Digital, Islamic, Regional, International) plus “Other Bank”, alphabetically sorted within each group. It is a constant (one source of truth, no duplicated arrays, no storage key) used by both employee banking and company accounts','Company Bank Accounts: a new Settings → Bank Accounts page to create, edit, deactivate, archive, search and filter company accounts. Each account has a Label, Bank (from the Bank Master), Account Holder, Account Number, Purpose (Operational / Payroll / Tax / Savings / Petty Cash / Other) and Status (Active / Inactive / Archived). Account numbers are stored masked in lists (only the last 4 shown) and never a PIN, OTP, password or token. Only Active accounts appear in transaction dropdowns, displayed as “Label — Bank”','Employee banking: the employee Bank is now chosen from the Bank Master, with a new Account Holder field. Existing values map correctly (e.g. Mandiri → Bank Mandiri, BSI → Bank Syariah Indonesia) and any other existing free-text bank is preserved as a “(current)” option — no bulk data migration. Employee account numbers are masked in the profile view','Transaction & execution integration: the Bank Account dropdowns in Add/Execute transactions, the transactions filter, recurring expenses and the default-bank setting now list only Active company accounts. Transactions that stored a legacy bank string keep resolving','Backward compatibility: on installs that already have data, the five legacy bank strings seed structured company accounts once (guarded, non-destructive) so existing references resolve; a fresh install starts empty. Complete Backup / Restore now include company accounts, and older backups without them restore cleanly','Data safety: one new additive storage key (tam_company_accounts_v1); SCHEMA_VERSION is unchanged (6); no storage key was renamed or removed; committed payroll/finance remain untouched','Supplemental Payment remains planned for a future release (v2.7.0). The existing overtime-drift warning and its disabled placeholder are unchanged in this release']},
     {v:'2.6.8 — Payroll Selection and Overtime Drift UX Fixes', items:['Generic payroll selection model: Select All and the header checkbox now select all visible rows, and the selected count is the actual number of selected rows. Each bulk action owns its eligibility and reports eligible / skipped / reason independently — Review applies to Draft, Approve applies to Draft and Review, Post applies to Approved. Adding a future action (Export, Delete, …) just declares its own eligible stages','This fixes the original confusion (previously "16 selected → 0 approved"): Approve now acts only on its eligible rows and clearly reports the rest, e.g. "Approved 3 payroll(s). 2 skipped — 1 already at Posted stage; 1 already at Executed stage"','The header checkbox stays synchronized with the visible rows (checked / indeterminate / unchecked), each action auto-disables when the period has no row eligible for that action, and Post to Finance reports rows skipped because they are not at the Approved stage alongside any commit blockers','Overtime Drift Visibility: approving overtime after payroll already exists now shows an immediate warning — no need to click Generate Payroll first — on the Overtime page, the Payroll Workspace and Payroll Detail. Draft/Review/Approved payroll shows "Overtime approved. Regenerate payroll to include the updated overtime"; Posted/Executed payroll shows that the original payroll is unchanged and a supplemental payment will be required (with a disabled "Supplemental Payment (Coming in a future release)" placeholder)','Posted and Executed payroll stays fully immutable — payroll totals and posted/executed transactions are never modified. The drift warning is derived from existing overtime-comparison logic, so it appears immediately, survives reload and never duplicates','No payroll status rules, committed-payroll immutability, storage key, backup format, migration or SCHEMA_VERSION (still 6) changed; Supplemental Payment itself is intentionally deferred to a future release']},
     {v:'2.6.7 — Enterprise Repository & Delivery Foundation', items:['Engineering & delivery foundation only — no business feature, calculation, payroll, overtime, finance, import, storage key, SCHEMA_VERSION (6), backup format or module-architecture change; the application runtime is byte-identical to v2.6.6 apart from the version identity','Added GitHub Actions CI (build + verify on every push/PR to main) and a tag-triggered release workflow that re-derives the version, checks the tag matches APP_VERSION, and publishes the portable HTML as a release asset','Added repository governance: issue templates (bug report / feature request), pull request template, CODEOWNERS, SECURITY policy, CONTRIBUTING guide, code of conduct, a proprietary LICENSE-NOTICE, release-notes templates, and enterprise QA / release-process / data-safety docs','Hardened repository hygiene (.gitignore / .gitattributes) to keep secrets, local backups, .env files and uploaded evidence out of version control, and documented a sample-data policy','README now carries CI / release / version / proprietary badges']},
     {v:'2.6.6 — Company Settings Checklist Fix', items:['Fixed: the "Configure company settings" onboarding step now becomes completed as soon as you save a meaningful company profile. Previously it only credited a non-default Company Name or a set Opening Cash Balance and ignored the Product Name, so saving Settings often left the step unchecked','Completion is derived purely from your persisted settings (company name, product name, or opening cash balance) — so it is correct immediately after saving and stays correct after navigation and browser reload, without needing a full page reload','Untouched shipped defaults do not count (a fresh install is still "not configured"), a theme-only change does not count as company setup, and optional blank fields never block completion','No company data is reset or modified; no storage key, SCHEMA_VERSION (6), calculation or .css change']},
@@ -4787,6 +5036,7 @@ const AUDIT_TYPE_LABELS = {
   'overtime.submitted':'Overtime Submitted', 'overtime.draft':'Overtime Set to Draft', 'overtime.committed-to-payroll':'Overtime Committed to Payroll',
   'finance.execute':'Transaction Executed', 'import.commit':'Smart Import Committed', 'import.undo':'Smart Import Undone',
   'employee.delete':'Employee Deleted', 'contract.delete':'Contract Deleted',
+  'bankaccount.create':'Bank Account Created', 'bankaccount.edit':'Bank Account Updated', 'bankaccount.status':'Bank Account Status Changed',
 };
 function auditTypeLabel(t){
   if(AUDIT_TYPE_LABELS[t]) return AUDIT_TYPE_LABELS[t];
@@ -5244,8 +5494,9 @@ function openEmployeeModal(id){
         <div class="field"><label>Join Date</label><input class="input" type="date" name="joinDate" value="${escapeHtml(v.joinDate||'')}"></div>
         <div class="field"><label>Contract Type</label><select class="input" name="contractType">${CONTRACT_TYPES.map(s=>`<option ${v.contractType===s?'selected':''}>${s}</option>`).join('')}</select></div>
         <div class="field"><label>Monthly Base Salary (Rp)</label><input class="input" type="number" step="any" name="monthlyBaseSalary" value="${v.monthlyBaseSalary??''}"></div>
-        <div class="field"><label>Bank Name</label><input class="input" name="bankName" value="${escapeHtml(v.bankName||'')}"></div>
-        <div class="field"><label>Bank Account Number</label><input class="input" name="bankAccountNumber" value="${escapeHtml(v.bankAccountNumber||'')}"></div>
+        <div class="field"><label>Bank</label><select class="input" name="bankName">${employeeBankSelectHTML(v.bankName)}</select></div>
+        <div class="field"><label>Account Holder</label><input class="input" name="bankAccountHolder" value="${escapeHtml(v.bankAccountHolder||v.accountHolder||'')}" placeholder="Name on the account"></div>
+        <div class="field"><label>Bank Account Number</label><input class="input" name="bankAccountNumber" value="${escapeHtml(v.bankAccountNumber||v.bankAccount||'')}" autocomplete="off"></div>
         <div class="field"><label>Email</label><input class="input" type="email" name="email" value="${escapeHtml(v.email||'')}"></div>
         <div class="field"><label>Phone</label><input class="input" name="phone" value="${escapeHtml(v.phone||'')}"></div>
         <div class="field" style="grid-column:span 2;"><label>Notes</label><textarea class="input" name="notes">${escapeHtml(v.notes||'')}</textarea></div>
@@ -5271,6 +5522,10 @@ function openEmployeeModal(id){
         const sal=fd.get('monthlyBaseSalary'); rec.monthlyBaseSalary=(sal===''||sal==null)?null:Number(sal);
         rec.bankName=(fd.get('bankName')||'').trim();
         rec.bankAccountNumber=(fd.get('bankAccountNumber')||'').trim();
+        rec.bankAccountHolder=(fd.get('bankAccountHolder')||'').trim();
+        // v2.6.9 — keep the legacy `bankAccount` field (used by Smart Import / dedup) in
+        // sync with the canonical `bankAccountNumber` so both readers stay consistent.
+        rec.bankAccount=rec.bankAccountNumber;
         rec.email=(fd.get('email')||'').trim();
         rec.phone=(fd.get('phone')||'').trim();
         rec.notes=(fd.get('notes')||'').trim();
@@ -5339,7 +5594,7 @@ function renderEmployeeDetail(main){
           <div>Contract Type: <b>${escapeHtml(e.contractType||'—')}</b></div>
           <div>Join Date: <b>${fmtDateID(e.joinDate)}</b></div>
           <div>Monthly Base Salary: <b class="mono">${fmtIDR(e.monthlyBaseSalary)}</b></div>
-          <div>Bank: <b>${escapeHtml(e.bankName||'—')}</b> ${escapeHtml(e.bankAccountNumber||'')}</div>
+          <div>Bank: <b>${escapeHtml(normalizeBankName(e.bankName)||'—')}</b> <span class="mono">${escapeHtml(maskAccountNumber(e.bankAccountNumber||e.bankAccount))}</span>${(e.bankAccountHolder||e.accountHolder)?` · <span class="dim">${escapeHtml(e.bankAccountHolder||e.accountHolder)}</span>`:''}</div>
           <div>Email: <b>${escapeHtml(e.email||'—')}</b></div>
           <div>Phone: <b>${escapeHtml(e.phone||'—')}</b></div>
           ${e.notes?`<div class="dim" style="margin-top:6px;">${escapeHtml(e.notes)}</div>`:''}
@@ -5421,6 +5676,19 @@ function renderEmployeeDetail(main){
 }
 
 /* ---------- generic HR actions menu (mirrors the finance actions menu) ---------- */
+// v2.6.9 — employee Bank <select> sourced from the Bank Master. Legacy short names
+// (Mandiri, BCA, BNI, BSI, …) map to their canonical master entry; any other existing
+// free-text value is preserved as a leading "(current)" option so nothing is lost and
+// no bulk data migration occurs (the stored value only changes if the user re-saves).
+function employeeBankSelectHTML(current){
+  const cur = (current||'').trim();
+  const mapped = normalizeBankName(cur);
+  const inMaster = INDONESIAN_BANKS.includes(mapped);
+  const custom = (cur && !inMaster) ? `<option value="${escapeHtml(cur)}" selected>${escapeHtml(cur)} (current)</option>` : '';
+  const selected = inMaster ? mapped : '';
+  return `<option value="" ${cur?'':'selected'}>— select —</option>${custom}`
+    + BANK_MASTER_GROUPS.map(g=>`<optgroup label="${escapeHtml(g.group)}">${g.banks.map(b=>`<option ${b===selected?'selected':''}>${escapeHtml(b)}</option>`).join('')}</optgroup>`).join('');
+}
 function hrActionsMenu(kind, id, items){
   return `<div class="actions-menu">
     <button class="btn btn-sm actions-toggle" data-hr-actions="${kind}:${id}">Actions ▾</button>
@@ -5457,6 +5725,10 @@ function bindHRActions(main){
     else if(a==='padj-edit') openAdjustmentModal(id);
     else if(a==='padj-toggle') toggleAdjustment(id);
     else if(a==='padj-delete') deleteAdjustment(id);
+    else if(a==='cacc-edit') openCompanyAccountModal(id);
+    else if(a==='cacc-activate') setCompanyAccountStatus(id, 'Active');
+    else if(a==='cacc-deactivate') setCompanyAccountStatus(id, 'Inactive');
+    else if(a==='cacc-archive') setCompanyAccountStatus(id, 'Archived');
     else if(a==='prow-detail') hrNavTo('payrollDetail',{detailPayrollId:id});
     else if(a==='prow-review') { await setPayrollStatus(id,'Reviewed'); render(); }
     else if(a==='prow-ready') { await setPayrollStatus(id,'Ready'); render(); }
@@ -6066,7 +6338,7 @@ function openRecurringModal(id){
         <div class="field"><label>End Month (optional)</label><input class="input" name="endMonth" value="${escapeHtml(v.endMonth||'')}" placeholder="blank = ongoing"></div>
         <div class="field"><label>Vendor</label><input class="input" name="vendor" value="${escapeHtml(v.vendor||'')}"></div>
         <div class="field"><label>Payment Method</label><select class="input" name="paymentMethod"><option value="">—</option>${PAYMENT_METHODS.map(m=>`<option ${v.paymentMethod===m?'selected':''}>${m}</option>`).join('')}</select></div>
-        <div class="field"><label>Bank Account</label><select class="input" name="bankAccount"><option value="">—</option>${BANK_ACCOUNTS.map(b=>`<option ${v.bankAccount===b?'selected':''}>${b}</option>`).join('')}</select></div>
+        <div class="field"><label>Bank Account</label><select class="input" name="bankAccount">${companyAccountOptionsHTML(v.bankAccount, {blankOption:true})}</select></div>
         <div class="field" style="grid-column:span 2;"><label>Notes</label><textarea class="input" name="notes">${escapeHtml(v.notes||'')}</textarea></div>
       </div>
       <div class="modal-actions"><button type="button" class="btn" id="reCancel">Cancel</button><button type="submit" class="btn btn-accent">${isNew?'Create':'Save'}</button></div>

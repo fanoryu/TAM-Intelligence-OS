@@ -6,8 +6,8 @@ AI assistants get productive quickly. It is descriptive (what *is*), whereas
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
 there rather than duplicating it.
 
-**As of the current release:** v2.6.8 — "Payroll Selection and Overtime Drift UX Fixes";
-`SCHEMA_VERSION` 6. When these change, update this document (not `CLAUDE.md`).
+**As of the current release:** v2.6.9 — "Enterprise Banking Foundation"; `SCHEMA_VERSION` 6.
+When these change, update this document (not `CLAUDE.md`).
 
 ---
 
@@ -44,7 +44,8 @@ Grouped as they appear in the app's navigation:
 - **People & Contracts:** Employees (+ Employee Detail), Contracts, Payroll Workspace (+ Payroll
   Detail), Overtime, Monthly Plan Generator, Recurring Expenses.
 - **Import:** Smart Import (spreadsheet extraction, column mapping, deduplication).
-- **Management / System:** Financial Calendar, Reports, Activity Log, Settings, About, Release Notes.
+- **Management / System:** Financial Calendar, Reports, Activity Log, Settings, Bank Accounts, About,
+  Release Notes.
 
 A capability status matrix (Available / Planned) is maintained in [`README.md`](README.md).
 
@@ -70,9 +71,10 @@ provenance, and diagrams (application structure, payroll workflow, release pipel
 
 - Persistence is **local**: browser `localStorage` (standalone file) or the Claude Artifact storage
   environment; nothing is sent to a server.
-- `SCHEMA_VERSION` is **6**; there is a fixed set of stable storage keys (transactions, settings,
-  employees, contracts, payroll plans, overtime records, audit log, and related) plus one-time
-  migration flags. The shipped build seeds **no** data.
+- `SCHEMA_VERSION` is **6**; there is a fixed set of stable storage keys (**14** as of v2.6.9:
+  transactions, settings, backups, employees, contracts, payroll plans, recurring, monthly plans,
+  overtime records, import batches, payroll adjustments, employee merges, audit log, and the new
+  `tam_company_accounts_v1`) plus one-time migration flags. The shipped build seeds **no** data.
 - Recovery is via Complete Backup export/import; destructive actions snapshot first.
 - The enumerated keys and migration rules are in [`docs/DATA-SAFETY.md`](docs/DATA-SAFETY.md).
 
@@ -160,7 +162,7 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 Directions (no committed release numbers unless already approved):
 
-- **Planned:** Supplemental Overtime Payment; ongoing repository maintenance.
+- **Planned:** Supplemental Payroll Engine (v2.7.0); ongoing repository maintenance.
 - **Under consideration:** authentication and role-based access control; attachment/evidence
   handling; expanded approval workflows.
 

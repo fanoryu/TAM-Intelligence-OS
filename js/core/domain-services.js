@@ -1,3 +1,37 @@
+/* ---------- Company Bank Accounts + Bank Master helpers (v2.6.9) ----------
+   Company accounts are user-managed records (tam_company_accounts_v1). The Bank
+   Master (BANK_MASTER_GROUPS / INDONESIAN_BANKS in constants.js) is static
+   reference data. Transactions store a company account's label string in the
+   existing `bankAccount` field, so legacy string values keep resolving. */
+function companyAccountById(id){ return (State.companyAccounts||[]).find(a=>a.id===id) || null; }
+function companyAccountByLabel(label){ if(!label) return null; return (State.companyAccounts||[]).find(a=>a.label===label) || null; }
+function activeCompanyAccounts(){ return (State.companyAccounts||[]).filter(a=>a.status==='Active'); }
+function companyAccountLabel(a){ if(!a) return '—'; return a.bankName ? (a.label+' — '+a.bankName) : a.label; }
+// Legacy short bank name -> Bank Master canonical name (display/mapping only; no data rewrite).
+const LEGACY_BANK_NAME_MAP = { 'Mandiri':'Bank Mandiri', 'BCA':'BCA', 'BNI':'Bank Negara Indonesia (BNI)', 'BRI':'Bank Rakyat Indonesia (BRI)', 'BSI':'Bank Syariah Indonesia', 'BTN':'Bank Tabungan Negara (BTN)' };
+function normalizeBankName(name){ const n=(name||'').trim(); if(!n) return ''; return LEGACY_BANK_NAME_MAP[n] || n; }
+// Resolve a transaction's stored bankAccount string (a company-account label, or a
+// legacy BANK_ACCOUNTS string) to a friendly display. Unknown/legacy values pass through.
+function resolveBankAccountDisplay(value){ if(!value) return '—'; const a=companyAccountByLabel(value); return a ? companyAccountLabel(a) : value; }
+// v2.6.9 — <option> list of ACTIVE company accounts for transaction / payroll / recurring
+// dropdowns. Option value = the account label (a string, backward-compatible with the
+// legacy stored value). A `selected` value not among the active accounts is preserved as a
+// leading "(current)" option so existing rows never lose their recorded account.
+// opts: { allOption:true (filters), blankOption:true (optional field) }.
+function companyAccountOptionsHTML(selected, opts){
+  opts = opts||{};
+  const sel = (selected==null)?'':String(selected);
+  const active = activeCompanyAccounts();
+  const labels = active.map(a=>a.label);
+  let html = '';
+  if(opts.allOption) html += `<option value="all" ${sel==='all'?'selected':''}>All accounts</option>`;
+  if(opts.blankOption) html += `<option value="" ${sel===''?'selected':''}>—</option>`;
+  if(sel && sel!=='all' && sel!=='' && !labels.includes(sel)) html += `<option value="${escapeHtml(sel)}" selected>${escapeHtml(sel)} (current)</option>`;
+  html += active.map(a=>`<option value="${escapeHtml(a.label)}" ${a.label===sel?'selected':''}>${escapeHtml(companyAccountLabel(a))}</option>`).join('');
+  if(!html) html = `<option value="">— no active accounts (add in Bank Accounts) —</option>`;
+  return html;
+}
+
 /* ---------- derived data ---------- */
 function getMonths(){
   const map = {};

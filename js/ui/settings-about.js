@@ -44,7 +44,7 @@ function renderSettings(main){
             <select class="input" name="defaultPaymentMethod">${PAYMENT_METHODS.map(m=>`<option ${s.defaultPaymentMethod===m?'selected':''}>${m}</option>`).join('')}</select>
           </div>
           <div class="field"><label>Default Bank</label>
-            <select class="input" name="defaultBank">${BANK_ACCOUNTS.map(b=>`<option ${s.defaultBank===b?'selected':''}>${b}</option>`).join('')}</select>
+            <select class="input" name="defaultBank">${companyAccountOptionsHTML(s.defaultBank)}</select>
           </div>
           <div class="field"><label>Auto-archive completed transactions</label>
             <select class="input" name="autoArchiveCompleted"><option value="no" ${!s.autoArchiveCompleted?'selected':''}>No</option><option value="yes" ${s.autoArchiveCompleted?'selected':''}>Yes</option></select>
@@ -303,6 +303,128 @@ function buildIntegrityHTML(res){
   if(!res.findings.length) return head + `<div class="insight-item good" style="display:block;">No integrity issues detected. All records have valid IDs, links, dates, and amounts.</div>`;
   return head + `<div class="insight-list">${res.findings.map(f=>`<div class="insight-item ${f.severity==='critical'?'warn':f.severity==='warning'?'warn':''}">${severityPill(f.severity)} <span style="margin-left:6px;">${escapeHtml(f.message)}</span></div>`).join('')}</div>`;
 }
+/* ============================================================
+   COMPANY BANK ACCOUNTS (v2.6.9) — structured, user-managed accounts.
+   Separate from the Bank Master (reference data) and from Employee banking.
+   Account numbers are stored in full but ALWAYS masked in lists/tables; the
+   full value appears only inside its own edit field. Only Active accounts feed
+   transaction/payroll dropdowns. No PIN/OTP/password/token is ever stored.
+   ============================================================ */
+const COMPANY_ACCOUNT_STATUS_META = {
+  'Active':   {pill:'pill-status-completed'},
+  'Inactive': {pill:'pill-status-archived'},
+  'Archived': {pill:'pill-status-cancelled'},
+};
+function bankAccountsFiltered(){
+  const f = State.bankAccountFilter || {search:'', purpose:'all', status:'all'};
+  let rows = (State.companyAccounts||[]).slice();
+  if(f.status!=='all') rows = rows.filter(a=>a.status===f.status);
+  if(f.purpose!=='all') rows = rows.filter(a=>(a.purpose||'')===f.purpose);
+  if(f.search.trim()){ const s=normStr(f.search); rows = rows.filter(a=>[a.label,a.bankName,a.holder,a.purpose].some(x=>normStr(x||'').includes(s))); }
+  rows.sort((a,b)=>String(a.label||'').localeCompare(String(b.label||'')));
+  return rows;
+}
+function bankAccountRowsHTML(){
+  const rows = bankAccountsFiltered();
+  return rows.map(a=>`<tr>
+      <td><b>${escapeHtml(a.label||'—')}</b></td>
+      <td class="dim">${escapeHtml(a.bankName||'—')}</td>
+      <td>${escapeHtml(a.holder||'—')}</td>
+      <td class="mono">${escapeHtml(maskAccountNumber(a.accountNumber))}</td>
+      <td>${escapeHtml(a.purpose||'—')}</td>
+      <td>${hrStatusBadge(a.status||'Active', COMPANY_ACCOUNT_STATUS_META)}</td>
+      <td>${hrActionsMenu('cacc', a.id, [
+        ['cacc-edit','Edit'],
+        a.status!=='Active'?['cacc-activate','Set Active']:null,
+        a.status==='Active'?['cacc-deactivate','Deactivate']:null,
+        a.status!=='Archived'?['cacc-archive','Archive']:null,
+      ])}</td>
+    </tr>`).join('') || `<tr><td colspan="7" class="empty">No bank accounts match. Click “+ New Bank Account”.</td></tr>`;
+}
+function applyBankAccountFilter(main){
+  const tb = document.getElementById('caccRows'); if(!tb) return;
+  tb.innerHTML = bankAccountRowsHTML();
+  const el = document.getElementById('caccShown'); if(el) el.textContent = bankAccountsFiltered().length;
+  bindHRActions(main);
+}
+function renderBankAccounts(main){
+  if(!State.bankAccountFilter) State.bankAccountFilter = {search:'', purpose:'all', status:'all'};
+  const f = State.bankAccountFilter;
+  const all = State.companyAccounts||[];
+  const activeN = all.filter(a=>a.status==='Active').length;
+  main.innerHTML = pageHeader('Bank Accounts',
+      'Company bank accounts used across finance and payroll. Only Active accounts appear in transaction dropdowns. Account numbers are stored masked in lists — never a PIN, OTP, password, or token.',
+      `<button class="btn btn-accent" id="caccNew">+ New Bank Account</button>`)
+    + `<div class="grid grid-4" style="margin-bottom:14px;">
+        <div class="card stat-card"><div class="stat-label">Accounts</div><div class="stat-value">${all.length}</div><div class="stat-sub dim">${activeN} active</div></div>
+        <div class="card stat-card"><div class="stat-label">Shown</div><div class="stat-value" id="caccShown">${bankAccountsFiltered().length}</div></div>
+      </div>
+      <div class="card">
+        <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1fr;margin-bottom:12px;">
+          <div class="field"><label>Search (label, bank, holder)</label><input class="input" id="caccSearch" placeholder="Search…" value="${escapeHtml(f.search)}"></div>
+          <div class="field"><label>Purpose</label><select class="input" id="caccPurpose"><option value="all">All purposes</option>${COMPANY_ACCOUNT_PURPOSES.map(p=>`<option ${f.purpose===p?'selected':''}>${p}</option>`).join('')}</select></div>
+          <div class="field"><label>Status</label><select class="input" id="caccStatus"><option value="all">All statuses</option>${COMPANY_ACCOUNT_STATUSES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+        </div>
+        <div class="table-wrap" style="max-height:560px;overflow:auto;">
+          <table>
+            <thead><tr><th>Label</th><th>Bank</th><th>Account Holder</th><th>Account Number</th><th>Purpose</th><th>Status</th><th></th></tr></thead>
+            <tbody id="caccRows">${bankAccountRowsHTML()}</tbody>
+          </table>
+        </div>
+        <p class="hint" style="margin-top:10px;">Display format is “Label — Bank”. Deactivate to hide an account from new transactions without losing history; Archive to retire it. Existing transactions that referenced an account keep their recorded value.</p>
+      </div>`;
+  document.getElementById('caccNew').addEventListener('click', ()=>openCompanyAccountModal(null));
+  document.getElementById('caccSearch').addEventListener('input', e=>{ State.bankAccountFilter.search=e.target.value; applyBankAccountFilter(main); });
+  document.getElementById('caccPurpose').addEventListener('change', e=>{ State.bankAccountFilter.purpose=e.target.value; applyBankAccountFilter(main); });
+  document.getElementById('caccStatus').addEventListener('change', e=>{ State.bankAccountFilter.status=e.target.value; applyBankAccountFilter(main); });
+  bindHRActions(main);
+}
+function bankMasterOptionsHTML(selected){
+  return BANK_MASTER_GROUPS.map(g=>`<optgroup label="${escapeHtml(g.group)}">${g.banks.map(b=>`<option ${b===selected?'selected':''}>${escapeHtml(b)}</option>`).join('')}</optgroup>`).join('');
+}
+function openCompanyAccountModal(id){
+  const a = id ? companyAccountById(id) : null;
+  const isNew = !a;
+  const v = a || {label:'', bankName:'', holder:'', accountNumber:'', purpose:'Operational', status:'Active', notes:''};
+  openModalHTML(`<h3>${isNew?'New Bank Account':'Edit Bank Account'}</h3>
+    <form id="caccForm"><div class="form-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="field"><label>Account Label</label><input class="input" name="label" value="${escapeHtml(v.label||'')}" required placeholder="e.g. Mandiri Payroll"></div>
+      <div class="field"><label>Bank</label><select class="input" name="bankName"><option value="">— select —</option>${bankMasterOptionsHTML(v.bankName)}</select></div>
+      <div class="field"><label>Account Holder</label><input class="input" name="holder" value="${escapeHtml(v.holder||'')}" placeholder="Name on the account"></div>
+      <div class="field"><label>Account Number</label><input class="input" name="accountNumber" value="${escapeHtml(v.accountNumber||'')}" placeholder="Full number (masked in lists)" autocomplete="off"></div>
+      <div class="field"><label>Purpose</label><select class="input" name="purpose">${COMPANY_ACCOUNT_PURPOSES.map(p=>`<option ${v.purpose===p?'selected':''}>${p}</option>`).join('')}</select></div>
+      <div class="field"><label>Status</label><select class="input" name="status">${COMPANY_ACCOUNT_STATUSES.map(s=>`<option ${v.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field" style="grid-column:span 2;"><label>Notes</label><input class="input" name="notes" value="${escapeHtml(v.notes||'')}"></div>
+    </div>
+    <p class="hint" style="margin-top:6px;">Do not enter a PIN, OTP, password, or access token here — store only the account number. It is masked everywhere except this field.</p>
+    <div class="modal-actions"><button type="button" class="btn" id="caccCancel">Cancel</button><button type="submit" class="btn btn-accent">${isNew?'Create':'Save'}</button></div></form>`,
+    {width:640, onMount:(root)=>{
+      root.querySelector('#caccCancel').addEventListener('click', closeModal);
+      root.querySelector('#caccForm').addEventListener('submit', async ev=>{
+        ev.preventDefault(); const fd=new FormData(ev.target);
+        const label=(fd.get('label')||'').trim();
+        if(!label){ showWarning('An account label is required.'); return; }
+        const now=new Date().toISOString();
+        const rec = a || {id:uid('cacc'), createdAt:now};
+        rec.label=label; rec.bankName=(fd.get('bankName')||'').trim(); rec.holder=(fd.get('holder')||'').trim();
+        rec.accountNumber=(fd.get('accountNumber')||'').trim(); rec.purpose=fd.get('purpose'); rec.status=fd.get('status');
+        rec.notes=(fd.get('notes')||'').trim(); rec.updatedAt=now;
+        if(isNew) State.companyAccounts.push(rec);
+        await persistCompanyAccounts();
+        logActivity({type:isNew?'bankaccount.create':'bankaccount.edit', module:'Bank Accounts', entity:rec.label, entityId:rec.id,
+          desc:`${isNew?'Created':'Updated'} company account ${rec.label}${rec.bankName?' ('+rec.bankName+')':''}`, refs:{companyAccountId:rec.id}});
+        closeModal(); showSuccess('Bank account saved.'); render();
+      });
+    }});
+}
+async function setCompanyAccountStatus(id, status){
+  const a = companyAccountById(id); if(!a) return;
+  if(status==='Archived' && !confirmAction(`Archive “${a.label}”? It will be hidden from new transactions. Existing history is unchanged.`)) return;
+  a.status=status; a.updatedAt=new Date().toISOString();
+  await persistCompanyAccounts();
+  logActivity({type:'bankaccount.status', module:'Bank Accounts', entity:a.label, entityId:a.id, desc:`Company account ${a.label} → ${status}`, refs:{companyAccountId:a.id}});
+  showSuccess(`Account ${status.toLowerCase()}.`); render();
+}
 function renderAbout(main){
   main.innerHTML = `
     <div class="page-head"><div><h1>About</h1></div></div>
@@ -324,6 +446,7 @@ function renderAbout(main){
 }
 function renderReleaseNotes(main){
   const notes = [
+    {v:'2.6.9 — Enterprise Banking Foundation', items:['Indonesian Bank Master: a single, reusable reference list of Indonesian banks grouped by type (State, Private, Digital, Islamic, Regional, International) plus “Other Bank”, alphabetically sorted within each group. It is a constant (one source of truth, no duplicated arrays, no storage key) used by both employee banking and company accounts','Company Bank Accounts: a new Settings → Bank Accounts page to create, edit, deactivate, archive, search and filter company accounts. Each account has a Label, Bank (from the Bank Master), Account Holder, Account Number, Purpose (Operational / Payroll / Tax / Savings / Petty Cash / Other) and Status (Active / Inactive / Archived). Account numbers are stored masked in lists (only the last 4 shown) and never a PIN, OTP, password or token. Only Active accounts appear in transaction dropdowns, displayed as “Label — Bank”','Employee banking: the employee Bank is now chosen from the Bank Master, with a new Account Holder field. Existing values map correctly (e.g. Mandiri → Bank Mandiri, BSI → Bank Syariah Indonesia) and any other existing free-text bank is preserved as a “(current)” option — no bulk data migration. Employee account numbers are masked in the profile view','Transaction & execution integration: the Bank Account dropdowns in Add/Execute transactions, the transactions filter, recurring expenses and the default-bank setting now list only Active company accounts. Transactions that stored a legacy bank string keep resolving','Backward compatibility: on installs that already have data, the five legacy bank strings seed structured company accounts once (guarded, non-destructive) so existing references resolve; a fresh install starts empty. Complete Backup / Restore now include company accounts, and older backups without them restore cleanly','Data safety: one new additive storage key (tam_company_accounts_v1); SCHEMA_VERSION is unchanged (6); no storage key was renamed or removed; committed payroll/finance remain untouched','Supplemental Payment remains planned for a future release (v2.7.0). The existing overtime-drift warning and its disabled placeholder are unchanged in this release']},
     {v:'2.6.8 — Payroll Selection and Overtime Drift UX Fixes', items:['Generic payroll selection model: Select All and the header checkbox now select all visible rows, and the selected count is the actual number of selected rows. Each bulk action owns its eligibility and reports eligible / skipped / reason independently — Review applies to Draft, Approve applies to Draft and Review, Post applies to Approved. Adding a future action (Export, Delete, …) just declares its own eligible stages','This fixes the original confusion (previously "16 selected → 0 approved"): Approve now acts only on its eligible rows and clearly reports the rest, e.g. "Approved 3 payroll(s). 2 skipped — 1 already at Posted stage; 1 already at Executed stage"','The header checkbox stays synchronized with the visible rows (checked / indeterminate / unchecked), each action auto-disables when the period has no row eligible for that action, and Post to Finance reports rows skipped because they are not at the Approved stage alongside any commit blockers','Overtime Drift Visibility: approving overtime after payroll already exists now shows an immediate warning — no need to click Generate Payroll first — on the Overtime page, the Payroll Workspace and Payroll Detail. Draft/Review/Approved payroll shows "Overtime approved. Regenerate payroll to include the updated overtime"; Posted/Executed payroll shows that the original payroll is unchanged and a supplemental payment will be required (with a disabled "Supplemental Payment (Coming in a future release)" placeholder)','Posted and Executed payroll stays fully immutable — payroll totals and posted/executed transactions are never modified. The drift warning is derived from existing overtime-comparison logic, so it appears immediately, survives reload and never duplicates','No payroll status rules, committed-payroll immutability, storage key, backup format, migration or SCHEMA_VERSION (still 6) changed; Supplemental Payment itself is intentionally deferred to a future release']},
     {v:'2.6.7 — Enterprise Repository & Delivery Foundation', items:['Engineering & delivery foundation only — no business feature, calculation, payroll, overtime, finance, import, storage key, SCHEMA_VERSION (6), backup format or module-architecture change; the application runtime is byte-identical to v2.6.6 apart from the version identity','Added GitHub Actions CI (build + verify on every push/PR to main) and a tag-triggered release workflow that re-derives the version, checks the tag matches APP_VERSION, and publishes the portable HTML as a release asset','Added repository governance: issue templates (bug report / feature request), pull request template, CODEOWNERS, SECURITY policy, CONTRIBUTING guide, code of conduct, a proprietary LICENSE-NOTICE, release-notes templates, and enterprise QA / release-process / data-safety docs','Hardened repository hygiene (.gitignore / .gitattributes) to keep secrets, local backups, .env files and uploaded evidence out of version control, and documented a sample-data policy','README now carries CI / release / version / proprietary badges']},
     {v:'2.6.6 — Company Settings Checklist Fix', items:['Fixed: the "Configure company settings" onboarding step now becomes completed as soon as you save a meaningful company profile. Previously it only credited a non-default Company Name or a set Opening Cash Balance and ignored the Product Name, so saving Settings often left the step unchecked','Completion is derived purely from your persisted settings (company name, product name, or opening cash balance) — so it is correct immediately after saving and stays correct after navigation and browser reload, without needing a full page reload','Untouched shipped defaults do not count (a fresh install is still "not configured"), a theme-only change does not count as company setup, and optional blank fields never block completion','No company data is reset or modified; no storage key, SCHEMA_VERSION (6), calculation or .css change']},

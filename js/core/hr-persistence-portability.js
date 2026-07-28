@@ -14,6 +14,7 @@ const HR_KEYS = {
   importBatches: 'tam_import_batches_v1',      // v2.4.0 Smart Import audit + undo
   payrollAdjustments: 'tam_payroll_adjustments_v1', // v2.5.0 recurring payroll adjustments
   employeeMerges: 'tam_employee_merges_v1',    // v2.5.2 employee dedup/merge audit
+  companyAccounts: 'tam_company_accounts_v1',   // v2.6.9 structured Company Bank Accounts
 };
 async function loadHRData(){
   for(const [stateKey, storeKey] of Object.entries(HR_KEYS)){
@@ -38,6 +39,44 @@ async function persistMonthlyPlans(){ return persistHR('monthlyPlans'); }
 async function persistOvertime(){ return persistHR('overtimeRecords'); }
 async function persistPayrollAdjustments(){ return persistHR('payrollAdjustments'); }
 async function persistEmployeeMerges(){ return persistHR('employeeMerges'); }
+async function persistCompanyAccounts(){ return persistHR('companyAccounts'); }
+// v2.6.9 — one-time, guarded, non-destructive seed of structured Company Bank Accounts
+// from the legacy BANK_ACCOUNTS strings, for backward compatibility (existing
+// transactions store one of those strings in `bankAccount`, and the seeded accounts'
+// labels match those strings so they keep resolving). A FRESH install stays EMPTY —
+// nothing is seeded unless the install already carries business data. Existing account
+// data is never overwritten. No schema/storage-shape change.
+async function migrateSeedCompanyAccounts(){
+  try{
+    const flagRes = await StorageAdapter.get('tam_migrated_bankaccts_v269');
+    if(flagRes && flagRes.value) return;
+    if(!Array.isArray(State.companyAccounts)) State.companyAccounts = [];
+    const hasData = (State.txns&&State.txns.length) || (State.employees&&State.employees.length)
+      || (State.recurringExpenses&&State.recurringExpenses.length) || (State.monthlyPlans&&State.monthlyPlans.length);
+    if(State.companyAccounts.length===0 && hasData){
+      const now = new Date().toISOString();
+      // Metadata for the known legacy labels; the label list itself is the single source
+      // of truth (BANK_ACCOUNTS in constants.js) so the two never drift.
+      const META = {
+        'Mandiri Operational':{bankName:'Bank Mandiri', purpose:'Operational'},
+        'Mandiri Payroll':    {bankName:'Bank Mandiri', purpose:'Payroll'},
+        'BCA':                {bankName:'BCA', purpose:'Operational'},
+        'BSI':                {bankName:'Bank Syariah Indonesia', purpose:'Payroll'},
+        'Cash':               {bankName:'', purpose:'Petty Cash'},
+      };
+      BANK_ACCOUNTS.forEach(label=>{
+        const m = META[label] || {bankName:'', purpose:'Other'};
+        State.companyAccounts.push({
+          id:uid('cacc'), label, bankName:m.bankName, holder:'', accountNumber:'',
+          purpose:m.purpose, status:'Active', notes:'Seeded from legacy bank list (v2.6.9)',
+          createdAt:now, updatedAt:now,
+        });
+      });
+      await persistCompanyAccounts();
+    }
+    await StorageAdapter.set('tam_migrated_bankaccts_v269','done');
+  }catch(e){ console.error('migrateSeedCompanyAccounts error', e); }
+}
 // Part 13 — one-time, guarded, non-destructive upgrade to the v2.5.2 dedup schema.
 // Ensures the merge-audit array exists and takes a safety backup. NEVER merges
 // existing duplicates automatically — they are only detected and surfaced.
@@ -162,6 +201,7 @@ function buildCompleteBackup(){
     overtimeRecords: State.overtimeRecords,
     importBatches: State.importBatches,
     payrollAdjustments: State.payrollAdjustments,
+    companyAccounts: State.companyAccounts,
   };
 }
 // Validates an uploaded complete-backup object. Returns {ok, errors, info}
@@ -187,6 +227,7 @@ function validateCompleteBackup(data){
     backupCount: Array.isArray(data.backups) ? data.backups.length : 0,
     employeeCount: Array.isArray(data.employees) ? data.employees.length : 0,
     overtimeCount: Array.isArray(data.overtimeRecords) ? data.overtimeRecords.length : 0,
+    companyAccountCount: Array.isArray(data.companyAccounts) ? data.companyAccounts.length : 0,
     schemaVersion: (data.schemaVersion===undefined||data.schemaVersion===null) ? 'not recorded' : String(data.schemaVersion),
     sourceApp: data.app || 'unknown', sourceVersion: data.version || 'unknown',
     exportedAt: data.exportedAt || null,
@@ -210,7 +251,7 @@ async function restoreCompleteBackup(data){
   });
   if(data.settings) State.settings = {...DEFAULT_SETTINGS, ...data.settings, schemaVersion: SCHEMA_VERSION};
   // People & Contracts + Overtime datasets (present in v2.2+/v2.3+ backups; absent → keep current).
-  ['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments'].forEach(k=>{
+  ['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts'].forEach(k=>{
     if(Array.isArray(data[k])) State[k] = JSON.parse(JSON.stringify(data[k]));
   });
   // Safety backup goes first so it survives the 25-backup cap.
@@ -218,7 +259,7 @@ async function restoreCompleteBackup(data){
   await persist();
   await saveSettings();
   await saveBackups();
-  await Promise.all(['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments'].map(persistHR));
+  await Promise.all(['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts'].map(persistHR));
   // Restored data already carries lifecycle fields (or got them above) — don't re-run migration.
   await StorageAdapter.set('tam_migrated_exec_v21', 'done');
   await StorageAdapter.set('tam_migrated_hr_v22', 'done');

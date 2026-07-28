@@ -19,6 +19,15 @@ function normStr(s){ return (s||'').toString().trim().toLowerCase().replace(/\s+
 function monthLabel(m){ return m.month + ' ' + m.year; }
 function monthKeySort(a,b){ return a.year-b.year || a.monthNum-b.monthNum; }
 function escapeHtml(s){ return (s===null||s===undefined)?'':String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// v2.6.9 — mask a bank account number for display (keeps last 4 digits/chars).
+// The full value is only ever shown inside its own edit field, never in lists,
+// tables, tooltips, or exports.
+function maskAccountNumber(n){
+  const s = (n===null||n===undefined) ? '' : String(n).trim();
+  if(!s) return '—';
+  if(s.length<=4) return '••'+s;
+  return '•••• '+s.slice(-4);
+}
 function toast(msg, ms){
   const root = document.getElementById('toast-root');
   const el = document.createElement('div');

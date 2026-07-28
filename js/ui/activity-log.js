@@ -61,6 +61,7 @@ const AUDIT_TYPE_LABELS = {
   'overtime.submitted':'Overtime Submitted', 'overtime.draft':'Overtime Set to Draft', 'overtime.committed-to-payroll':'Overtime Committed to Payroll',
   'finance.execute':'Transaction Executed', 'import.commit':'Smart Import Committed', 'import.undo':'Smart Import Undone',
   'employee.delete':'Employee Deleted', 'contract.delete':'Contract Deleted',
+  'bankaccount.create':'Bank Account Created', 'bankaccount.edit':'Bank Account Updated', 'bankaccount.status':'Bank Account Status Changed',
 };
 function auditTypeLabel(t){
   if(AUDIT_TYPE_LABELS[t]) return AUDIT_TYPE_LABELS[t];
