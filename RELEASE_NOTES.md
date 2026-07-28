@@ -78,7 +78,7 @@ This is a data-model + UI release; it adds **one** additive storage key and does
 - The tracked company workbook remains a documented, accepted exception (unchanged).
 
 ## Git Information
-- Commit: <pending approval>
+- Commit: 889c2accdeefbeeafd5040909353e40d9869c488
 - Tag: v2.6.9
 - Branch: main
 
