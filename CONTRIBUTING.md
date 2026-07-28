@@ -14,6 +14,30 @@ are made, verified, and released.
    migration.
 4. **Build must stay verifiable.** Every change must pass `node tools/verify-build.js`.
 
+## Baseline check (before you start)
+
+Confirm a known-good starting point before editing:
+
+```bash
+git status                 # working tree clean
+git branch --show-current  # main (or your feature branch)
+git log -1 --oneline       # latest commit
+git describe --tags --abbrev=0   # latest released tag
+```
+
+If the baseline is unexpected, stop and reconcile before making changes.
+
+## Actions that require explicit approval
+
+Do **not** do any of the following without the maintainer's explicit approval:
+
+- `git commit`, `git push`, `git tag`, or creating/editing a GitHub Release;
+- rewriting Git history (rebase, amend of pushed commits, force-push);
+- removing or moving a tracked file — including the tracked company workbook, which is a documented,
+  accepted exception and must not be inspected, exposed, moved, untracked, or deleted;
+- changing `APP_VERSION`, `APP_RELEASE_NAME`, `SCHEMA_VERSION`, storage keys, or migration flags
+  outside an intentional, approved release/migration.
+
 ## Architecture (what you are editing)
 
 - **Modular source** = `index.html` + `css/` (5 files) + `js/` (44 classic-script modules across
@@ -104,6 +128,32 @@ Any regression in a previously-working feature is a **release blocker**.
 4. Boot both the modular source and the dist; confirm zero console errors.
 5. Update `CHANGELOG.md` (and `RELEASE_NOTES.md` for a release) and any affected docs.
 6. Commit the source **and** the rebuilt `dist/` together.
+
+## Release-candidate process
+
+Releases are proposed as a **Release Candidate**, not published directly. Before any release action:
+
+1. Bump `APP_VERSION` + `APP_RELEASE_NAME` in `js/core/constants.js`; add a `RELEASE_NOTES.md` entry
+   and a `CHANGELOG.md` entry.
+2. `node tools/build-single-file.js` then `node tools/verify-build.js` (must pass).
+3. Boot the modular source **and** the portable dist — zero console errors.
+4. Present the RC (root cause, files changed, validation, regression, known limitations, build/verify
+   output, working-tree status) and **wait for explicit approval**.
+5. Only after approval: commit source + rebuilt dist → annotate `vX.Y.Z` → push `main` then the tag →
+   let the tag-triggered Release workflow publish. See [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md).
+
+## Version-consistency audit
+
+The version lives **once**, in `APP_VERSION`. After a version bump, confirm every human-facing
+reference agrees and that historical references stay intact:
+
+- Runtime/derived: `<title>` in `index.html`, `APP_RELEASE_NAME`, the About/embedded Release Notes
+  entry, the `dist/` filename (all checked by the verifier).
+- Docs: `README.md` (version badge, "Current release", portable filename), `ARCHITECTURE.md`
+  ("Current release" header + section index), `CHANGELOG.md`/`RELEASE_NOTES.md`, and issue-template
+  version examples.
+- Leave **historical** references (past CHANGELOG entries, prior release sections, lineage lists)
+  unchanged — only update pointers that should track the latest release.
 
 ## Documentation
 

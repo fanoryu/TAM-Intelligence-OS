@@ -1,223 +1,168 @@
-# TAM Intelligence OS — Modular Frontend Architecture
+# TAM Intelligence OS
+
+**Integrated Management Intelligence for PT Total Asset Manajemen** — a single-page finance,
+payroll, and operations workspace that runs entirely in the browser, with no backend and no runtime
+dependencies.
 
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
 ![Version](https://img.shields.io/badge/version-2.6.8-blue)
-![Status](https://img.shields.io/badge/license-proprietary%20%26%20confidential-red)
+![License](https://img.shields.io/badge/license-proprietary%20%26%20confidential-red)
+![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
+![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
+![Repository](https://img.shields.io/badge/repository-private-lightgrey)
 
-Integrated Management Intelligence for **PT Total Asset Manajemen**.
+> **Proprietary & confidential.** This repository is private and **not** open source — see
+> [`LICENSE`](LICENSE) and [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md). Do not commit real company,
+> employee, payroll, or backup data.
 
-> **Proprietary & confidential.** This repository is private and not open source — see
-> [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md). Do not commit real company data.
+---
 
-Current release: **v2.6.8 — Payroll Selection and Overtime Drift UX Fixes**
-(lineage: **v2.6.0** modular split; **v2.6.1** search-box focus; **v2.6.2** module
-decomposition + Git; **v2.6.3** Payroll operational workspace; **v2.6.3a** Approve→Post
-lifecycle fix; **v2.6.3b** floating Actions menu; **v2.6.3c** responsive detail pages +
-consistent sidebar icons; **v2.6.4** version-derived release tooling + read-only Activity
-Log and payroll audit timeline; **v2.6.5** Smart Import review selection no longer jumps
-scroll; **v2.6.6** onboarding "Configure company settings" step completes correctly;
-**v2.6.7** GitHub CI/release automation + repository governance — no app-behavior change;
-**v2.6.8** generic payroll bulk-selection model + immediate overtime-drift visibility).
+## Overview
+
+TAM Intelligence OS is an internal operations tool for **PT Total Asset Manajemen**. It manages the
+monthly cycle for finance and people operations — employees and contracts, overtime, payroll
+generation and posting, transaction execution, cash flow, budgeting, and reporting — as one
+self-contained HTML application.
+
+Design principles:
+
+- **Client-side only.** All data is stored locally in the browser's `localStorage` (or the Claude
+  Artifact storage environment). Nothing is sent to a server; there is no backend, database, or API.
+- **No build framework, no dependencies.** The app is plain HTML, CSS, and classic-script JavaScript
+  sharing one global scope. Node.js is used **only** for the build/verify tooling, never to run the
+  app. The only external network references are the XLSX parser and web fonts (CDN).
+- **Two shippable forms.** A modular development source and a single portable HTML file that behaves
+  identically.
+- **Data-safety first.** A 109-check verifier guards the persisted-data schema, storage keys,
+  migration flags, and build fidelity on every change.
+
+---
+
+## Current release
+
+**v2.6.8 — Payroll Selection and Overtime Drift UX Fixes** · `SCHEMA_VERSION` 6
+
+- **Generic payroll bulk-selection model** — Select All and the header checkbox select all visible
+  rows; each bulk action (Review → Draft; Approve → Draft/Review; Post → Approved) owns its
+  eligibility and reports *eligible / skipped / reason*.
+- **Immediate overtime-drift visibility** — approving overtime after payroll already exists surfaces
+  a warning right away (no Generate click) on the Overtime page, Payroll Workspace, and Payroll
+  Detail; Posted/Executed payroll stays immutable and flags that a supplemental payment is required.
+
+Download the portable build from the release page:
+**[Release v2.6.8](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.6.8)** →
+`tam-intelligence-os-v2.6.8.html`. See [`CHANGELOG.md`](CHANGELOG.md) and
+[`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
 
 Two supported outputs:
 
 | Output | What it is | Where |
 |---|---|---|
-| **A. Modular development source** | `index.html` + `css/` + `js/` (44 modules in `core/ ui/ finance/ people/ import/ analytics/`) loaded as ordered **classic scripts** (shared global scope, no ES modules) | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior to earlier releases | `dist/tam-intelligence-os-v2.6.8.html` |
+| **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (44 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/`), one shared global scope, no ES modules | project root |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.6.8.html` |
 
 ---
 
-## Run the modular source locally
+## Product capabilities
 
-No framework and no Node required to run. Because it loads local `css/` and `js/` files,
-serve the folder over HTTP (recommended) rather than `file://`:
+- **Finance operations** — a transaction ledger with planned vs. actual amounts, an Execution
+  Center to execute/schedule/cancel payments, cash-flow and budget views, and a financial calendar.
+- **People & payroll** — employees and contracts with work schedules; an operational Payroll
+  Workspace running Draft → Review → Approved → Posted → Executed over a read-only worksheet; and a
+  TAM-method overtime engine that feeds approved overtime into payroll.
+- **Planning & analytics** — a monthly plan generator, planned-vs-actual and month-over-month
+  comparisons, trend charts, and an executive dashboard.
+- **Data import** — Smart Import extracts employees/contracts/transactions from spreadsheets with
+  column mapping, conflict handling, and duplicate prevention.
+- **Governance & recovery** — a read-only cross-module Activity Log (audit trail), Complete Backup /
+  Restore, CSV exports, and typed-confirmation safeguards around destructive actions.
 
-```bash
-python -m http.server 8000
+---
+
+## Feature matrix
+
+Status legend: **Available** = shipped and in use · **Partial** = usable with documented limits ·
+**Planned** = on the roadmap, not yet available.
+
+| Module / capability | Status | Notes |
+|---|---|---|
+| Executive Dashboard | Available | KPI overview, executive insights |
+| Finance Overview | Available | Planned vs. actual, status rollups |
+| Transactions | Available | Ledger with planned/actual, filters, CSV export |
+| Execution Center | Available | Execute / schedule / cancel payments |
+| Cash Flow | Available | Inflow/outflow by period |
+| Budget Center | Available | Budget vs. actual tracking |
+| Employees | Available | Records, work schedules, search/filters |
+| Employee Detail | Available | Profile + contract, payroll & overtime timeline |
+| Contracts | Available | Contract lifecycle, coverage per month |
+| Payroll Workspace | Available | Draft → Review → Approved → Posted → Executed; generic bulk selection |
+| Payroll Detail | Available | Read-only payroll + generated finance transaction |
+| Overtime | Available | TAM-method calculation, approval, drift warnings |
+| Monthly Plan Generator | Available | Builds the monthly plan from master data |
+| Smart Import | Available | Spreadsheet import, column mapping, dedup |
+| Activity Log | Available | Read-only cross-module audit trail |
+| Reports | Available | Report views and CSV export |
+| Company Settings | Available | Company profile, schedules, appearance |
+| Backup & Restore | Available | Complete Backup JSON export/import |
+| CSV Export | Available | Payroll, overtime, transactions, reports |
+| Search & Filters | Available | Incremental, focus-preserving across modules |
+| Theme support | Available | Light/dark, pre-paint theme reconciliation |
+| Supplemental Overtime Payment | Planned | Drift is surfaced; disabled placeholder shown (see Roadmap) |
+
+This matrix lists shipped functionality only; it does not promise unavailable features.
+
+---
+
+## Screenshots
+
+No screenshots are committed yet (to avoid any risk of exposing real company data). A capture plan —
+which screens to show, the required fabricated sample data, target filenames under `docs/images/`,
+and recommended dimensions — is maintained by the maintainer and will be added here once
+safe, sanitized captures exist. Until then, run the app locally (below) to explore the UI.
+
+---
+
+## Architecture overview
+
+```mermaid
+flowchart LR
+  subgraph Source["Modular source"]
+    IDX["index.html<br/>(ordered script tags)"]
+    CSS["css/ (5 files)"]
+    JS["js/ (44 classic-script modules)<br/>core · ui · finance · people · import · analytics"]
+  end
+  subgraph Runtime["Browser runtime (client-only)"]
+    STATE["State (in-memory)"]
+    LS[("localStorage / Artifact storage")]
+  end
+  subgraph Build["Build & verify tooling (Node)"]
+    ORDER["tools/module-order.js<br/>(load-order source of truth)"]
+    BUILD["tools/build-single-file.js"]
+    VERIFY["tools/verify-build.js<br/>(109 checks)"]
+  end
+  DIST["dist/tam-intelligence-os-v2.6.8.html<br/>(portable single file)"]
+
+  IDX --> JS --> STATE --> LS
+  CSS --> IDX
+  ORDER --> BUILD
+  IDX --> BUILD
+  CSS --> BUILD
+  JS --> BUILD
+  BUILD --> DIST
+  BUILD --> VERIFY
 ```
 
-Then open <http://localhost:8000>. Any static server works (`npx serve`, VS Code Live
-Server). The portable build in `dist/` can also just be opened directly in a browser.
+The 44 modules are **classic scripts** sharing one global scope; their **load order** is the single
+critical invariant and lives once in `tools/module-order.js` (mirrored by `index.html`). The build
+inlines CSS + JS into one portable file; the verifier asserts the dist equals the concatenated
+source and that the version identity, schema, storage keys, and decomposition are all consistent.
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map, provenance, and additional
+diagrams (payroll workflow, release pipeline).
 
 ---
 
-## Build the portable single-file release
-
-**Toolchain:** Node.js is the primary build/verify environment (tested on **v24.18.0**;
-any v18+ works). It has no dependencies — plain `fs`/`path`, nothing to `npm install`.
-Node is used **only** for the tooling, never to run the app itself. The PowerShell scripts
-are kept as an **optional fallback** for machines without Node.
-
-Regenerate the portable build from the modular source:
-
-```bash
-node tools/build-single-file.js
-```
-
-Optional fallback (no Node.js):
-
-```bash
-powershell -ExecutionPolicy Bypass -File tools/build-single-file.ps1
-```
-
-The build inlines the five CSS files into one `<style>` and the 44 JS modules into one
-`<script>`, in the order given by `tools/module-order.js`. It does **not** minify. External
-XLSX + Google Fonts links are left untouched, so the portable file behaves exactly like
-earlier releases.
-
-**Version is derived, never hardcoded (v2.6.4).** The single source of truth for the release
-version is `const APP_VERSION` in `js/core/constants.js`. `tools/app-version.js` parses it, and
-both the Node and PowerShell build/verify tools derive everything from there — the output
-filename is `dist/tam-intelligence-os-v${APP_VERSION}.html` automatically, and the verifier
-checks the `APP_VERSION` constant, `<title>`, `APP_RELEASE_NAME`, the Release Notes entry and
-the generated filename all agree with it. To cut a new release you change only the two constants
-in `constants.js` (version + release name) and add a Release Notes entry — the tooling handles
-the rest and fails clearly if the version cannot be parsed or the filename would not match.
-
----
-
-## Verify
-
-```bash
-node tools/verify-build.js
-```
-
-Optional fallback (no Node.js):
-
-```bash
-powershell -ExecutionPolicy Bypass -File tools/verify-build.ps1
-```
-
-The Node verifier (109 checks) fails the build if:
-
-- **CSS drifts from v2.5.2** (styles are unchanged — CSS must stay byte-for-byte identical
-  apart from the one v2.6.3b floating-menu rule),
-- the dist inlined payloads do not equal the concatenated modular source (build fidelity),
-- the **version identity** (derived from `constants.js`) is inconsistent — `APP_VERSION`,
-  `<title>`, `APP_RELEASE_NAME`, the Release Notes entry, or the generated dist filename
-  disagree with `APP_VERSION`,
-- a storage key changes, `SCHEMA_VERSION` changes (must stay 6), a migration flag disappears,
-- the seed data is no longer empty, a mount point is missing, duplicate `init()` calls appear,
-- ES `import`/`export` or `type="module"` are introduced,
-- the **search-focus fix regresses** — every search box must route to its incremental
-  `apply*Filter()` and must not call the full page renderer on `input`,
-- the **module decomposition** is inconsistent — a manifest module is missing, a flat
-  `js/NN-*.js` file reappears, a folder is missing, or `index.html`'s `<script>` tags no
-  longer match `tools/module-order.js` exactly,
-- or the **v2.6.4 audit features** regress — the Activity Log page/helpers/incremental filter
-  are missing, an independent audit storage key is introduced, the payroll timeline builders
-  are absent, or Post to Finance no longer records exact per-row skip reasons.
-
-The PowerShell fallback (`tools/verify-build.ps1`, 53 checks) runs the CSS/fidelity/version/
-data-safety/focus subset; the Node verifier is the full superset.
-
----
-
-## What each recent release changed (and did not)
-
-- **v2.6.8 — Payroll Selection and Overtime Drift UX Fixes.** Payroll Workspace selection is now
-  **generic (stage-agnostic)**: Select All and the header checkbox select all visible rows, and
-  each bulk action owns its eligibility and reports **eligible / skipped / reason** (Review → Draft,
-  Approve → Draft/Review, Post → Approved) via one registry (`PAYROLL_BULK_ACTIONS`) +
-  `partitionPayrollSelection()`. **Overtime drift** approved after payroll exists now surfaces an
-  immediate warning — no Generate click required — on the Overtime page, Payroll Workspace and
-  Payroll Detail (Draft/Review/Approved → "regenerate"; Posted/Executed → original payroll
-  unchanged, supplemental payment required, disabled placeholder). Derived from existing
-  overtime-comparison logic, so it survives reload and never duplicates. Posted/Executed payroll
-  stays immutable. No payroll status rule, storage key, `SCHEMA_VERSION` (6), backup format,
-  migration or `.css` change.
-- **v2.6.7 — Enterprise Repository & Delivery Foundation.** Engineering/governance only — **no
-  application behavior change** (runtime byte-identical to v2.6.6 apart from the version). Added
-  GitHub Actions **CI** (build + verify on every push/PR to `main`) and a **tag-triggered release
-  workflow** that re-derives the version, refuses to publish unless the tag equals `v<APP_VERSION>`,
-  and uploads the portable HTML. Added repository governance — issue/PR templates, `CODEOWNERS`,
-  `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE-NOTICE.md` (proprietary),
-  release-notes templates, and `docs/` (QA checklist, release process, data safety) — plus hardened
-  `.gitignore`/`.gitattributes` and README badges. No storage key, `SCHEMA_VERSION` (6), calculation,
-  backup-format, module-order, or `.css` change.
-- **v2.6.6 — Company Settings Checklist Fix.** The onboarding "Configure company settings" step
-  now completes as soon as a meaningful company profile is saved. Completion is derived purely
-  from persisted settings via `companySettingsConfigured()` — true when the Company Name **or**
-  Product Name is non-default (non-empty) **or** an Opening Cash Balance is set. Previously it
-  ignored Product Name and only credited a non-default Company Name or a set cash balance, so
-  saving Settings often left the step unchecked. Unchanged shipped defaults and theme-only saves
-  do not count; optional blank fields never block it. No company data, storage key,
-  `SCHEMA_VERSION` (6), calculation or `.css` change.
-- **v2.6.5 — Smart Import Selection Scroll Preservation.** Fixed the Smart Import review jump:
-  toggling a row checkbox is now **fully incremental** (updates only `model.items[].selected`
-  and the live "N selected" counter — no `smartCounts` value depends on selection, so nothing
-  else needs to change and the wizard is not re-rendered). Select All Safe / Unselect All sync
-  the visible checkboxes in place. Skip Conflicts and column-mapping overrides still re-render
-  (they change buckets/counts or rebuild the model) but preserve the review list's scroll
-  position and the focused control via a guarded `requestAnimationFrame` + `setTimeout` restore
-  using `focus({preventScroll:true})`. No change to import parsing, employee/contract matching,
-  payroll generation, transaction creation, duplicate prevention, storage, `SCHEMA_VERSION` (6),
-  audit behavior or `.css`.
-- **v2.6.4 — Release Automation & Payroll Audit Visibility.** The build/verify tooling
-  (Node + PowerShell) now derives the version from a single source of truth (`APP_VERSION`
-  in `constants.js`) via `tools/app-version.js` — no hardcoded version, and the dist filename
-  follows `APP_VERSION`. Added a read-only **Activity Log** (Management → Activity Log) over
-  the existing `tam_audit_log_v1` store, with search / module / event / period filters,
-  incremental rendering (search keeps focus), an empty state and CSV export. Payroll Detail
-  shows a read-only **Payroll Timeline** and the Workspace shows **Period Activity**, both
-  derived from existing history + audit records (only real events, no fabricated timestamps).
-  **Post to Finance** now reports posted-vs-skipped with the exact blocker reason per skipped
-  row (rows stay Approved, no transaction created, blocker rules unchanged). No business
-  calculation, storage key, migration flag, `SCHEMA_VERSION` (6) or `.css` file changed.
-- **v2.6.3c — Responsive UI Polish.** Execution Center sidebar icon rendered monochrome
-  (consistent with siblings); Employee/Contract/Payroll detail cards size to content and stack
-  at 125%/150% zoom; tighter detail-card spacing. JS/markup only — no `.css` files or
-  verification touched (CSS golden master unchanged).
-- **v2.6.3b — Floating Actions Menu Fix.** The row Actions menu is portaled to a top-level
-  `#menu-root` and positioned with `position:fixed` (via `getBoundingClientRect`), so it's
-  never clipped by a table's `overflow`. One shared controller (auto-flip, close on
-  outside-click/Escape, reposition on resize/scroll) is reused across Employees, Contracts,
-  Payroll, Overtime, Transactions, Execution Center. UI infrastructure only.
-- **v2.6.3a — Payroll Workspace Hotfix.** Approve Selected now moves rows Review→Approved
-  (approval is a sign-off; data validation moved to Post to Finance, which skips/reports
-  blocked rows). Actions dropdowns auto-flip upward when there's no room below. UI/action-flow
-  only — no calculation-engine, schema, or storage change.
-- **v2.6.3 — Payroll Intelligence Workspace.** Rebuilt Payroll as an operational workspace:
-  current-period banner + switcher, KPI cards, read-only worksheet, Draft→Review→Approved→
-  Posted→Executed lifecycle (display mapping over unchanged stored statuses; Executed derived
-  from the finance transaction), bulk actions with confirmations, period **lock**, deterministic
-  **health** cards, a **summary**, and an **employee timeline**. Payroll = Base Salary +
-  Approved Overtime only. No schema/storage-key/calculation change; locks live in settings.
-- **v2.6.2 — Developer Experience & Module Decomposition.** Split the 20 flat `js/` files
-  into **43 feature modules** (`core/ ui/ finance/ people/ import/ analytics/`) and
-  initialized Git. Pure code move — verified byte-identical to the previous concatenation,
-  so runtime behavior is unchanged. Still classic ordered scripts (no ES modules).
-- **v2.6.1 — Search Focus & Incremental Rendering Fix.** Typing in any search box no longer
-  loses focus; search/filter update **only the table body** via `apply*Filter()`, preserving
-  focus/caret/selection, scroll, and payroll checkbox selection.
-
-**Unchanged across both:** all business logic, calculations, storage keys, `SCHEMA_VERSION`
-(6), migration flags, backup format, imports, deduplication, exports — and all CSS.
-
----
-
-## Load order is the one critical invariant
-
-The 44 modules are classic scripts sharing one global scope; their **load order** (top-level
-`const` initializations depend on it) lives in exactly one place: **`tools/module-order.js`**.
-`index.html` mirrors it as `<script src>` tags, the build/verify tools `require()` it, and
-`verify-build.js` asserts `index.html` matches it. If you add or move a module, update the
-manifest **and** `index.html` together, then run `node tools/verify-build.js`.
-
-## Scaffolding tools (one-time, historical)
-
-- `tools/extract-source.ps1` produced the first modular split from `tam-intelligence-os-v2.5.2.html` (v2.6.0).
-- `tools/decompose.js` split the flat files into the feature-folder tree (v2.6.2), self-checking byte-identity.
-
-Both are **one-time** and **not** part of the normal build. Do **not** re-run them — the
-source files are now edited in place, and re-running would overwrite current work from an
-older baseline.
-
----
-
-## Project layout
+## Project structure
 
 ```
 index.html                         Modular entry: meta, external deps, pre-paint theme
@@ -248,17 +193,199 @@ tools/
 dist/
   tam-intelligence-os-v2.6.8.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
-.github/                           Repository governance & delivery (v2.6.7)
+.github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
   workflows/release.yml            Tag-triggered (v*) GitHub Release; publishes portable HTML
   ISSUE_TEMPLATE/                  bug_report.yml, feature_request.yml, config.yml
   pull_request_template.md  CODEOWNERS  RELEASE_TEMPLATE.md
 docs/                              QA-CHECKLIST.md, RELEASE-PROCESS.md, DATA-SAFETY.md
-SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  LICENSE-NOTICE.md  RELEASE_NOTES.md
-.gitignore  .gitattributes  README.md  ARCHITECTURE.md  CHANGELOG.md
+LICENSE  LICENSE-NOTICE.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md
+RELEASE_NOTES.md  README.md  ARCHITECTURE.md  CHANGELOG.md
+.gitignore  .gitattributes
 ```
 
-See **ARCHITECTURE.md** for full file-by-file provenance, load order, and the decomposition
-map (§9). See **CONTRIBUTING.md**, **docs/RELEASE-PROCESS.md**, and **docs/QA-CHECKLIST.md** for
-the contributor and release workflow, and **SECURITY.md** / **docs/DATA-SAFETY.md** for data
-handling.
+---
+
+## Getting started
+
+No framework and no `npm install` are required to run the app. Because the modular source loads
+local `css/` and `js/` files, serve the folder over HTTP (recommended) rather than opening via
+`file://`:
+
+```bash
+python -m http.server 8000
+```
+
+Then open <http://localhost:8000>. Any static server works (`npx serve`, VS Code Live Server). The
+portable build in `dist/` — or the asset from
+[Release v2.6.8](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.6.8) — can also be
+opened directly in a browser.
+
+---
+
+## Development workflow
+
+1. **Confirm the baseline:** `git status` (clean), `git branch --show-current` (main),
+   `git describe --tags --abbrev=0` (latest release tag).
+2. **Edit the modular source** — never edit `dist/` by hand. If you add or move a module, update
+   `tools/module-order.js` **and** `index.html` together.
+3. **Build** the portable file, then **verify** (both below).
+4. **Browser QA** in both the modular source and the portable dist — zero console errors.
+5. Update [`CHANGELOG.md`](CHANGELOG.md) (and [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for a release)
+   and any affected docs; keep version references consistent (the version lives once, in
+   `APP_VERSION`).
+6. Commit the source **and** the rebuilt `dist/` together.
+
+Branch naming: `feature/<name>`, `fix/<name>`, `chore/<name>`, `release/<version>`. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the full contract.
+
+---
+
+## Build and verification
+
+**Toolchain:** Node.js is the primary build/verify environment (tested on **v24**; any v18+ works).
+It has no dependencies — plain `fs`/`path`, nothing to `npm install`. PowerShell scripts are an
+optional fallback for machines without Node.
+
+Build the portable single file from the modular source:
+
+```bash
+node tools/build-single-file.js
+```
+
+Verify (109 checks):
+
+```bash
+node tools/verify-build.js
+```
+
+Optional PowerShell fallback:
+
+```bash
+powershell -ExecutionPolicy Bypass -File tools/build-single-file.ps1
+powershell -ExecutionPolicy Bypass -File tools/verify-build.ps1
+```
+
+**Version is derived, never hardcoded.** The single source of truth is `const APP_VERSION` in
+`js/core/constants.js`. `tools/app-version.js` parses it; the build and verify tools derive
+everything from there — the output filename is `dist/tam-intelligence-os-v${APP_VERSION}.html`
+automatically. The verifier fails the build if:
+
+- CSS drifts from the v2.5.2 golden master (styles must stay byte-for-byte identical apart from the
+  one v2.6.3b floating-menu rule);
+- the dist inlined payload ≠ the concatenated modular source (build fidelity);
+- the version identity (`APP_VERSION`, `<title>`, `APP_RELEASE_NAME`, the Release Notes entry, the
+  dist filename) is inconsistent;
+- a storage key changes, `SCHEMA_VERSION` changes (must stay 6), or a migration flag disappears;
+- the seed data is non-empty, a mount point is missing, or ES `import`/`export`/`type="module"`
+  appears;
+- the search-focus fix, module decomposition, or the audit/timeline/blocker features regress.
+
+---
+
+## Release process
+
+Releases are tag-driven and guarded end-to-end (see [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md)):
+
+1. Bump `APP_VERSION` + `APP_RELEASE_NAME` in `js/core/constants.js`; add a Release Notes entry.
+2. Build + verify; boot modular and dist with zero console errors.
+3. Commit source + rebuilt dist; annotate a `vX.Y.Z` tag; push `main` then the tag.
+4. The **Release** workflow (`.github/workflows/release.yml`) rebuilds, verifies, **refuses to
+   publish unless the tag equals `v<APP_VERSION>`** and the portable HTML exists, then creates or
+   refreshes the GitHub Release idempotently and uploads the portable asset.
+
+```mermaid
+flowchart LR
+  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (109)"]
+  V --> C["commit source + dist"] --> T["push tag vX.Y.Z"]
+  T --> GA["GitHub Actions: Release"]
+  GA --> GATE{"tag matches<br/>v-APP_VERSION?"}
+  GATE -->|yes| REL["GitHub Release + portable asset"]
+  GATE -->|no| STOP["fail: publish nothing"]
+```
+
+The **CI** workflow (`.github/workflows/ci.yml`) builds + verifies on every push/PR to `main` and
+uploads the portable HTML as a build artifact.
+
+---
+
+## Data safety
+
+TAM Intelligence OS stores finance, payroll, employee, and contract data **locally**; data never
+leaves the device on its own. The verifier enforces these invariants unless a change is an
+**intentional, documented migration**:
+
+- `SCHEMA_VERSION` = 6; the 13 storage keys and the migration flags are stable.
+- The shipped build ships **empty seed data**.
+- The Complete Backup JSON format is stable; destructive actions (Restore, Employee Merge, Smart
+  Import, Start Fresh) snapshot data first.
+
+Never commit real company/personal data. Full guidance: [`docs/DATA-SAFETY.md`](docs/DATA-SAFETY.md).
+
+---
+
+## Documentation index
+
+| Document | Purpose |
+|---|---|
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Module map, load order, per-release provenance, diagrams |
+| [`CHANGELOG.md`](CHANGELOG.md) | Full version history |
+| [`RELEASE_NOTES.md`](RELEASE_NOTES.md) | Notes for the current release |
+| [`SECURITY.md`](SECURITY.md) | Vulnerability reporting and data-handling policy |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contributor contract and workflow |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Expected conduct for collaborators |
+| [`LICENSE`](LICENSE) | Proprietary license (all rights reserved) |
+| [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md) | Extended proprietary/confidentiality terms |
+| [`docs/QA-CHECKLIST.md`](docs/QA-CHECKLIST.md) | Pre-release QA checklist |
+| [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) | Step-by-step release procedure |
+| [`docs/DATA-SAFETY.md`](docs/DATA-SAFETY.md) | Data-safety invariants and handling rules |
+
+---
+
+## Roadmap
+
+Directions only — no release numbers are assigned unless already approved.
+
+**Released**
+- Payroll operational workspace with generic bulk selection (v2.6.8)
+- Immediate overtime-drift visibility (v2.6.8)
+- Read-only Activity Log and payroll audit timeline (v2.6.4)
+
+**Planned**
+- **Supplemental Overtime Payment** — pay approved overtime that landed after payroll was posted
+  (the drift condition is already surfaced; the action is a disabled placeholder today).
+- **Repository maintenance** — ongoing tooling, documentation, and workflow upkeep.
+
+**Under consideration**
+- Authentication and role-based access control (RBAC)
+- Attachment and evidence handling
+- Expanded approval workflows
+
+These are candidate directions, not commitments.
+
+---
+
+## Governance
+
+- **Ownership & review:** [`.github/CODEOWNERS`](.github/CODEOWNERS) routes review to the repository
+  owner across all paths.
+- **Contributions:** [`CONTRIBUTING.md`](CONTRIBUTING.md) is the contract; PRs use
+  [`.github/pull_request_template.md`](.github/pull_request_template.md) with data-safety and
+  regression checkboxes.
+- **Issues:** structured [bug](.github/ISSUE_TEMPLATE/bug_report.yml) and
+  [feature](.github/ISSUE_TEMPLATE/feature_request.yml) forms; blank issues are disabled and
+  security reports are routed privately.
+- **Conduct:** [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
+- **CI/Release:** official GitHub Actions only; minimal permissions; tag/version guardrails.
+
+---
+
+## License and security
+
+- **License:** proprietary and confidential — see [`LICENSE`](LICENSE) and
+  [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md). Not open source; all rights reserved by PT Total Asset
+  Manajemen.
+- **Security:** report vulnerabilities privately via GitHub Security Advisories — never in a public
+  issue, and never with real data. See [`SECURITY.md`](SECURITY.md).
+
+© PT Total Asset Manajemen. All rights reserved.

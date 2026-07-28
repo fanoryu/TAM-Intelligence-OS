@@ -1,6 +1,7 @@
 # License Notice — Proprietary & Confidential
 
-**This repository is NOT open source.** No open-source license is granted.
+**This repository is NOT open source.** No open-source license is granted. This notice extends the
+root [`LICENSE`](LICENSE) with additional terms; where both apply, read them together.
 
 TAM Intelligence OS, including its source code, build tooling, documentation, and generated portable
 builds, is **proprietary and confidential** to **PT Total Asset Manajemen**.

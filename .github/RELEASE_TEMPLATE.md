@@ -8,6 +8,13 @@
 
 **Release Name:** <Release Name>
 
+## Summary
+<!-- One short paragraph: what this release is and why it exists. -->
+
+## Highlights
+<!-- 2–5 bullet points a reader should take away. -->
+- <highlight>
+
 ## Added
 - <new capability, or "None">
 
@@ -20,11 +27,21 @@
 ## Security
 - <security-relevant change, or "None">
 
+## Compatibility
+<!-- Who/what is affected. This app is client-only with local storage. -->
+- Runs in the browser (modular source or portable single file); no backend.
+- Existing local data: <fully compatible | migrated — see Migration>
+- `SCHEMA_VERSION`: <unchanged (6) | X → Y>
+
 ## Data Safety
 - SCHEMA_VERSION: <unchanged (6) | migrated X → Y with migration + flag>
 - Storage keys / migration flags: <unchanged | describe>
 - Backup format: <unchanged | describe>
 - <any data-safety notes>
+
+## Migration
+<!-- Required only if SCHEMA_VERSION changed or storage keys/flags changed. -->
+- <"None — no schema/storage change" | migration steps, new flag name, and rollback note>
 
 ## QA
 <!-- Distinguish: browser-tested / automated-test verified / source-inspected / unable to verify -->
@@ -47,3 +64,11 @@
 
 ## Release Asset
 - dist/tam-intelligence-os-vX.Y.Z.html
+
+## Checksum (optional)
+<!--
+  The release workflow does NOT currently generate checksums. Leave this as "Not generated"
+  unless you produce one manually. If checksum publishing is added to release.yml later, record
+  the SHA-256 of the portable asset here.
+-->
+- SHA-256: Not generated (planned; not produced by the current release workflow)

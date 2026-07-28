@@ -15,6 +15,16 @@ Report privately through GitHub Security Advisories:
 If you cannot use Security Advisories, contact the repository owner (**@fanoryu**) privately through
 GitHub. Do not disclose the issue publicly until it has been addressed.
 
+### What to include in a report
+
+A useful report describes the problem without exposing real data:
+
+- A clear description of the issue and its security impact.
+- Steps to reproduce, using **fabricated placeholder** values only.
+- Affected area/module and the application version (Settings → About).
+- Browser and OS.
+- A proof-of-concept **only if** it uses clearly fabricated data.
+
 ### Never include sensitive data in a report
 
 When reporting, **redact and exclude** all of the following. Describe the behavior instead of
@@ -49,7 +59,7 @@ Only the latest released version receives security fixes. Older versions are not
 
 | Version | Supported |
 |---|---|
-| Latest release (currently 2.6.x) | ✅ |
+| Latest release (currently **v2.6.8**) | ✅ |
 | Any older version | ❌ |
 
 ## Response expectations
@@ -71,8 +81,21 @@ If credentials or tokens are ever exposed (in a report, a commit, a log, or a sc
 4. If real company/backup data was exposed, notify the data owner at PT Total Asset Manajemen and
    follow internal data-handling procedures.
 
-## Responsible disclosure
+## Data-handling expectations
+
+TAM Intelligence OS is client-only. Understanding its data posture helps scope reports correctly:
+
+- All finance/payroll/employee/contract data is stored **locally** (browser `localStorage` or the
+  Claude Artifact storage environment). There is no server, database, or API.
+- The app makes **no network calls that carry user data**. The only external references are the XLSX
+  parser and web fonts (CDN); exports (CSV/JSON) are generated locally and downloaded by the user.
+- Real company data must never be committed to the repository or pasted into issues, PRs, logs, or
+  screenshots. See [`docs/DATA-SAFETY.md`](docs/DATA-SAFETY.md) and
+  [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Disclosure policy
 
 We ask reporters to give a reasonable opportunity to remediate before any public discussion, and to
 avoid accessing, modifying, or exfiltrating data beyond the minimum needed to demonstrate the issue.
-Good-faith research reported privately is welcomed.
+Good-faith research reported privately is welcomed. This is a private repository; disclosure is
+coordinated with the repository owner and PT Total Asset Manajemen.

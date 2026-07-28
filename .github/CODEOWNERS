@@ -15,6 +15,14 @@
 
 # GitHub automation and governance
 /.github/               @fanoryu
+/.github/workflows/     @fanoryu
+
+# Security & governance files
+/SECURITY.md            @fanoryu
+/LICENSE                @fanoryu
+/LICENSE-NOTICE.md      @fanoryu
+/CODE_OF_CONDUCT.md     @fanoryu
+/CONTRIBUTING.md        @fanoryu
 
 # Documentation
 /docs/                  @fanoryu

@@ -21,6 +21,107 @@ no bundler. `SCHEMA_VERSION` is 6.
 
 ---
 
+## Diagrams
+
+These diagrams reflect the actual implementation. There is **no server, database, API, or external
+service** — the app is client-only; Node is used solely for the build/verify tooling.
+
+### A. Application structure
+
+```mermaid
+flowchart TD
+  subgraph SRC["Modular source (edited by hand)"]
+    IDX["index.html<br/>ordered CSS link + JS script tags, mount points"]
+    CSS["css/ — tokens, base, shell, components, charts"]
+    subgraph JSMOD["js/ — 44 classic-script modules (one global scope)"]
+      CORE["core/ — constants, state, storage-adapter,<br/>state-load-migrations, domain-services, bootstrap"]
+      UI["ui/ — shell-render, charts, settings-about, activity-log"]
+      FIN["finance/ — dashboard, transactions, execution-center,<br/>cashflow, budget, add-upload"]
+      PPL["people/ — employees, contracts, overtime,<br/>payroll-ops-engine, payroll-workspace, monthly-plan"]
+      IMP["import/ — parser, smart-import-*"]
+      ANA["analytics/ — plan-vs-actual, compare, trends, reports"]
+    end
+  end
+
+  subgraph RUN["Browser runtime (client-only)"]
+    STATE["State (in-memory object graph)"]
+    LS[("localStorage / Artifact storage<br/>SCHEMA_VERSION 6, 13 keys")]
+  end
+
+  ORDER["tools/module-order.js<br/>(load-order source of truth)"]
+  CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
+  AV["tools/app-version.js"]
+  BUILD["tools/build-single-file.js"]
+  VERIFY["tools/verify-build.js<br/>109 invariant checks"]
+  DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
+
+  CSS --> IDX
+  JSMOD --> IDX
+  IDX --> STATE
+  STATE <--> LS
+
+  ORDER --> IDX
+  ORDER --> BUILD
+  CONST --> AV --> BUILD
+  IDX --> BUILD
+  CSS --> BUILD
+  JSMOD --> BUILD
+  BUILD --> DIST
+  DIST --> VERIFY
+  CONST --> VERIFY
+```
+
+### B. Payroll workflow (and overtime drift)
+
+```mermaid
+flowchart TD
+  OT["Overtime record"] -->|Approve| OTA["Approved overtime"]
+  OTA -->|feeds| GEN
+
+  GEN["Generate payroll<br/>(from contracts + approved overtime)"] --> DRAFT["Draft"]
+  DRAFT -->|Review Selected| REVIEW["Review"]
+  REVIEW -->|Approve Selected| APPROVED["Approved"]
+  APPROVED -->|Post to Finance| POSTED["Posted<br/>(Planned Gaji transaction)"]
+  POSTED -->|Execute in Execution Center| EXECUTED["Executed<br/>(payment recorded)"]
+
+  OTA -.->|approved AFTER capture| DRIFT{"Overtime drift<br/>detected (derived)"}
+  DRAFT -.-> DRIFT
+  REVIEW -.-> DRIFT
+  APPROVED -.-> DRIFT
+  POSTED -.-> DRIFT
+  EXECUTED -.-> DRIFT
+
+  DRIFT -->|Draft / Review / Approved| REGEN["Warn: regenerate payroll<br/>to include updated overtime"]
+  DRIFT -->|Posted / Executed| SUPP["Warn: original payroll unchanged;<br/>supplemental payment required"]
+  SUPP -.->|future| SUPPFUT["Supplemental Overtime Payment<br/>(planned; disabled placeholder today)"]
+```
+
+Stages are a display mapping over the stored status values (`Draft` / `Reviewed` / `Ready` /
+`Committed`), with `Executed` derived from the linked finance transaction — no schema change. Drift
+is a **derived**, read-only comparison (`payrollOvertimeDrift`) reusing `approvedOvertimeForMonth` +
+`sameIdSet`; Posted/Executed totals and transactions are never modified.
+
+### C. Release pipeline
+
+```mermaid
+flowchart LR
+  SRC["Modular source"] --> BUILD["build-single-file.js"]
+  BUILD --> VERIFY["verify-build.js<br/>(109 checks)"]
+  VERIFY --> COMMIT["Commit source + dist"]
+  COMMIT --> TAG["Annotated tag vX.Y.Z<br/>(push main, then tag)"]
+  TAG --> GA["GitHub Actions: release.yml"]
+  GA --> REBUILD["rebuild + verify + re-derive version"]
+  REBUILD --> GATE{"tag == v-APP_VERSION<br/>AND dist exists?"}
+  GATE -->|no| STOP["fail: publish nothing"]
+  GATE -->|yes| REL["Create/refresh GitHub Release<br/>(idempotent)"]
+  REL --> ASSET["Upload portable asset<br/>tam-intelligence-os-vX.Y.Z.html"]
+```
+
+CI (`ci.yml`) runs build + verify on every push/PR to `main` and uploads the portable HTML as an
+artifact. The release job publishes nothing unless every guardrail passes.
+
+---
+
 ## 1. Design principle: preserve the shared global scope (Phase 0, still in force)
 
 The stable app is one `<script>` in one global function scope. Templates reference
