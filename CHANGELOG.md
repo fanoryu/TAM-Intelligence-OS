@@ -1,5 +1,59 @@
 # Changelog
 
+## 2.7.0 — Supplemental Payroll Engine
+
+**Type:** New payroll capability + housekeeping. Adds **one** additive storage key
+(`tam_supplemental_payments_v1`, 14 → 15). **No** `SCHEMA_VERSION` change (still 6); no storage key
+renamed/removed; the base payroll total, its finance transaction, and its execution history are
+never modified.
+
+### Added — Supplemental Payroll Engine
+- A **Supplemental Payment** is a separate accounting document that settles overtime approved **after**
+  the base payroll became immutable (Posted/Executed). New module `js/people/supplemental-engine.js`
+  and store `tam_supplemental_payments_v1`.
+- **Source (v1): overtime only.** The amount reuses the existing `payrollOvertimeDrift(pp)`
+  calculation (`addedAmount` per-ID basis) — no second overtime-delta formula.
+- **Lifecycle:** Draft → Review → Approved → Posted → Executed (+ Cancelled). Amount and source
+  overtime **freeze at Approved**. Centralized helpers own all business rules (eligible unpaid
+  overtime, duplicate detection, generation, explicit refresh, transition eligibility/apply,
+  posting, execution linkage) — not scattered in UI handlers.
+- **Duplicate prevention:** an overtime record is never captured by two non-cancelled supplementals;
+  at most one open Draft/Review per employee/period/source; later overtime after a frozen record
+  forms a **new** supplemental; generation is idempotent; zero/negative deltas create nothing.
+- **Finance:** posting creates exactly **one** Planned transaction (`source:'supplemental'`), linked
+  both ways, with an immutable company-account snapshot. **Execution** reuses the Execution Center;
+  executing the linked transaction closes the supplemental (idempotent — no double pay).
+- **UI:** the v2.6.8 overtime-drift warning is now **actionable** (Generate / Open) in the Payroll
+  Workspace, Payroll Detail, and Overtime page; a new **Supplemental Payments** page (list / search /
+  filter / detail / lifecycle actions); Payroll Detail and Employee Detail show related supplementals
+  separately from base payroll; Activity Log labels for every `supplemental.*` transition.
+
+### Added / Changed — housekeeping
+- **Feature lifecycle registry** (`FEATURE_REGISTRY` in `shell-render.js`) replaces the hardcoded
+  sidebar "Preview" badge. Projects / Vendors / Financial Calendar show **SOON** (they are
+  non-functional placeholders); Recurring Expenses is **stable** (no badge). One shared badge helper,
+  accessible tooltips.
+- **CSV bank-account policy:** the general employee CSV export now **masks** account numbers (last 4);
+  import still accepts full numbers; stored values are not rewritten. Documented in `docs/DATA-SAFETY.md`.
+- **Workflow labels:** CI/Release "Verify build" step labels are now count-neutral (no hardcoded
+  verifier count).
+- `APP_VERSION` → `2.7.0`, `APP_RELEASE_NAME` → "Supplemental Payroll Engine".
+
+### Data safety
+- SCHEMA_VERSION **unchanged (6)**; storage keys **14 → 15** (additive); backup/restore include
+  `supplementalPayments`; older backups without it restore cleanly. No seed (fresh installs start
+  empty).
+
+### Not in this release
+- Supplemental support for bonuses / reimbursements / arbitrary adjustments, and Payroll Reporting,
+  remain out of scope (later releases).
+
+### Validation
+- `node tools/build-single-file.js` → `dist/tam-intelligence-os-v2.7.0.html`;
+  `node tools/verify-build.js` → **129 checks**. Modular + portable boot with **zero console errors**.
+
+---
+
 ## 2.6.9 — Enterprise Banking Foundation
 
 **Type:** Banking data model + UI. Adds **one** additive storage key (`tam_company_accounts_v1`).

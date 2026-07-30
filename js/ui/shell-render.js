@@ -62,6 +62,27 @@ function openFloatingMenu(toggle, menu){
   setTimeout(()=>{ if(__floatMenu && __floatMenu.onDoc===onDoc) document.addEventListener('click', onDoc, true); }, 0);
   __floatMenu = { menu, placeholder, toggle, onDoc, onKey, onReposition, onItem };
 }
+/* ============================================================
+   FEATURE LIFECYCLE REGISTRY (v2.7.0)
+   One centralized source for feature status + sidebar badges. Replaces the
+   previously hardcoded "Preview" badge string. Stable features render no badge.
+   ============================================================ */
+const FEATURE_STATUS = { STABLE:'stable', BETA:'beta', PREVIEW:'preview', COMING_SOON:'comingSoon' };
+const FEATURE_BADGE_TEXT = { stable:'', beta:'BETA', preview:'PREVIEW', comingSoon:'SOON' };
+const FEATURE_REGISTRY = {
+  recurring: { status:'stable',     label:'Recurring Expenses', tooltip:'' },
+  projects:  { status:'comingSoon', label:'Projects',           tooltip:'Projects is planned and not yet available.' },
+  vendors:   { status:'comingSoon', label:'Vendors',            tooltip:'Vendor management is planned and not yet available.' },
+  calendar:  { status:'comingSoon', label:'Financial Calendar', tooltip:'The financial calendar is planned and not yet available.' },
+};
+function featureStatusOf(id){ const f=FEATURE_REGISTRY[id]; return f?f.status:'stable'; }
+function featureIsComingSoon(id){ return featureStatusOf(id)==='comingSoon'; }
+// Shared badge renderer — stable features render nothing; others get an accessible badge.
+function featureBadgeHTML(id){
+  const f = FEATURE_REGISTRY[id]; if(!f) return '';
+  const txt = FEATURE_BADGE_TEXT[f.status]; if(!txt) return '';
+  return `<span class="nav-preview-tag" title="${escapeHtml(f.tooltip||txt)}">${txt}</span>`;
+}
 const NAV_GROUPS = [
   {id:'executive', label:'Executive', items:[
     {id:'execDashboard', label:'Executive Dashboard', ic:'◆'},
@@ -79,6 +100,7 @@ const NAV_GROUPS = [
     {id:'contracts', label:'Contracts', ic:'▦'},
     {id:'payroll', label:'Payroll Workspace', ic:'৳'},
     {id:'overtime', label:'Overtime', ic:'⏱'},
+    {id:'supplementals', label:'Supplemental Payments', ic:'⊕'},
     {id:'monthlyplan', label:'Monthly Plan Generator', ic:'⊞'},
   ]},
   {id:'analytics', label:'Analytics', items:[
@@ -136,7 +158,7 @@ function render(){
             </button>
             <div class="nav-group-items" style="${collapsed?'display:none;':''}">
               ${g.items.map(n=>`<button class="nav-item ${State.view===n.id?'active':''}" data-nav="${n.id}">
-                <span class="ic">${n.ic}</span>${escapeHtml(n.label)}${n.placeholder?'<span class="nav-preview-tag">Preview</span>':''}
+                <span class="ic">${n.ic}</span>${escapeHtml(n.label)}${featureBadgeHTML(n.id)}
               </button>`).join('')}
             </div>
           </div>`;
@@ -197,6 +219,8 @@ function renderView(main){
   if(State.view==='payrollAdjustments') return renderPayrollAdjustments(main);
   if(State.view==='overtime') return renderOvertime(main);
   if(State.view==='overtimeSheet') return renderOvertimeWorksheet(main);
+  if(State.view==='supplementals') return renderSupplementalPayments(main);
+  if(State.view==='supplementalDetail') return renderSupplementalDetail(main);
   if(State.view==='monthlyplan') return renderMonthlyPlanGenerator(main);
   if(State.view==='recurring') return renderRecurringExpenses(main);
   if(State.view==='legacyMap') return renderLegacyPayrollMapping(main);

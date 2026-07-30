@@ -266,6 +266,7 @@ function renderEmployeeDetail(main){
         </tr>`).join('') || '<tr><td colspan="5" class="empty">No overtime records for this employee.</td></tr>'}</tbody>
       </table></div>
     </div>
+    ${(typeof supplementalEmployeeSectionHTML==='function')?supplementalEmployeeSectionHTML(e.id):''}
     <div class="card">
       <h3>Finance Transactions</h3>
       <div class="table-wrap"><table>
@@ -338,6 +339,7 @@ function bindHRActions(main){
     else if(a==='padj-edit') openAdjustmentModal(id);
     else if(a==='padj-toggle') toggleAdjustment(id);
     else if(a==='padj-delete') deleteAdjustment(id);
+    else if(a.startsWith('supp-')) handleSupplementalAction(a.slice(5).replace(/-([a-z])/g,(_,c)=>c.toUpperCase()), id);
     else if(a==='cacc-edit') openCompanyAccountModal(id);
     else if(a==='cacc-activate') setCompanyAccountStatus(id, 'Active');
     else if(a==='cacc-deactivate') setCompanyAccountStatus(id, 'Inactive');
@@ -359,11 +361,14 @@ function bindHRActions(main){
 }
 
 function exportEmployeesCsv(){
-  const headers = ['Employee ID','Full Name','Job Title','Department','Employment Status','Record Active','Join Date','Contract Type','Active Contract','Monthly Base Salary','Bank Name','Bank Account','Email','Phone','Notes'];
-  const lines = [`# ${APP_NAME} v${APP_VERSION} — Employees`, headers.join(',')];
+  // v2.7.0 CSV bank-account security policy: this general-purpose employee export MASKS the
+  // account number (last 4 only). Full numbers are never written to a general CSV or logs;
+  // import still accepts full numbers and stored values are not rewritten. See docs/DATA-SAFETY.md.
+  const headers = ['Employee ID','Full Name','Job Title','Department','Employment Status','Record Active','Join Date','Contract Type','Active Contract','Monthly Base Salary','Bank','Bank Account (masked)','Email','Phone','Notes'];
+  const lines = [`# ${APP_NAME} v${APP_VERSION} — Employees (bank account numbers masked)`, headers.join(',')];
   State.employees.forEach(e=>{
     const ct = activeContractToday(e.id);
-    lines.push([e.employeeId,e.fullName,e.jobTitle,e.department,e.employmentStatus,e.active===false?'No':'Yes',e.joinDate||'',e.contractType,ct?ct.contractNumber:'',e.monthlyBaseSalary??'',e.bankName,e.bankAccountNumber,e.email,e.phone,e.notes].map(csvSafe).join(','));
+    lines.push([e.employeeId,e.fullName,e.jobTitle,e.department,e.employmentStatus,e.active===false?'No':'Yes',e.joinDate||'',e.contractType,ct?ct.contractNumber:'',e.monthlyBaseSalary??'',normalizeBankName(e.bankName),maskAccountNumber(e.bankAccountNumber||e.bankAccount),e.email,e.phone,e.notes].map(csvSafe).join(','));
   });
   downloadBlob(lines.join('\n'), `${FILE_BASE}-employees.csv`, 'text/csv');
   toast('Employees exported.');

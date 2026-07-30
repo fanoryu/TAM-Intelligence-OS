@@ -26,7 +26,7 @@ jobs:
       - name: Build portable single file
         run: node tools/build-single-file.js
 
-      - name: Verify build (109 invariant checks)
+      - name: Verify build
         run: node tools/verify-build.js
 
       - name: Determine version from APP_VERSION

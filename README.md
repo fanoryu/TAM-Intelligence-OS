@@ -6,7 +6,7 @@ dependencies.
 
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.6.9-blue)
+![Version](https://img.shields.io/badge/version-2.7.0-blue)
 ![License](https://img.shields.io/badge/license-proprietary%20%26%20confidential-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
@@ -34,36 +34,38 @@ Design principles:
   app. The only external network references are the XLSX parser and web fonts (CDN).
 - **Two shippable forms.** A modular development source and a single portable HTML file that behaves
   identically.
-- **Data-safety first.** A 114-check verifier guards the persisted-data schema, storage keys,
+- **Data-safety first.** A 129-check verifier guards the persisted-data schema, storage keys,
   migration flags, and build fidelity on every change.
 
 ---
 
 ## Current release
 
-**v2.6.9 — Enterprise Banking Foundation** · `SCHEMA_VERSION` 6
+**v2.7.0 — Supplemental Payroll Engine** · `SCHEMA_VERSION` 6
 
-- **Indonesian Bank Master** — one grouped, alphabetized, reusable constant (State / Private /
-  Digital / Islamic / Regional / International + "Other Bank"); no storage key, no duplicated arrays.
-- **Company Bank Accounts** — a Settings → Bank Accounts page (create / edit / deactivate / archive /
-  search / filter) with masked account numbers; only Active accounts appear in transaction dropdowns
-  as "Label — Bank". New additive store `tam_company_accounts_v1` (SCHEMA_VERSION unchanged).
-- **Employee banking** — bank chosen from the master, new Account Holder field, legacy values mapped
-  and preserved. Backward compatible; a guarded seed runs only on installs that already have data.
-- **Supplemental Payment** remains planned for **v2.7.0** (the v2.6.8 overtime-drift warning is
-  unchanged).
+- **Supplemental Payments** — a separate accounting document that settles overtime approved **after**
+  the base payroll became immutable (Posted/Executed). The base payroll total, its finance
+  transaction, and its execution history are never modified. New additive store
+  `tam_supplemental_payments_v1` (SCHEMA_VERSION unchanged).
+- **Lifecycle** Draft → Review → Approved → Posted → Executed; amount + source overtime freeze at
+  Approved; rigorous duplicate prevention (an overtime record is never paid twice). Reuses the drift
+  amount, the finance transaction model, and the Execution Center.
+- **Actionable drift** — the overtime-drift warning now lets you Generate/settle a supplemental from
+  the Payroll Workspace, Payroll Detail, or Overtime page; a Supplemental Payments page manages them.
+- **Housekeeping** — feature-status registry (SOON badges for placeholder pages), masked employee CSV
+  export, count-neutral CI labels. Source is overtime only; other adjustment types are future work.
 
 Download the portable build from the release page:
-**[Release v2.6.9](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.6.9)** →
-`tam-intelligence-os-v2.6.9.html`. See [`CHANGELOG.md`](CHANGELOG.md) and
+**[Release v2.7.0](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.0)** →
+`tam-intelligence-os-v2.7.0.html`. See [`CHANGELOG.md`](CHANGELOG.md) and
 [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
 
 Two supported outputs:
 
 | Output | What it is | Where |
 |---|---|---|
-| **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (44 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/`), one shared global scope, no ES modules | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.6.9.html` |
+| **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (45 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/`), one shared global scope, no ES modules | project root |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.7.0.html` |
 
 ---
 
@@ -113,7 +115,7 @@ Status legend: **Available** = shipped and in use · **Partial** = usable with d
 | CSV Export | Available | Payroll, overtime, transactions, reports |
 | Search & Filters | Available | Incremental, focus-preserving across modules |
 | Theme support | Available | Light/dark, pre-paint theme reconciliation |
-| Supplemental Overtime Payment | Planned | Planned for v2.7.0; drift is surfaced today with a disabled placeholder |
+| Supplemental Payments | Available | Settle overtime approved after payroll is immutable; Draft→…→Executed |
 
 This matrix lists shipped functionality only; it does not promise unavailable features.
 
@@ -135,7 +137,7 @@ flowchart LR
   subgraph Source["Modular source"]
     IDX["index.html<br/>(ordered script tags)"]
     CSS["css/ (5 files)"]
-    JS["js/ (44 classic-script modules)<br/>core · ui · finance · people · import · analytics"]
+    JS["js/ (45 classic-script modules)<br/>core · ui · finance · people · import · analytics"]
   end
   subgraph Runtime["Browser runtime (client-only)"]
     STATE["State (in-memory)"]
@@ -146,7 +148,7 @@ flowchart LR
     BUILD["tools/build-single-file.js"]
     VERIFY["tools/verify-build.js<br/>(109 checks)"]
   end
-  DIST["dist/tam-intelligence-os-v2.6.9.html<br/>(portable single file)"]
+  DIST["dist/tam-intelligence-os-v2.7.0.html<br/>(portable single file)"]
 
   IDX --> JS --> STATE --> LS
   CSS --> IDX
@@ -158,7 +160,7 @@ flowchart LR
   BUILD --> VERIFY
 ```
 
-The 44 modules are **classic scripts** sharing one global scope; their **load order** is the single
+The 45 modules are **classic scripts** sharing one global scope; their **load order** is the single
 critical invariant and lives once in `tools/module-order.js` (mirrored by `index.html`). The build
 inlines CSS + JS into one portable file; the verifier asserts the dist equals the concatenated
 source and that the version identity, schema, storage keys, and decomposition are all consistent.
@@ -174,7 +176,7 @@ index.html                         Modular entry: meta, external deps, pre-paint
                                    script, ordered CSS <link> + JS <script> tags, mounts
 css/                               Extracted styles (load order fixed)
   tokens.css base.css shell.css components.css charts.css
-js/                                44 classic-script modules, one shared global scope
+js/                                45 classic-script modules, one shared global scope
   core/       constants, utils, storage-adapter, state, state-load-migrations,
               domain-services, hr-persistence-portability, stabilization,
               onboarding-reset, app-bootstrap
@@ -196,7 +198,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.6.9.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.7.0.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
@@ -223,7 +225,7 @@ python -m http.server 8000
 
 Then open <http://localhost:8000>. Any static server works (`npx serve`, VS Code Live Server). The
 portable build in `dist/` — or the asset from
-[Release v2.6.9](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.6.9) — can also be
+[Release v2.7.0](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.0) — can also be
 opened directly in a browser.
 
 ---
@@ -359,14 +361,16 @@ changes.
 Directions only — no release numbers are assigned unless already approved.
 
 **Released**
+- Supplemental Payroll Engine — settle overtime after payroll is immutable (v2.7.0)
 - Enterprise Banking Foundation — Bank Master, Company Bank Accounts, employee banking (v2.6.9)
 - Payroll operational workspace with generic bulk selection (v2.6.8)
 - Immediate overtime-drift visibility (v2.6.8)
 - Read-only Activity Log and payroll audit timeline (v2.6.4)
 
 **Planned**
-- **Supplemental Payroll Engine (v2.7.0)** — pay approved overtime that landed after payroll was
-  posted (the drift condition is already surfaced; the action is a disabled placeholder today).
+- **Payroll Reporting suite (v2.7.1)** — consolidated payroll/supplemental reporting and exports.
+- **Supplemental sources beyond overtime** — bonuses/reimbursements/adjustments (the engine is
+  designed to extend; only overtime settlement ships today).
 - **Repository maintenance** — ongoing tooling, documentation, and workflow upkeep.
 
 **Under consideration**

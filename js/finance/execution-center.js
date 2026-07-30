@@ -174,6 +174,9 @@ async function executeTransaction(id, data){
   logActivity({type:'finance.execute', module:'Finance', entity:t.uraian||t.category||'Transaction', entityId:t.id,
     desc:`Executed ${fmtIDR(data.actualAmount)}${data.method?' via '+data.method:''} — status ${newStatus}`,
     refs:{transactionId:t.id, employeeId:t.employeeId||null, payrollPlanId:t.payrollPlanId||null, monthKey:t.monthKey||null}});
+  // v2.7.0 — if this transaction settles a supplemental payment, close the supplemental
+  // (Executed). Idempotent; base payroll transactions have no supplementalId so are unaffected.
+  if(typeof linkSupplementalExecution==='function') await linkSupplementalExecution(t);
 }
 async function scheduleTransaction(id, date){
   const t = findTxn(id); if(!t) return;

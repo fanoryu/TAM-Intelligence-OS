@@ -62,6 +62,9 @@ const AUDIT_TYPE_LABELS = {
   'finance.execute':'Transaction Executed', 'import.commit':'Smart Import Committed', 'import.undo':'Smart Import Undone',
   'employee.delete':'Employee Deleted', 'contract.delete':'Contract Deleted',
   'bankaccount.create':'Bank Account Created', 'bankaccount.edit':'Bank Account Updated', 'bankaccount.status':'Bank Account Status Changed',
+  'supplemental.create':'Supplemental Created', 'supplemental.refresh':'Supplemental Refreshed', 'supplemental.review':'Supplemental Submitted for Review',
+  'supplemental.return_draft':'Supplemental Returned to Draft', 'supplemental.approve':'Supplemental Approved', 'supplemental.return_review':'Supplemental Returned to Review',
+  'supplemental.post':'Supplemental Posted to Finance', 'supplemental.execute':'Supplemental Executed', 'supplemental.cancel':'Supplemental Cancelled',
 };
 function auditTypeLabel(t){
   if(AUDIT_TYPE_LABELS[t]) return AUDIT_TYPE_LABELS[t];

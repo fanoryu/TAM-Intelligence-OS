@@ -1,86 +1,85 @@
-# TAM Intelligence OS v2.6.9 — Enterprise Banking Foundation
+# TAM Intelligence OS v2.7.0 — Supplemental Payroll Engine
 
-**Release Name:** Enterprise Banking Foundation
+**Release Name:** Supplemental Payroll Engine
 
 ## Summary
-Establishes the banking foundation: a reusable Indonesian Bank Master, structured Company Bank
-Accounts, and improved employee banking — with legacy compatibility and account-number masking.
-This is a data-model + UI release; it adds **one** additive storage key and does **not** change
-`SCHEMA_VERSION`. Supplemental Payment is intentionally deferred to **v2.7.0**.
+Introduces Supplemental Payments — a separate accounting document that settles overtime approved
+**after** the base payroll became immutable (Posted/Executed). The base payroll total, its finance
+transaction, and its execution history are never modified. Adds **one** additive storage key and does
+**not** change `SCHEMA_VERSION`. Source in v1 is overtime only.
 
 ## Highlights
-- **Indonesian Bank Master** — one grouped, alphabetized, reusable constant (no storage key).
-- **Company Bank Accounts** — a Settings → Bank Accounts CRUD page; masked account numbers; only
-  Active accounts appear in transaction dropdowns ("Label — Bank").
-- **Employee banking** — bank chosen from the master, new Account Holder field, legacy values mapped.
-- **Backward compatible** — legacy strings resolve; a guarded seed runs only on installs with data.
+- **Supplemental Payment** entity with a full lifecycle: Draft → Review → Approved → Posted → Executed.
+- The v2.6.8 overtime-drift warning is now **actionable** — generate/settle a supplemental in a click.
+- Reuses existing systems: the drift amount, the finance transaction model, and the Execution Center.
+- Rigorous **duplicate prevention** — an overtime record is never paid twice; frozen records are never mutated.
+- Housekeeping: feature-status registry (no more hardcoded "Preview" badge), masked employee CSV, count-neutral CI labels.
 
 ## Added
-- Bank Master (`BANK_MASTER_GROUPS` / `INDONESIAN_BANKS`): State, Private, Digital, Islamic (Syariah),
-  Regional (BPD), International, and "Other Bank" — alphabetized within each group.
-- Company Bank Accounts store `tam_company_accounts_v1` with a full management page (create / edit /
-  deactivate / archive / search / filter). Fields: Account Label, Bank, Account Holder, Account
-  Number (masked), Purpose, Status.
-- Employee **Account Holder** field; employee **Bank** dropdown sourced from the Bank Master.
-- Activity Log events for bank-account create/edit/status (reusing `tam_audit_log_v1`).
+- **Supplemental Payments** module (`js/people/supplemental-engine.js`) + store
+  `tam_supplemental_payments_v1`. Model: `{ id, employeeId, payrollPlanId, payrollPeriod, sourceType,
+  sourceOvertimeIds, amount, status, companyAccountId + snapshots, financeTransactionId, executionId,
+  notes, timestamps, createdBy, auditVersion }`. Source type v1: `overtime_drift` only.
+- New **Supplemental Payments** page (list / search / filter by status·period·employee / detail /
+  lifecycle actions with skipped/disabled reasons). Payroll Detail and Employee Detail show related
+  supplementals separately from base payroll. Activity Log labels for all `supplemental.*` events.
+- Actionable overtime-drift banner (Generate / Open) in Payroll Workspace, Payroll Detail, Overtime.
+- **Feature lifecycle registry** replacing the hardcoded sidebar badge; masked general employee CSV export.
 
 ## Changed
-- Transaction (Add/Execute), transactions filter, recurring expenses, and default-bank setting now
-  list only **Active** company accounts.
-- Complete Backup / Restore include `companyAccounts`.
-- `APP_VERSION` → `2.6.9`, `APP_RELEASE_NAME` → "Enterprise Banking Foundation".
+- Overtime-drift committed banner: the disabled placeholder is replaced by real Generate/Open actions.
+- CI/Release "Verify build" step labels are count-neutral.
+- `APP_VERSION` → `2.7.0`, `APP_RELEASE_NAME` → "Supplemental Payroll Engine".
 
 ## Fixed
-- None (feature release). Reconciled the employee `bankAccount` / `bankAccountNumber` field naming so
-  both readers stay consistent going forward.
+- Resolved the known employee-CSV limitation: bank-account numbers are now masked in the general export.
 
 ## Security
-- Bank account numbers are **masked** everywhere except their own edit field (last 4 shown). No PIN,
-  OTP, password, or token is ever stored. No account data is transmitted (client-only).
+- Bank-account numbers are masked everywhere outside their own edit field, including the general CSV
+  export; no PIN/OTP/password/token stored; account snapshots are immutable after posting. No
+  supplemental data or account numbers are transmitted (client-only).
 
 ## Compatibility
 - Runs in the browser (modular source or portable single file); no backend.
-- Existing local data: **fully compatible**. Legacy bank strings on transactions and employees keep
-  resolving; employee legacy bank names map to the master; unknown values are preserved.
+- Existing local data: **fully compatible**. No base-payroll data is touched. Fresh installs start
+  with an empty supplemental store (no seed).
 - `SCHEMA_VERSION`: **unchanged (6)**.
 
 ## Data Safety
 - SCHEMA_VERSION: **unchanged (6)**.
-- Storage keys: **13 → 14** (added additive `tam_company_accounts_v1`); none renamed or removed.
-- Migration flags: added `tam_migrated_bankaccts_v269` (one-time company-account seed).
-- Backup format: extended additively with `companyAccounts`; older backups restore cleanly.
+- Storage keys: **14 → 15** (added additive `tam_supplemental_payments_v1`); none renamed or removed.
+- Backup format: extended additively with `supplementalPayments`; older backups restore cleanly.
 
 ## Migration
-- **Additive store** `tam_company_accounts_v1` defaults to `[]`.
-- **One-time, guarded, non-destructive seed** (`tam_migrated_bankaccts_v269`): converts the five
-  legacy bank strings into Active company accounts **only when the install already has data**. A
-  fresh install stays empty. Existing account data is never overwritten. No `SCHEMA_VERSION` change.
+- **Additive store** `tam_supplemental_payments_v1` defaults to `[]`. **No migration and no seed** —
+  supplementals are created explicitly by the user from an overtime-drift warning.
 
 ## QA
-- Build: `dist/tam-intelligence-os-v2.6.9.html`.
-- Verify: **114/114 checks** (13 legacy keys vs the v2.5.2 golden master + new-key/seed-flag/Bank-Master
-  checks; SCHEMA_VERSION still 6).
-- Browser (modular + dist), **zero console errors**: Bank Accounts CRUD, search/filter, masking (no
-  full number in lists); employee bank mapping + preservation + masked detail; transaction/recurring
-  dropdowns list only Active accounts with legacy values preserved; seed migration (fresh→empty,
-  with-data→seeded, idempotent); Complete Backup round-trip incl. company accounts and older-backup
-  tolerance.
+- Build: `dist/tam-intelligence-os-v2.7.0.html`. Verify: **129 checks** (adds supplemental key/count,
+  lifecycle constants, linkage, feature-registry, count-neutral workflow labels; SCHEMA_VERSION 6).
+- Browser (modular + dist), **zero console errors**: foundation (15 keys, reload, backup round-trip,
+  old-backup restore); generation (posted/executed base + late OT, no-eligible, repeated, refresh,
+  frozen records, new-record-after-freeze, no double-count); lifecycle (all valid/invalid
+  transitions, idempotent); finance (one Planned txn, both-way links, snapshot vs rename, base
+  byte-stable); execution (execute once, repeat blocked, actual/history linked, base untouched);
+  UI (list/detail, payroll & employee integration, actionable banner, Activity Log labels, no
+  account-number leaks); feature badges (SOON/none) and masked CSV.
 
 ## Regression
-- Payroll generic selection, overtime drift banners, execution, Smart Import / dedup, existing
-  transactions with legacy bank strings — all unaffected.
+- Payroll generic selection, overtime drift, execution, Smart Import/dedup, company accounts, and
+  existing transactions — all unaffected. Base payroll transactions verified byte-stable.
 
 ## Known Limitations
-- **Supplemental Payment** is not implemented (planned for v2.7.0); the v2.6.8 overtime-drift warning
-  and disabled placeholder are unchanged.
-- Employee CSV export still contains the full account number (existing behavior; not masked in
-  export).
-- The tracked company workbook remains a documented, accepted exception (unchanged).
+- Source is **overtime only**; bonuses/reimbursements/arbitrary adjustments are out of scope (the
+  engine is designed to extend later).
+- Projects / Vendors / Financial Calendar remain non-functional placeholders (labeled **SOON**).
+- No dedicated full-account "payment file" export exists; the general employee CSV is masked.
+- The tracked company workbook remains a documented, accepted exception (untouched).
 
 ## Git Information
-- Commit: 889c2accdeefbeeafd5040909353e40d9869c488
-- Tag: v2.6.9
+- Commit: <pending approval>
+- Tag: v2.7.0
 - Branch: main
 
 ## Release Asset
-- dist/tam-intelligence-os-v2.6.9.html
+- dist/tam-intelligence-os-v2.7.0.html

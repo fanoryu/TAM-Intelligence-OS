@@ -15,6 +15,7 @@ const HR_KEYS = {
   payrollAdjustments: 'tam_payroll_adjustments_v1', // v2.5.0 recurring payroll adjustments
   employeeMerges: 'tam_employee_merges_v1',    // v2.5.2 employee dedup/merge audit
   companyAccounts: 'tam_company_accounts_v1',   // v2.6.9 structured Company Bank Accounts
+  supplementalPayments: 'tam_supplemental_payments_v1', // v2.7.0 Supplemental Payroll Engine
 };
 async function loadHRData(){
   for(const [stateKey, storeKey] of Object.entries(HR_KEYS)){
@@ -40,6 +41,7 @@ async function persistOvertime(){ return persistHR('overtimeRecords'); }
 async function persistPayrollAdjustments(){ return persistHR('payrollAdjustments'); }
 async function persistEmployeeMerges(){ return persistHR('employeeMerges'); }
 async function persistCompanyAccounts(){ return persistHR('companyAccounts'); }
+async function persistSupplementalPayments(){ return persistHR('supplementalPayments'); }
 // v2.6.9 — one-time, guarded, non-destructive seed of structured Company Bank Accounts
 // from the legacy BANK_ACCOUNTS strings, for backward compatibility (existing
 // transactions store one of those strings in `bankAccount`, and the seeded accounts'
@@ -202,6 +204,7 @@ function buildCompleteBackup(){
     importBatches: State.importBatches,
     payrollAdjustments: State.payrollAdjustments,
     companyAccounts: State.companyAccounts,
+    supplementalPayments: State.supplementalPayments,
   };
 }
 // Validates an uploaded complete-backup object. Returns {ok, errors, info}
@@ -228,6 +231,7 @@ function validateCompleteBackup(data){
     employeeCount: Array.isArray(data.employees) ? data.employees.length : 0,
     overtimeCount: Array.isArray(data.overtimeRecords) ? data.overtimeRecords.length : 0,
     companyAccountCount: Array.isArray(data.companyAccounts) ? data.companyAccounts.length : 0,
+    supplementalCount: Array.isArray(data.supplementalPayments) ? data.supplementalPayments.length : 0,
     schemaVersion: (data.schemaVersion===undefined||data.schemaVersion===null) ? 'not recorded' : String(data.schemaVersion),
     sourceApp: data.app || 'unknown', sourceVersion: data.version || 'unknown',
     exportedAt: data.exportedAt || null,
@@ -251,7 +255,7 @@ async function restoreCompleteBackup(data){
   });
   if(data.settings) State.settings = {...DEFAULT_SETTINGS, ...data.settings, schemaVersion: SCHEMA_VERSION};
   // People & Contracts + Overtime datasets (present in v2.2+/v2.3+ backups; absent → keep current).
-  ['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts'].forEach(k=>{
+  ['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts','supplementalPayments'].forEach(k=>{
     if(Array.isArray(data[k])) State[k] = JSON.parse(JSON.stringify(data[k]));
   });
   // Safety backup goes first so it survives the 25-backup cap.
@@ -259,7 +263,7 @@ async function restoreCompleteBackup(data){
   await persist();
   await saveSettings();
   await saveBackups();
-  await Promise.all(['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts'].map(persistHR));
+  await Promise.all(['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts','supplementalPayments'].map(persistHR));
   // Restored data already carries lifecycle fields (or got them above) — don't re-run migration.
   await StorageAdapter.set('tam_migrated_exec_v21', 'done');
   await StorageAdapter.set('tam_migrated_hr_v22', 'done');

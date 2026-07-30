@@ -73,15 +73,36 @@ const keys = ['tam_txns_v1','tam_settings_v1','tam_backups_v1','tam_employees_v1
 const flags = ['tam_migrated_exec_v21','tam_migrated_hr_v22','tam_migrated_norm_v221','tam_migrated_overtime_v23','tam_migrated_payrollops_v25','tam_migrated_dedup_v252','tam_v23_ack'];
 keys.forEach((k)=>check(dist.includes(k)&&orig.includes(k), 'storage key present & unchanged: '+k));
 flags.forEach((f)=>check(dist.includes(f)&&orig.includes(f), 'migration flag present & unchanged: '+f));
-// v2.6.9 — ONE new additive storage key (Company Bank Accounts). It did not exist in the
-// v2.5.2 golden master, so it is checked in the current build only. Total known keys: 14.
-const newKeys269 = ['tam_company_accounts_v1'];
-newKeys269.forEach((k)=>check(dist.includes(k), 'v2.6.9 storage key present: '+k+' (Company Bank Accounts — additive)'));
-check(keys.length + newKeys269.length === 14, 'exactly 14 known storage keys (13 legacy + 1 v2.6.9)');
+// v2.6.9 + v2.7.0 — additive storage keys not present in the v2.5.2 golden master, so they are
+// checked in the current build only. Total known keys: 15 (13 legacy + company accounts + supplemental).
+const newKeysPost252 = ['tam_company_accounts_v1', 'tam_supplemental_payments_v1'];
+newKeysPost252.forEach((k)=>check(dist.includes(k), 'post-v2.5.2 additive storage key present: '+k));
+check(keys.length + newKeysPost252.length === 15, 'exactly 15 known storage keys (13 legacy + companyAccounts + supplementalPayments)');
 check(dist.includes('tam_migrated_bankaccts_v269'), 'v2.6.9 company-account seed migration flag present');
 // Bank Master is reference data — a constant, NOT a storage key.
 check(dist.includes('const BANK_MASTER_GROUPS') && dist.includes('const INDONESIAN_BANKS'), 'Indonesian Bank Master is a constant (single source, no storage key)');
 check(!/tam_bank_master_v\d/.test(dist) && !/tam_banks_v\d/.test(dist), 'no bank-master storage key introduced (Bank Master stays a constant)');
+// v2.7.0 — Supplemental Payroll Engine: store present, lifecycle constants, backup inclusion.
+check(dist.includes("supplementalPayments: 'tam_supplemental_payments_v1'"), 'supplemental store registered in HR_KEYS');
+check(dist.includes("const SUPPLEMENTAL_STATUSES = ['Draft','Review','Approved','Posted','Executed','Cancelled']"), 'supplemental lifecycle statuses defined');
+check(dist.includes('function generateSupplementalForPlan(') && dist.includes('function transitionSupplemental('), 'supplemental generator + transition engine present');
+check(dist.includes('function supplementalEligibleOvertime(') && dist.includes('function capturedOvertimeIdsForPlan('), 'supplemental duplicate-prevention helpers present');
+check(dist.includes('supplementalPayments: State.supplementalPayments'), 'supplemental store included in Complete Backup');
+check(dist.includes("SUPPLEMENTAL_SOURCE_TYPES = ['overtime_drift']"), 'supplemental v1 source is overtime_drift only (no speculative adjustment types)');
+check(!orig.includes('tam_supplemental_payments_v1') && !orig.includes('SUPPLEMENTAL_STATUSES'), 'supplemental engine is genuinely new (absent from the v2.5.2 golden master)');
+check(dist.includes('function postSupplemental(') && dist.includes('supplementalId:supp.id'), 'supplemental posting links to a finance transaction (both directions)');
+check(dist.includes('function linkSupplementalExecution('), 'supplemental execution linkage present (reuses Execution Center)');
+// v2.7.0 — feature lifecycle registry replaces the hardcoded sidebar PREVIEW badge.
+check(dist.includes('const FEATURE_REGISTRY') && dist.includes('function featureBadgeHTML('), 'centralized feature registry + shared badge helper present');
+check(!/nav-preview-tag">Preview</.test(dist), 'no hardcoded "Preview" sidebar badge outside the registry');
+check(dist.includes('featureBadgeHTML(n.id)'), 'sidebar badge rendered via the feature registry helper');
+// v2.7.0 — workflow step label is count-neutral (no hardcoded verifier count).
+try {
+  const ci = read(path.join(root, '.github', 'workflows', 'ci.yml'));
+  const rel = read(path.join(root, '.github', 'workflows', 'release.yml'));
+  check(/name:\s*Verify build\s*$/m.test(ci) && !/invariant checks\)/.test(ci), 'ci.yml verify step label is count-neutral');
+  check(/name:\s*Verify build\s*$/m.test(rel) && !/invariant checks\)/.test(rel), 'release.yml verify step label is count-neutral');
+} catch(e){ check(false, 'workflow files readable for label check: '+e.message); }
 check(dist.includes('<script id="seed-data" type="application/json">[]</script>'), 'seed-data JSON present and EMPTY');
 check(dist.includes('<div id="app"></div>')&&dist.includes('<div id="toast-root"></div>')&&dist.includes('<div id="modal-root"></div>'), 'all three mount points present');
 const initCount = (dist.match(/\(async function init\(\)/g)||[]).length;

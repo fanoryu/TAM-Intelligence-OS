@@ -6,7 +6,7 @@ AI assistants get productive quickly. It is descriptive (what *is*), whereas
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
 there rather than duplicating it.
 
-**As of the current release:** v2.6.9 — "Enterprise Banking Foundation"; `SCHEMA_VERSION` 6.
+**As of the current release:** v2.7.0 — "Supplemental Payroll Engine"; `SCHEMA_VERSION` 6.
 When these change, update this document (not `CLAUDE.md`).
 
 ---
@@ -71,10 +71,11 @@ provenance, and diagrams (application structure, payroll workflow, release pipel
 
 - Persistence is **local**: browser `localStorage` (standalone file) or the Claude Artifact storage
   environment; nothing is sent to a server.
-- `SCHEMA_VERSION` is **6**; there is a fixed set of stable storage keys (**14** as of v2.6.9:
+- `SCHEMA_VERSION` is **6**; there is a fixed set of stable storage keys (**15** as of v2.7.0:
   transactions, settings, backups, employees, contracts, payroll plans, recurring, monthly plans,
-  overtime records, import batches, payroll adjustments, employee merges, audit log, and the new
-  `tam_company_accounts_v1`) plus one-time migration flags. The shipped build seeds **no** data.
+  overtime records, import batches, payroll adjustments, employee merges, audit log,
+  `tam_company_accounts_v1`, and `tam_supplemental_payments_v1`) plus one-time migration flags. The
+  shipped build seeds **no** data.
 - Recovery is via Complete Backup export/import; destructive actions snapshot first.
 - The enumerated keys and migration rules are in [`docs/DATA-SAFETY.md`](docs/DATA-SAFETY.md).
 
@@ -108,8 +109,9 @@ Overtime is calculated with the internal TAM method (monthly standard hours → 
 rounding only the final amount). Records move Draft → Reviewed → Approved and, once payroll is
 committed, "Committed to Payroll". **Drift detection** is derived and read-only: if approved overtime
 changes after payroll captured it, the app warns immediately (regenerate for uncommitted payroll; for
-posted/executed payroll it flags that a supplemental payment is required). Supplemental payment
-itself is not yet implemented (see §16).
+posted/executed payroll it becomes actionable — generate a **Supplemental Payment** (v2.7.0) that
+settles the late overtime as a separate document without touching the base payroll (Draft → Review →
+Approved → Posted → Executed; reuses the finance transaction model and Execution Center).
 
 ## 12. Repository Layout
 
@@ -147,7 +149,8 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 ## 16. Known Limitations
 
-- **Supplemental Overtime Payment** is not implemented; drift is surfaced with a disabled placeholder.
+- **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
+  reimbursements) are not yet implemented (the engine is designed to extend).
 - **No automated browser/unit test suite** — QA is the invariant verifier plus manual browser
   validation.
 - **External CDN references** for the spreadsheet parser and fonts mean the fully offline experience
@@ -162,7 +165,9 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 Directions (no committed release numbers unless already approved):
 
-- **Planned:** Supplemental Payroll Engine (v2.7.0); ongoing repository maintenance.
+- **Released:** Supplemental Payroll Engine (v2.7.0) — overtime-drift settlement.
+- **Planned:** Payroll Reporting suite (v2.7.1); supplemental sources beyond overtime; ongoing
+  repository maintenance.
 - **Under consideration:** authentication and role-based access control; attachment/evidence
   handling; expanded approval workflows.
 

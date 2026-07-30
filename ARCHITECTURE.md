@@ -1,9 +1,9 @@
 # TAM Intelligence OS — Architecture
 
-**Current release:** v2.6.9 — Enterprise Banking Foundation
+**Current release:** v2.7.0 — Supplemental Payroll Engine
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
 CSS/data-safety invariants)
-**Shape today:** a modular source of **44 classic-script JS modules** (in `core/ ui/ finance/
+**Shape today:** a modular source of **45 classic-script JS modules** (in `core/ ui/ finance/
 people/ import/ analytics/`) + 5 CSS files, assembled into one portable
 `dist/tam-intelligence-os-v${APP_VERSION}.html`. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
@@ -17,9 +17,9 @@ no bundler. `SCHEMA_VERSION` is 6.
 > visibility), **§12** (v2.6.5 Smart Import scroll preservation), **§13** (v2.6.6 company
 > settings checklist fix), **§14** (v2.6.7 repository governance & delivery — no runtime
 > change), **§15** (v2.6.8 generic payroll bulk-selection model + immediate overtime-drift
-> visibility) and **§16** (v2.6.9 Enterprise Banking Foundation — Bank Master, Company Bank
-> Accounts, employee banking). Where an early section says "20 files", read §9 for the current
-> structure.
+> visibility), **§16** (v2.6.9 Enterprise Banking Foundation — Bank Master, Company Bank
+> Accounts, employee banking) and **§17** (v2.7.0 Supplemental Payroll Engine). Where an early
+> section says "20 files", read §9 for the current structure.
 
 ---
 
@@ -35,7 +35,7 @@ flowchart TD
   subgraph SRC["Modular source (edited by hand)"]
     IDX["index.html<br/>ordered CSS link + JS script tags, mount points"]
     CSS["css/ — tokens, base, shell, components, charts"]
-    subgraph JSMOD["js/ — 44 classic-script modules (one global scope)"]
+    subgraph JSMOD["js/ — 45 classic-script modules (one global scope)"]
       CORE["core/ — constants, state, storage-adapter,<br/>state-load-migrations, domain-services, bootstrap"]
       UI["ui/ — shell-render, charts, settings-about, activity-log"]
       FIN["finance/ — dashboard, transactions, execution-center,<br/>cashflow, budget, add-upload"]
@@ -47,14 +47,14 @@ flowchart TD
 
   subgraph RUN["Browser runtime (client-only)"]
     STATE["State (in-memory object graph)"]
-    LS[("localStorage / Artifact storage<br/>SCHEMA_VERSION 6, 13 keys")]
+    LS[("localStorage / Artifact storage<br/>SCHEMA_VERSION 6, 15 keys")]
   end
 
   ORDER["tools/module-order.js<br/>(load-order source of truth)"]
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>109 invariant checks"]
+  VERIFY["tools/verify-build.js<br/>invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX
@@ -95,7 +95,7 @@ flowchart TD
 
   DRIFT -->|Draft / Review / Approved| REGEN["Warn: regenerate payroll<br/>to include updated overtime"]
   DRIFT -->|Posted / Executed| SUPP["Warn: original payroll unchanged;<br/>supplemental payment required"]
-  SUPP -.->|future| SUPPFUT["Supplemental Overtime Payment<br/>(planned; disabled placeholder today)"]
+  SUPP -->|Generate| SUPPENG["Supplemental Payment (v2.7.0)<br/>Draft → Review → Approved → Posted → Executed"]
 ```
 
 Stages are a display mapping over the stored status values (`Draft` / `Reviewed` / `Ready` /
@@ -108,7 +108,7 @@ is a **derived**, read-only comparison (`payrollOvertimeDrift`) reusing `approve
 ```mermaid
 flowchart LR
   SRC["Modular source"] --> BUILD["build-single-file.js"]
-  BUILD --> VERIFY["verify-build.js<br/>(109 checks)"]
+  BUILD --> VERIFY["verify-build.js<br/>(invariant checks)"]
   VERIFY --> COMMIT["Commit source + dist"]
   COMMIT --> TAG["Annotated tag vX.Y.Z<br/>(push main, then tag)"]
   TAG --> GA["GitHub Actions: release.yml"]
@@ -121,6 +121,37 @@ flowchart LR
 
 CI (`ci.yml`) runs build + verify on every push/PR to `main` and uploads the portable HTML as an
 artifact. The release job publishes nothing unless every guardrail passes.
+
+---
+
+## 17. v2.7.0 — Supplemental Payroll Engine (one additive storage key; SCHEMA 6)
+
+A **separate accounting document** that settles overtime approved after the base payroll became
+immutable (Posted/Executed). The base payroll total, its finance transaction, and its execution
+history are **never** modified. New module `js/people/supplemental-engine.js` (engine + UI, loaded
+after `payroll-workspace.js`) and store `tam_supplemental_payments_v1` (the **15th** key).
+
+- **Source (v1): overtime only.** The amount reuses the existing `payrollOvertimeDrift(pp)` per-ID
+  basis via `supplementalAmountForIds` — no second overtime-delta formula.
+- **Centralized rules** (not in UI handlers): `supplementalEligibleOvertime` (drift minus overtime
+  already captured by non-cancelled supplementals — the duplicate-prevention core),
+  `openSupplementalForPlan` (at most one open Draft/Review per plan/source), `generateSupplementalForPlan`
+  (explicit, idempotent), `refreshSupplemental` (explicit, audited; open records only),
+  `canTransitionSupplemental` / `transitionSupplemental`, `postSupplemental`, `linkSupplementalExecution`.
+- **Lifecycle** Draft → Review → Approved → Posted → Executed (+ Cancelled). Amount and source
+  overtime **freeze at Approved**; later overtime forms a **new** supplemental rather than mutating a
+  frozen one.
+- **Finance/Execution reuse:** posting creates exactly one Planned transaction (`source:'supplemental'`,
+  `supplementalId` link both ways, immutable company-account snapshot); `executeTransaction` calls
+  `linkSupplementalExecution`, which closes the supplemental (idempotent) — the base payroll and its
+  execution are untouched.
+- **Data safety:** additive store (empty default, **no seed** — fresh installs start empty); backup /
+  restore include `supplementalPayments`; `SCHEMA_VERSION` unchanged (6); verifier known-key count
+  **14 → 15**.
+- **Housekeeping shipped alongside:** a centralized `FEATURE_REGISTRY` + `featureBadgeHTML` replace the
+  hardcoded sidebar badge (Projects/Vendors/Financial Calendar → SOON; Recurring Expenses stable);
+  the general employee CSV export masks account numbers; CI/Release "Verify build" labels are
+  count-neutral.
 
 ---
 

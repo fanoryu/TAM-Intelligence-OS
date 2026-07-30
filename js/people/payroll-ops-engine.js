@@ -495,14 +495,27 @@ function payrollDriftBannerHTML(plans){
     </div>`;
   }
   if(committed.length){
-    html += `<div class="card ot-drift-banner" style="margin-bottom:14px;border-left:3px solid var(--brick);">
-      <h3>Approved overtime added after payroll was posted <span class="tag">${committed.length}</span></h3>
-      <p style="margin:4px 0 2px;">Approved overtime was added after payroll was posted.</p>
-      <p style="margin:0 0 2px;">The original payroll remains unchanged.</p>
-      <p style="margin:0 0 8px;"><b>A supplemental payment will be required.</b></p>
-      <div class="insight-list">${committed.map(item).join('')}</div>
-      <button class="btn" disabled title="Supplemental Payment — coming in a future release" style="margin-top:10px;">Supplemental Payment (Coming in a future release)</button>
-    </div>`;
+    // v2.7.0 — the committed-drift banner is now actionable via the Supplemental Payroll
+    // Engine. Show only plans that still need action: generate a supplemental, or open the
+    // existing Draft/Review one. Drift already captured by a frozen (Approved/Posted/Executed)
+    // supplemental is settled and is not shown here (see the Supplemental Payments page).
+    const stateOf = (pp)=> (typeof supplementalPlanState==='function') ? supplementalPlanState(pp) : {needsGeneration:false, open:null, elig:{amount:0}};
+    const actionable = committed.map(x=>({x, st:stateOf(x.pp)})).filter(o=>o.st.needsGeneration || o.st.open);
+    if(actionable.length){
+      const rowHTML = actionable.map(({x,st})=>{
+        const amt = st.elig && st.elig.amount ? st.elig.amount : x.drift.addedAmount;
+        const action = st.open
+          ? `<button class="btn btn-sm" data-supp-open="${st.open.id}">Open ${escapeHtml(st.open.status)} Supplemental</button>`
+          : `<button class="btn btn-sm btn-accent" data-supp-gen="${x.pp.id}">Generate Supplemental (${fmtIDR(amt)})</button>`;
+        return `<div class="insight-item warn"><b>${escapeHtml(x.pp.employeeName||'—')}</b> — ${escapeHtml(x.pp.month)} ${x.pp.year}: +${fmtIDR(amt)} unpaid overtime <span style="margin-left:8px;">${action}</span></div>`;
+      }).join('');
+      html += `<div class="card ot-drift-banner" style="margin-bottom:14px;border-left:3px solid var(--brick);">
+        <h3>Approved overtime added after payroll was posted <span class="tag">${actionable.length}</span></h3>
+        <p style="margin:4px 0 2px;">Approved overtime was added after payroll was posted. The original payroll remains unchanged.</p>
+        <p style="margin:0 0 8px;"><b>Settle it with a supplemental payment — the base payroll is never modified.</b></p>
+        <div class="insight-list">${rowHTML}</div>
+      </div>`;
+    }
   }
   return html;
 }

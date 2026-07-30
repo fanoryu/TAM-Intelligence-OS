@@ -400,6 +400,7 @@ function renderPayrollDetail(main){
         <div style="margin-top:8px;"><button class="btn btn-sm" id="pdExec">Open in Execution Center</button></div>
       </div>`:'<div class="empty">Not posted to finance yet. Approve then Post to Finance to create a Planned transaction.</div>'}</div>
     </div>
+    ${(typeof supplementalPlanSectionHTML==='function')?supplementalPlanSectionHTML(p):''}
     <div class="card" style="margin-bottom:14px;"><h3>Payroll Timeline</h3>
       <p class="hint" style="margin-top:-2px;margin-bottom:10px;">Generated → Reviewed → Approved → Posted → Executed, plus period lock/unlock. Only events that actually occurred are shown (real timestamps — nothing is fabricated).</p>
       ${payrollTimelineHTML(buildPayrollTimeline(p))}</div>

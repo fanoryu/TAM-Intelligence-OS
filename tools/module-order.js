@@ -60,6 +60,8 @@ module.exports = [
   // --- native payroll ops + workspace (from 18) ---
   'people/payroll-ops-engine.js',
   'people/payroll-workspace.js',
+  // --- supplemental payroll engine (v2.7.0) ---
+  'people/supplemental-engine.js',
   // --- bootstrap (19) ---
   'core/app-bootstrap.js'
 ];
