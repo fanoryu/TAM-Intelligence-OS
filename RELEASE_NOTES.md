@@ -77,7 +77,7 @@ transaction, and its execution history are never modified. Adds **one** additive
 - The tracked company workbook remains a documented, accepted exception (untouched).
 
 ## Git Information
-- Commit: <pending approval>
+- Commit: 9d8f8bee6c6a4059da53ed2c2bc46a6b05657fde
 - Tag: v2.7.0
 - Branch: main
 
