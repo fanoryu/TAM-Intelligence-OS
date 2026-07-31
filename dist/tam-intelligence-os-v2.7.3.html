@@ -10650,6 +10650,184 @@ function supplementalEmployeeSectionHTML(empId){
   return `<div class="card" style="margin-bottom:14px;"><h3>Supplemental Payments <span class="tag">${recs.length}</span></h3><div class="hist-list">${rows}</div></div>`;
 }
 
+/* ============================================================
+   DOMAIN LAYER — AGGREGATES & INVARIANTS (Enterprise Foundation, PR-5A)
+   ------------------------------------------------------------
+   DESCRIPTIVE METADATA ONLY. This module DOCUMENTS the aggregate
+   boundaries and invariants that the EXISTING functions already enforce.
+   It does not enforce anything itself, changes no behavior, and nothing
+   here is invoked at load time.
+
+   The invariant catalogue below is a human/tooling-readable description
+   of rules enforced elsewhere (CLAUDE.md §7–§9 and the existing handlers)
+   — NOT a new enforcement point. Enforcement is unchanged by this layer.
+   Lifecycle values reference the existing *_STATUSES constants
+   (core/constants.js), the real source of truth, rather than restating
+   them.
+
+   Scope note: this is Phase 0 of the approved plan (a registry). It is
+   not the operational domain layer; the UI still bypasses it entirely.
+   ============================================================ */
+
+// Aggregate roots: each owns exactly one set of invariants. References to
+// lifecycle enums are resolved lazily (by name) so this module has no
+// load-order dependency and stays purely declarative.
+const DOMAIN_AGGREGATES = Object.freeze({
+  Employee:          Object.freeze({ identity: 'employeeId',    lifecycleEnum: 'EMPLOYMENT_STATUSES',       owns: ['identity', 'employment status', 'contracts (consistency scope)'] }),
+  Contract:          Object.freeze({ identity: 'contract id',   lifecycleEnum: 'CONTRACT_STORED_STATUSES',  owns: ['salary base', 'contract lifecycle'] }),
+  OvertimeRecord:    Object.freeze({ identity: 'overtime id',   lifecycleEnum: 'OVERTIME_STATUSES',         owns: ['overtime approval lifecycle', 'immutable-once-committed input'] }),
+  PayrollPlan:       Object.freeze({ identity: 'payrollPlanId', lifecycleEnum: 'PAYROLL_STATUSES',          owns: ['payroll status transitions', 'committed snapshot', 'frozen overtime snapshot', 'one-per-employee-per-period'] }),
+  SupplementalPayment: Object.freeze({ identity: 'supplemental id', lifecycleEnum: 'SUPPLEMENTAL_STATUSES', owns: ['supplemental lifecycle', 'source-overtime snapshot', 'duplicate-capture guard'] }),
+  Transaction:       Object.freeze({ identity: 'txn id',        lifecycleEnum: null,                        owns: ['planned vs actual', 'execution', 'no-duplicate'] }),
+  MonthlyPlan:       Object.freeze({ identity: 'period key',    lifecycleEnum: 'PLAN_STATUSES',             owns: ['period-level cycle state'] }),
+  CompanyAccount:    Object.freeze({ identity: 'account id',    lifecycleEnum: 'COMPANY_ACCOUNT_STATUSES',  owns: ['company bank account state'] }),
+  RecurringExpense:  Object.freeze({ identity: 'recurring id',  lifecycleEnum: null,                        owns: ['recurring template -> generated transactions'] }),
+  ImportBatch:       Object.freeze({ identity: 'batch id',      lifecycleEnum: null,                        owns: ['atomic import commit/undo'] }),
+  AuditTrail:        Object.freeze({ identity: 'append-only',   lifecycleEnum: null,                        owns: ['append-only, system-owned history'] })
+});
+
+// Invariants (Blueprint §8 / Contract §9). Text mirrors CLAUDE.md §7–§9;
+// enforcement lives in the referenced functions, not here.
+const DOMAIN_INVARIANTS = Object.freeze([
+  'Committed payroll/finance is immutable once committed/executed.',
+  'Planned != Actual: posting creates planned; execution records actual; no auto-execution.',
+  'No duplicates: one payroll per employee per period; re-run updates or skips, never duplicates.',
+  'Single transparent formula: Payroll = Base Salary + Approved Overtime (+ Supplemental).',
+  'Money is exact internally; round only the final payable.',
+  'Snapshots are frozen at commit; historical reads use the frozen snapshot, never a recompute.',
+  'Audit is append-only; never rewritten or deleted.',
+  'Drift is surfaced, not silently applied to committed amounts.',
+  'unavailable != zero for unknown legacy overtime hours.',
+  'Derive, do not duplicate: computed states are derived from stored facts.'
+]);
+
+/* ============================================================
+   DOMAIN LAYER — BUSINESS COMMANDS (Enterprise Foundation, PR-5)
+   ------------------------------------------------------------
+   DESCRIPTIVE catalogue of state-changing business commands (Contract
+   PR-5.3 §1). Each entry names the EXISTING global handler that already
+   performs the command, the aggregate it targets, and the lifecycle
+   transition it causes. This is metadata, not an execution path: the UI
+   continues to call the existing functions directly, and this layer does
+   NOT execute commands (call-site migration is a later, separate phase).
+
+   `handler` is a function NAME resolved on demand (read-only) by the
+   Domain facade, so this module carries no load-order dependency on the
+   handlers and never invokes them.
+   ============================================================ */
+
+const DOMAIN_COMMANDS = Object.freeze({
+  // Payroll
+  'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
+  // Finance
+  'finance.execute':       Object.freeze({ aggregate: 'Transaction',          handler: 'executeTransaction',        transition: 'planned -> actual' }),
+  // Supplemental
+  'supplemental.generate': Object.freeze({ aggregate: 'SupplementalPayment',  handler: 'generateSupplementalForPlan', transition: 'create (from overtime drift)' }),
+  'supplemental.transition': Object.freeze({ aggregate: 'SupplementalPayment', handler: 'transitionSupplemental',    transition: 'Draft -> Review -> Approved -> ... -> Executed/Cancelled' }),
+  'supplemental.post':     Object.freeze({ aggregate: 'SupplementalPayment',  handler: 'postSupplemental',          transition: 'Approved -> Posted (links a finance transaction)' }),
+  // Audit (system-owned side effect of authorized actions)
+  'audit.log':             Object.freeze({ aggregate: 'AuditTrail',           handler: 'logActivity',               transition: 'append (never mutate)' })
+});
+
+/* ============================================================
+   DOMAIN LAYER — BUSINESS QUERIES (Enterprise Foundation, PR-5)
+   ------------------------------------------------------------
+   Additive, behavior-neutral catalogue of side-effect-free reads
+   (Contract PR-5.3 §2). Each query names the EXISTING global function
+   that already serves it. Queries never change state and never emit
+   events. Nothing here is invoked at load time.
+   ============================================================ */
+
+const DOMAIN_QUERIES = Object.freeze({
+  'payroll.totalCompensation':  Object.freeze({ aggregate: 'PayrollPlan',   handler: 'payrollTotalCompensation',  note: 'base + committed supplemental' }),
+  'payroll.historicalSnapshot': Object.freeze({ aggregate: 'PayrollPlan',   handler: 'payrollHistoricalSnapshot', note: 'reads the frozen snapshot; never recomputes' }),
+  'audit.events':               Object.freeze({ aggregate: 'AuditTrail',    handler: 'getAuditEvents',            note: 'normalized, newest first' })
+});
+
+/* ============================================================
+   DOMAIN LAYER — BUSINESS EVENTS (Enterprise Foundation, PR-5)
+   ------------------------------------------------------------
+   Additive, behavior-neutral catalogue of business events (Contract
+   PR-5.3 §3). Events are immutable past-tense facts emitted on a
+   successful command; today they are recorded through the existing
+   append-only audit trail. This map documents the correspondence
+   between a domain event and the audit `type` already written by the
+   existing instrumentation — it introduces no new event bus.
+   ============================================================ */
+
+// Domain event -> existing audit `type` string (see AUDIT_TYPE_LABELS in
+// js/ui/activity-log.js). One-way documentation map; not invoked at load.
+const DOMAIN_EVENTS = Object.freeze({
+  PayrollGenerated:        'payroll.generate',
+  PayrollReviewed:         'payroll.review',
+  PayrollApproved:         'payroll.approve',
+  PayrollCommitted:        'payroll.post',
+  OvertimeApproved:        'overtime.approved',
+  OvertimeCommitted:       'overtime.committed-to-payroll',
+  TransactionExecuted:     'finance.execute',
+  SupplementalReviewed:    'supplemental.review',
+  SupplementalApproved:    'supplemental.approve',
+  SupplementalPosted:      'supplemental.post',
+  SupplementalExecuted:    'supplemental.execute',
+  SupplementalCancelled:   'supplemental.cancel',
+  ImportCommitted:         'import.commit',
+  ImportUndone:            'import.undo'
+});
+
+/* ============================================================
+   DOMAIN LAYER — READ-ONLY REGISTRY FACADE (Enterprise Foundation, PR-5A)
+   ------------------------------------------------------------
+   A thin, frozen, READ-ONLY view over the domain registries. Its only
+   capabilities are (a) exposing the descriptive registries and (b)
+   RESOLVING — not invoking — the existing handler for a registered
+   command/query name.
+
+   TRUTHFUL SCOPE (PR-5A — Enterprise Domain Registry):
+     - The registries are DESCRIPTIVE METADATA about the existing system.
+     - This layer does NOT enforce any invariant, execute any command,
+       isolate any query, or guarantee any event. Those remain enforced by
+       the existing handlers exactly as before.
+     - The application's UI still calls the existing functions DIRECTLY and
+       bypasses this facade entirely.
+     - There is deliberately no dispatch/execute here. The facade becomes
+       an operational seam only in a later phase (PR-5B onward), under a
+       separate, approved change.
+
+   `commandHandler(name)` / `queryHandler(name)` RETURN the existing global
+   function (or null) so callers — and the verifier — can confirm every
+   registered handler name resolves to a real function. They never call it.
+   ============================================================ */
+
+const Domain = (function () {
+  // Resolve a handler by name from the shared global scope. Returns the
+  // function itself (never invokes it) or null if it is not a function.
+  function resolve(name) {
+    var g = (typeof window !== 'undefined') ? window : this;
+    var fn = g ? g[name] : undefined;
+    return (typeof fn === 'function') ? fn : null;
+  }
+
+  return Object.freeze({
+    // Descriptive registries (single source of truth for the domain map).
+    aggregates: DOMAIN_AGGREGATES,
+    invariants: DOMAIN_INVARIANTS,
+    commands: DOMAIN_COMMANDS,
+    queries: DOMAIN_QUERIES,
+    events: DOMAIN_EVENTS,
+
+    // Read-only handler resolution: returns the existing handler function
+    // for a registered command/query name, or null. Does NOT execute it.
+    commandHandler: function (name) {
+      var c = DOMAIN_COMMANDS[name];
+      return c ? resolve(c.handler) : null;
+    },
+    queryHandler: function (name) {
+      var q = DOMAIN_QUERIES[name];
+      return q ? resolve(q.handler) : null;
+    }
+  });
+})();
+
 
 /* ---------- init ---------- */
 (async function init(){
