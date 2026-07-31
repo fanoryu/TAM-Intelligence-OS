@@ -177,6 +177,75 @@ async function deleteEmployee(id){
   toast('Employee deleted.'); render();
 }
 
+/* ============================================================
+   PR-5C.1 — narrow Employee CONTACT-UPDATE command.
+   Mutates ONLY the approved contact fields (phone/email/notes). It never
+   touches salary, employment status, active state, contract/bank data,
+   department, job title, or schedule. Reuses empById + persistEmployees +
+   the existing `history` audit style, and returns a typed command outcome.
+   Atomic: on a failed persist it reverts the fields and the audit entry.
+   This is the ONLY handler routed through Domain.command in this PR; the
+   full employee save (openEmployeeModal) is unchanged and still direct.
+   ============================================================ */
+const EMPLOYEE_CONTACT_FIELDS = ['phone','email','notes'];
+async function updateEmployeeContact(id, patch){
+  const e = empById(id);
+  if(!e) return { success:false, error:'EmployeeNotFound' };
+  patch = patch || {};
+  const before = {}, applied = {};
+  // Allowlist: only approved contact fields are considered; all else is ignored.
+  EMPLOYEE_CONTACT_FIELDS.forEach(k=>{
+    if(Object.prototype.hasOwnProperty.call(patch, k)){
+      before[k] = e[k];
+      applied[k] = (patch[k]==null ? '' : String(patch[k])).trim();
+    }
+  });
+  if(Object.keys(applied).length===0) return { success:false, error:'NoContactFieldsProvided' };
+  const prevUpdatedAt = e.updatedAt;
+  Object.keys(applied).forEach(k=> e[k] = applied[k]);
+  e.updatedAt = new Date().toISOString();
+  (e.history = e.history || []).push({ event:'contact-edited', ts:e.updatedAt, note:'Contact details updated ('+Object.keys(applied).join(', ')+')' });
+  const ok = await persistEmployees();
+  if(ok !== true){
+    // Atomic rollback — no partial field update, no audit-success entry retained.
+    Object.keys(before).forEach(k=> e[k] = before[k]);
+    e.history.pop();
+    e.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
+  }
+  return { success:true, data:e };
+}
+
+// Narrow contact-only editor. The ONE migrated UI path: it routes through the
+// Domain command seam and never calls updateEmployeeContact directly.
+function openEmployeeContactModal(id){
+  const e = empById(id); if(!e) return;
+  openModalHTML(`
+    <h3>Edit Contact</h3>
+    <form id="empContactForm">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="field"><label>Email</label><input class="input" type="email" name="email" value="${escapeHtml(e.email||'')}"></div>
+        <div class="field"><label>Phone</label><input class="input" name="phone" value="${escapeHtml(e.phone||'')}"></div>
+        <div class="field" style="grid-column:span 2;"><label>Notes</label><textarea class="input" name="notes">${escapeHtml(e.notes||'')}</textarea></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="empContactCancel">Cancel</button>
+        <button type="submit" class="btn btn-accent">Save Contact</button>
+      </div>
+    </form>`, {width:520, onMount:(root)=>{
+      root.querySelector('#empContactCancel').addEventListener('click', closeModal);
+      root.querySelector('#empContactForm').addEventListener('submit', async ev=>{
+        ev.preventDefault();
+        const fd = new FormData(ev.target);
+        const outcome = await Domain.command('employee.contact.update', id, {
+          email: fd.get('email'), phone: fd.get('phone'), notes: fd.get('notes')
+        });
+        if(outcome && outcome.success){ closeModal(); toast('Contact updated.'); render(); }
+        else { toast('Could not update contact'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
+      });
+    }});
+}
+
 function renderEmployeeDetail(main){
   const e = empById(State.detailEmpId);
   if(!e){ main.innerHTML = emptyState('Employee not found','It may have been deleted.'); return; }
@@ -197,6 +266,7 @@ function renderEmployeeDetail(main){
       <div><h1>${escapeHtml(e.fullName||'Employee')}</h1><p class="desc">${escapeHtml(e.jobTitle||'—')} · ${escapeHtml(e.department||'—')} · ${escapeHtml(e.employeeId||'')}</p></div>
       <div class="head-controls">
         <button class="btn" id="backEmp">← Employees</button>
+        <button class="btn" id="editContactD">Edit Contact</button>
         <button class="btn" id="editEmpD">Edit</button>
         <button class="btn btn-accent" id="newCtForEmp">+ New Contract</button>
       </div>
@@ -286,6 +356,7 @@ function renderEmployeeDetail(main){
       </table></div>
     </div>`;
   document.getElementById('backEmp').addEventListener('click', ()=>hrNavTo('employees'));
+  document.getElementById('editContactD').addEventListener('click', ()=>openEmployeeContactModal(e.id));
   document.getElementById('editEmpD').addEventListener('click', ()=>openEmployeeModal(e.id));
   document.getElementById('newCtForEmp').addEventListener('click', ()=>openContractModal(null, e.id));
   main.querySelectorAll('[data-ct-detail]').forEach(b=>b.addEventListener('click', ()=>hrNavTo('contractDetail', {detailContractId:b.dataset.ctDetail})));
