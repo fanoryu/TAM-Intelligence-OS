@@ -80,9 +80,17 @@ Full-length mappings are in `filter-repo-metadata/commit-map.txt` and `ref-map.t
   from GitHub storage by SHA (expected until GitHub GC) — the reason this ticket is required.
 
 ### Response
-- **Status: NOT YET SUBMITTED / PENDING.** No GitHub Support ticket has been filed or answered as of
-  this record. Update this section with the ticket ID and GitHub's confirmation once the owner submits
-  the request and GitHub completes the purge.
+- **Status: Completed.**
+
+**GitHub Support Response:**
+
+> "No problem! I've cleared out unreferenced commits, and that link should now return a 404 error."
+
+**Outcome:**
+- GitHub Support confirmed server-side cleanup of unreferenced commits.
+- Cached references associated with the removed history have been cleared.
+- The previous object link now returns HTTP 404.
+- Sensitive-data removal process completed.
 
 ## Final verification checklist
 - [x] Pre-rewrite bundle exists, verifies "complete history", SHA-256 recorded
@@ -97,9 +105,15 @@ Full-length mappings are in `filter-repo-metadata/commit-map.txt` and `ref-map.t
 - [x] Workbook absent from remote `main` tree (API root + recursive)
 - [x] Repository remains **PRIVATE**; default branch `main`; LICENSE blob unchanged
 - [x] All 8 Releases exist with expected assets; no duplicates
-- [ ] GitHub Support purge of retained old objects — **pending owner submission**
-- [ ] (Separate owner decisions, out of scope) author-email scrub, visibility change, licensing choice
+- [x] GitHub Support purge of retained old objects — **completed** (Support confirmed unreferenced
+      commits cleared; old object link now returns HTTP 404)
+
+**Sanitization complete.** Every verification item above is satisfied.
+
+> Deferred owner decisions (intentionally **not** part of this sanitization and tracked separately):
+> author-email scrub of commit metadata, repository visibility change, and the licensing choice. These
+> remain the owner's to make and are out of scope for this record.
 
 ---
 *Generated 2026-07-31 as part of the post-sanitization audit & archive. Do not edit historical facts;
-append updates (e.g. the GitHub Support response) below.*
+append updates below. Updated 2026-07-31: GitHub Support cleanup completed (object link now 404).*
