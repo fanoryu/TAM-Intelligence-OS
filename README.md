@@ -6,7 +6,7 @@ dependencies.
 
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.7.0-blue)
+![Version](https://img.shields.io/badge/version-2.7.1-blue)
 ![License](https://img.shields.io/badge/license-proprietary%20%26%20confidential-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
@@ -34,30 +34,43 @@ Design principles:
   app. The only external network references are the XLSX parser and web fonts (CDN).
 - **Two shippable forms.** A modular development source and a single portable HTML file that behaves
   identically.
-- **Data-safety first.** A 129-check verifier guards the persisted-data schema, storage keys,
+- **Data-safety first.** A 166-check verifier guards the persisted-data schema, storage keys,
   migration flags, and build fidelity on every change.
 
 ---
 
 ## Current release
 
-**v2.7.0 — Supplemental Payroll Engine** · `SCHEMA_VERSION` 6
+**v2.7.1 — Payroll Integrity & Reporting Foundation** · `SCHEMA_VERSION` 6
 
-- **Supplemental Payments** — a separate accounting document that settles overtime approved **after**
-  the base payroll became immutable (Posted/Executed). The base payroll total, its finance
-  transaction, and its execution history are never modified. New additive store
-  `tam_supplemental_payments_v1` (SCHEMA_VERSION unchanged).
-- **Lifecycle** Draft → Review → Approved → Posted → Executed; amount + source overtime freeze at
-  Approved; rigorous duplicate prevention (an overtime record is never paid twice). Reuses the drift
-  amount, the finance transaction model, and the Execution Center.
-- **Actionable drift** — the overtime-drift warning now lets you Generate/settle a supplemental from
-  the Payroll Workspace, Payroll Detail, or Overtime page; a Supplemental Payments page manages them.
-- **Housekeeping** — feature-status registry (SOON badges for placeholder pages), masked employee CSV
-  export, count-neutral CI labels. Source is overtime only; other adjustment types are future work.
+A controlled post-release integrity fix that establishes the source-of-truth model underpinning
+payroll reporting. No new storage key and no schema change; no historical payroll or finance amount
+is ever auto-repaired.
 
-Download the portable build from the release page:
-**[Release v2.7.0](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.0)** →
-`tam-intelligence-os-v2.7.0.html`. See [`CHANGELOG.md`](CHANGELOG.md) and
+- **Payroll Historical Source of Truth** — one centralized, stage-aware view model,
+  `payrollHistoricalSnapshot()`. Draft/Review/Approved render working-plan values; Posted/Executed
+  derive from immutable committed evidence, so historical figures are never reconstructed from
+  current contract or overtime data.
+- **Immutable committed snapshots** — payroll postings freeze an overtime snapshot (with
+  record-count/hours audit metadata) on the transaction and a committed snapshot on the plan;
+  supplementals freeze their source-overtime snapshot at Approved. Historical detail survives later
+  edits or deletion of the source records.
+- **Payroll Integrity framework** — a compact 🟢/🟡 integrity indicator plus a detailed mismatch
+  notice in Payroll Detail, and deterministic integrity checks for payroll↔transaction linkage and
+  snapshot consistency (detect-only; financial history is never auto-repaired).
+- **Historical rendering consistency** — Payroll Detail, worksheet rows, period totals/summary,
+  Employee Detail history, payroll reports, and CSV export all read the same stage-aware model.
+- **Global supplemental duplicate prevention** — an overtime record can never be captured by more
+  than one non-cancelled supplemental across all payroll plans.
+- **Company Settings completion marker** — onboarding completion uses an explicit persisted marker
+  set only after a successful save, with a conservative legacy fallback for older profiles.
+- **Execution Center transaction deep-link** — "Open in Execution Center" reveals and highlights the
+  exact linked transaction regardless of its date bucket.
+
+Builds on the **v2.7.0 Supplemental Payroll Engine** (settle overtime approved after payroll becomes
+immutable). Download the portable build from the release page:
+**[Release v2.7.1](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.1)** →
+`tam-intelligence-os-v2.7.1.html`. See [`CHANGELOG.md`](CHANGELOG.md) and
 [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
 
 Two supported outputs:
@@ -65,7 +78,7 @@ Two supported outputs:
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (45 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/`), one shared global scope, no ES modules | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.7.0.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.7.1.html` |
 
 ---
 
@@ -74,8 +87,13 @@ Two supported outputs:
 - **Finance operations** — a transaction ledger with planned vs. actual amounts, an Execution
   Center to execute/schedule/cancel payments, cash-flow and budget views, and a financial calendar.
 - **People & payroll** — employees and contracts with work schedules; an operational Payroll
-  Workspace running Draft → Review → Approved → Posted → Executed over a read-only worksheet; and a
-  TAM-method overtime engine that feeds approved overtime into payroll.
+  Workspace running Draft → Review → Approved → Posted → Executed over a read-only worksheet; a
+  TAM-method overtime engine that feeds approved overtime into payroll; and **Supplemental Payments**
+  that settle overtime approved after payroll is immutable.
+- **Payroll integrity & history** — Posted/Executed payroll renders from **immutable committed
+  snapshots** through a single source-of-truth helper (`payrollHistoricalSnapshot()`), with an
+  at-a-glance integrity indicator and deterministic integrity checks; committed financial history is
+  never reconstructed or auto-repaired.
 - **Planning & analytics** — a monthly plan generator, planned-vs-actual and month-over-month
   comparisons, trend charts, and an executive dashboard.
 - **Data import** — Smart Import extracts employees/contracts/transactions from spreadsheets with
@@ -104,7 +122,9 @@ Status legend: **Available** = shipped and in use · **Partial** = usable with d
 | Employee Detail | Available | Profile + contract, payroll & overtime timeline |
 | Contracts | Available | Contract lifecycle, coverage per month |
 | Payroll Workspace | Available | Draft → Review → Approved → Posted → Executed; generic bulk selection |
-| Payroll Detail | Available | Read-only payroll + generated finance transaction |
+| Payroll Detail | Available | Read-only payroll + generated finance transaction; integrity indicator |
+| Historical Payroll Snapshot | Available | Posted/Executed render immutable committed snapshots via `payrollHistoricalSnapshot()` |
+| Payroll Integrity | Available | Compact 🟢/🟡 indicator, mismatch notice, deterministic integrity checks (detect-only) |
 | Overtime | Available | TAM-method calculation, approval, drift warnings |
 | Monthly Plan Generator | Available | Builds the monthly plan from master data |
 | Smart Import | Available | Spreadsheet import, column mapping, dedup |
@@ -115,7 +135,7 @@ Status legend: **Available** = shipped and in use · **Partial** = usable with d
 | CSV Export | Available | Payroll, overtime, transactions, reports |
 | Search & Filters | Available | Incremental, focus-preserving across modules |
 | Theme support | Available | Light/dark, pre-paint theme reconciliation |
-| Supplemental Payments | Available | Settle overtime approved after payroll is immutable; Draft→…→Executed |
+| Supplemental Payments | Available | Settle overtime approved after payroll is immutable; Draft→…→Executed; global duplicate prevention |
 
 This matrix lists shipped functionality only; it does not promise unavailable features.
 
@@ -146,9 +166,9 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(109 checks)"]
+    VERIFY["tools/verify-build.js<br/>(166 checks)"]
   end
-  DIST["dist/tam-intelligence-os-v2.7.0.html<br/>(portable single file)"]
+  DIST["dist/tam-intelligence-os-v2.7.1.html<br/>(portable single file)"]
 
   IDX --> JS --> STATE --> LS
   CSS --> IDX
@@ -164,7 +184,10 @@ The 45 modules are **classic scripts** sharing one global scope; their **load or
 critical invariant and lives once in `tools/module-order.js` (mirrored by `index.html`). The build
 inlines CSS + JS into one portable file; the verifier asserts the dist equals the concatenated
 source and that the version identity, schema, storage keys, and decomposition are all consistent.
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map, provenance, and additional
+Historical payroll rendering is centralized through a single stage-aware helper,
+`payrollHistoricalSnapshot()`, so Posted/Executed figures and reports are deterministic and read
+from immutable committed evidence rather than live master data. See
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map, provenance, and additional
 diagrams (payroll workflow, release pipeline).
 
 ---
@@ -185,7 +208,7 @@ js/                                45 classic-script modules, one shared global 
               add-upload, cashflow, budget
   people/     people-core, employees, contracts, payroll-planning, recurring-expenses,
               monthly-plan, legacy-mapping, hr-dashboard-reports, overtime,
-              employee-dedup, payroll-ops-engine, payroll-workspace
+              employee-dedup, payroll-ops-engine, payroll-workspace, supplemental-engine
   import/     parser, import-preview, smart-import-extract, smart-import-commit,
               smart-import-ui
   analytics/  plan-vs-actual, compare, trends, executive-dashboard,
@@ -198,7 +221,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.7.0.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.7.1.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
@@ -225,7 +248,7 @@ python -m http.server 8000
 
 Then open <http://localhost:8000>. Any static server works (`npx serve`, VS Code Live Server). The
 portable build in `dist/` — or the asset from
-[Release v2.7.0](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.0) — can also be
+[Release v2.7.1](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.1) — can also be
 opened directly in a browser.
 
 ---
@@ -260,7 +283,7 @@ Build the portable single file from the modular source:
 node tools/build-single-file.js
 ```
 
-Verify (109 checks):
+Verify (166 checks):
 
 ```bash
 node tools/verify-build.js
@@ -303,7 +326,7 @@ Releases are tag-driven and guarded end-to-end (see [`docs/RELEASE-PROCESS.md`](
 
 ```mermaid
 flowchart LR
-  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (109)"]
+  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (166)"]
   V --> C["commit source + dist"] --> T["push tag vX.Y.Z"]
   T --> GA["GitHub Actions: Release"]
   GA --> GATE{"tag matches<br/>v-APP_VERSION?"}
@@ -322,7 +345,7 @@ TAM Intelligence OS stores finance, payroll, employee, and contract data **local
 leaves the device on its own. The verifier enforces these invariants unless a change is an
 **intentional, documented migration**:
 
-- `SCHEMA_VERSION` = 6; the 13 storage keys and the migration flags are stable.
+- `SCHEMA_VERSION` = 6; the 15 storage keys and the migration flags are stable.
 - The shipped build ships **empty seed data**.
 - The Complete Backup JSON format is stable; destructive actions (Restore, Employee Merge, Smart
   Import, Start Fresh) snapshot data first.
@@ -361,6 +384,8 @@ changes.
 Directions only — no release numbers are assigned unless already approved.
 
 **Released**
+- Payroll Integrity & Reporting Foundation — historical source-of-truth model, immutable committed
+  snapshots, payroll integrity framework (v2.7.1)
 - Supplemental Payroll Engine — settle overtime after payroll is immutable (v2.7.0)
 - Enterprise Banking Foundation — Bank Master, Company Bank Accounts, employee banking (v2.6.9)
 - Payroll operational workspace with generic bulk selection (v2.6.8)
@@ -368,7 +393,9 @@ Directions only — no release numbers are assigned unless already approved.
 - Read-only Activity Log and payroll audit timeline (v2.6.4)
 
 **Planned**
-- **Payroll Reporting suite (v2.7.1)** — consolidated payroll/supplemental reporting and exports.
+- **Payroll Reporting suite** — consolidated payroll/supplemental reporting and exports built on the
+  v2.7.1 historical source-of-truth model (deliberately deferred until that model is validated in
+  production).
 - **Supplemental sources beyond overtime** — bonuses/reimbursements/adjustments (the engine is
   designed to extend; only overtime settlement ships today).
 - **Repository maintenance** — ongoing tooling, documentation, and workflow upkeep.
