@@ -309,20 +309,43 @@ check(/const DOMAIN_QUERIES = Object\.freeze\(/.test(qrySrc), 'DOMAIN_QUERIES is
 check(/const DOMAIN_AGGREGATES = Object\.freeze\(/.test(aggSrc), 'DOMAIN_AGGREGATES is Object.freeze()');
 check(/const DOMAIN_EVENTS = Object\.freeze\(/.test(evtSrc), 'DOMAIN_EVENTS is Object.freeze()');
 check(/const Domain = \(function/.test(facSrc) && /Object\.freeze\(\{/.test(facSrc), 'Domain facade is a frozen object');
-// COMMANDS remain non-operational: the facade must expose no command execution
-// surface (no dispatch/ask). PR-5B adds read-only query routing only.
-check(!/\bdispatch\s*:/.test(facSrc) && !/\bask\s*:/.test(facSrc), 'Domain facade has no command execute/dispatch surface');
+// No LEGACY execute surface: dispatch/ask must never appear on the facade.
+check(!/\bdispatch\s*:/.test(facSrc) && !/\bask\s*:/.test(facSrc) && !/Domain\.(dispatch|ask)\(/.test(srcJs), 'no legacy dispatch/ask surface on the Domain facade');
 // PR-5B — operational read-only query routing exists on the facade.
 check(/\bquery:\s*function/.test(facSrc), 'Domain facade exposes read-only query() routing (PR-5B)');
-// Exactly ONE query is migrated: only a single distinct query id is routed
-// through Domain.query(...) anywhere in the source, and it is the approved
-// employee read. (Counts distinct ids, so documentation mentions of the same
-// literal do not inflate the count.)
+// PR-5C.1 — operational command routing exists on the facade.
+check(/\bcommand:\s*function/.test(facSrc), 'Domain facade exposes command() routing (PR-5C.1)');
+// Exactly ONE query migrated (distinct routed query ids).
 const migratedQueryIds = Array.from(new Set((srcJs.match(/Domain\.query\('([^']+)'\)/g)||[]).map(s=>s.match(/'([^']+)'/)[1])));
 check(migratedQueryIds.length === 1 && migratedQueryIds[0] === 'employee.filtered', 'exactly one query id routed through Domain.query(): '+JSON.stringify(migratedQueryIds));
-check(!/Domain\.(dispatch|ask)\(/.test(srcJs) && !/Domain\.command\(/.test(srcJs), 'no command is routed through the Domain facade (queries only)');
 check(dist.includes("Domain.query('employee.filtered')"), 'migrated query call present in dist');
 check(/'employee\.filtered':\s*Object\.freeze\(\{[^}]*handler:\s*'employeesFiltered'/.test(qrySrc), 'employee.filtered query registered to handler employeesFiltered');
+// Exactly ONE command migrated (distinct routed command ids), and it is the approved contact command.
+const migratedCmdIds = Array.from(new Set((srcJs.match(/Domain\.command\('([^']+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1])));
+check(migratedCmdIds.length === 1 && migratedCmdIds[0] === 'employee.contact.update', 'exactly one command id routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
+check(dist.includes("Domain.command('employee.contact.update'"), 'migrated command call present in dist');
+check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateEmployeeContact'/.test(cmdSrc), 'employee.contact.update registered to handler updateEmployeeContact');
+// The facade command() calls the handler exactly once (a single fn.apply, no loop).
+const cmdMethod = (facSrc.match(/command:\s*function[\s\S]*?\n    \}/)||[''])[0];
+check((cmdMethod.match(/fn\.apply\(/g)||[]).length === 1 && !/for\s*\(|while\s*\(|forEach/.test(cmdMethod), 'Domain.command invokes the handler exactly once (single fn.apply, no loop)');
+// PR-5C.1 — approved-field allowlist: the contact handler mutates ONLY phone/email/notes.
+const empSrc = read(path.join(root,'js','people','employees.js'));
+check(/const EMPLOYEE_CONTACT_FIELDS = \['phone','email','notes'\]/.test(empSrc), 'contact command allowlist is exactly [phone, email, notes]');
+const ucStart = empSrc.indexOf('async function updateEmployeeContact(');
+check(ucStart !== -1, 'updateEmployeeContact handler present');
+const ucRest = ucStart!==-1 ? empSrc.slice(ucStart+1) : '';
+const ucNext = ucRest.search(/\n(async function|function) /);
+const ucBody = ucNext>=0 ? ucRest.slice(0, ucNext) : ucRest;
+['monthlyBaseSalary','employmentStatus','contractType','jobTitle','department','bankName','bankAccount','bankAccountNumber','monthlySalary','joinDate','active'].forEach((f)=>
+  check(!ucBody.includes(f), 'contact handler does not touch forbidden field: '+f));
+check(ucBody.includes('persistEmployees(') && (ucBody.match(/persistEmployees\(/g)||[]).length === 1, 'contact handler persists exactly once (persistEmployees)');
+check(!/logActivity\(/.test(ucBody), 'contact handler adds no duplicate audit call (history-only, matching the edit path)');
+check(/success:\s*true/.test(ucBody) && /success:\s*false/.test(ucBody), 'contact handler returns a typed success/failure outcome');
+// The full employee save path is unchanged and still direct (not routed):
+// the empForm submit handler exists and Domain.command is used exactly once in
+// this module (the contact command only) — the monolithic save is not routed.
+check(/querySelector\('#empForm'\)\.addEventListener\('submit'/.test(empSrc), 'full employee save (empForm) submit handler still present');
+check((empSrc.match(/Domain\.command\(/g)||[]).length === 1, 'exactly one Domain.command() call site in employees.js (the contact command; monolithic save stays direct)');
 // Extract command/query identifiers and their handler names.
 function idKeys(src){ return (src.match(/^\s*'([a-z][a-zA-Z]*\.[a-zA-Z]+)':/gm)||[]).map(s=>s.match(/'([^']+)'/)[1]); }
 function handlerNames(src){ return (src.match(/handler:\s*'([A-Za-z0-9_]+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1]); }

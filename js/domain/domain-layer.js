@@ -6,19 +6,21 @@
    RESOLVING — not invoking — the existing handler for a registered
    command/query name.
 
-   TRUTHFUL SCOPE (PR-5B — First Operational Domain Slice):
+   TRUTHFUL SCOPE (PR-5C.1 — First Operational Command Slice):
      - The registries are DESCRIPTIVE METADATA about the existing system.
-     - `query(name, ...args)` is the FIRST operational routing: it resolves
-       and calls the existing READ-ONLY handler for a registered query and
-       returns its typed result unchanged. It performs no mutation, no
-       persistence, no audit — it is a pass-through over a read-only handler.
-       As of PR-5B exactly ONE query (`employee.filtered`) travels this path.
-     - COMMANDS remain NON-OPERATIONAL: there is deliberately no dispatch/
-       execute surface for commands. `commandHandler` only RESOLVES (returns)
-       a handler; it never invokes it. No mutation, event, or aggregate
-       command is routed through this facade.
-     - Every other read still calls the existing functions directly; only
-       the one migrated query is routed here.
+     - `query(name, ...args)` routes ONE read-only query (`employee.filtered`,
+       PR-5B): resolves and calls the existing read-only handler, returns its
+       typed result unchanged; no mutation/persistence/audit.
+     - `command(name, ...args)` routes ONE state-changing command
+       (`employee.contact.update`, PR-5C.1): resolves and calls the existing
+       handler EXACTLY ONCE and returns its typed outcome. The handler remains
+       the implementation authority (its own validation, mutation, persistence,
+       and audit). This facade adds NO aggregate enforcement and NO
+       authorization — those are explicitly not operational.
+     - There is NO legacy dispatch/ask surface. `commandHandler`/`queryHandler`
+       only RESOLVE (return) a handler; they never invoke it.
+     - Every other read/write still calls the existing functions directly; only
+       the one migrated query and the one migrated command are routed here.
 
    `commandHandler(name)` / `queryHandler(name)` RETURN the existing global
    function (or null) so callers — and the verifier — can confirm every
@@ -55,13 +57,26 @@ const Domain = (function () {
 
     // Operational query routing (PR-5B). Resolves and calls the registered
     // READ-ONLY handler and returns its typed result unchanged. Throws
-    // clearly on an unknown query or missing handler — never a silent
-    // no-op. There is intentionally NO equivalent for commands.
+    // clearly on an unknown query or missing handler — never a silent no-op.
     query: function (name) {
       var q = DOMAIN_QUERIES[name];
       if (!q) throw new Error('Unknown domain query: ' + name);
       var fn = resolve(q.handler);
       if (!fn) throw new Error('Domain query handler not found: ' + q.handler);
+      return fn.apply(null, Array.prototype.slice.call(arguments, 1));
+    },
+
+    // Operational command routing (PR-5C.1). Resolves and calls the registered
+    // handler EXACTLY ONCE and returns its typed outcome unchanged. The handler
+    // remains the implementation authority (its own validation, mutation,
+    // persistence, and audit). Throws clearly on an unknown command or missing
+    // handler. As of PR-5C.1 exactly ONE command (employee.contact.update) is
+    // routed here; no aggregate enforcement or authorization is performed.
+    command: function (name) {
+      var c = DOMAIN_COMMANDS[name];
+      if (!c) throw new Error('Unknown domain command: ' + name);
+      var fn = resolve(c.handler);
+      if (!fn) throw new Error('Domain command handler not found: ' + c.handler);
       return fn.apply(null, Array.prototype.slice.call(arguments, 1));
     }
   });
