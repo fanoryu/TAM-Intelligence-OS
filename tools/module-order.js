@@ -62,14 +62,6 @@ module.exports = [
   'people/payroll-workspace.js',
   // --- supplemental payroll engine (v2.7.0) ---
   'people/supplemental-engine.js',
-  // --- domain layer (Enterprise Foundation, PR-5): additive, behavior-neutral
-  //     single source of truth over the existing handlers. Loaded after all
-  //     domain functions are defined and before bootstrap. ---
-  'domain/aggregates.js',
-  'domain/commands.js',
-  'domain/queries.js',
-  'domain/events.js',
-  'domain/domain-layer.js',
   // --- bootstrap (19) ---
   'core/app-bootstrap.js'
 ];
