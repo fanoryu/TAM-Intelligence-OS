@@ -322,9 +322,12 @@ check(dist.includes("Domain.query('employee.filtered')"), 'migrated query call p
 check(/'employee\.filtered':\s*Object\.freeze\(\{[^}]*handler:\s*'employeesFiltered'/.test(qrySrc), 'employee.filtered query registered to handler employeesFiltered');
 // Exactly ONE command migrated (distinct routed command ids), and it is the approved contact command.
 const migratedCmdIds = Array.from(new Set((srcJs.match(/Domain\.command\('([^']+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1])));
-check(migratedCmdIds.length === 1 && migratedCmdIds[0] === 'employee.contact.update', 'exactly one command id routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
+const EXPECTED_OP_CMDS = ['employee.contact.update','employee.employment.update'];
+check(migratedCmdIds.length === 2 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly two command ids routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
 check(dist.includes("Domain.command('employee.contact.update'"), 'migrated command call present in dist');
+check(dist.includes("Domain.command('employee.employment.update'"), 'employment command call present in dist');
 check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateEmployeeContact'/.test(cmdSrc), 'employee.contact.update registered to handler updateEmployeeContact');
+check(/'employee\.employment\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateEmployeeEmployment'/.test(cmdSrc), 'employee.employment.update registered to handler updateEmployeeEmployment');
 // The facade command() calls the handler exactly once (a single fn.apply, no loop).
 const cmdMethod = (facSrc.match(/command:\s*function[\s\S]*?\n    \}/)||[''])[0];
 check((cmdMethod.match(/fn\.apply\(/g)||[]).length === 1 && !/for\s*\(|while\s*\(|forEach/.test(cmdMethod), 'Domain.command invokes the handler exactly once (single fn.apply, no loop)');
@@ -345,7 +348,7 @@ check(/success:\s*true/.test(ucBody) && /success:\s*false/.test(ucBody), 'contac
 // the empForm submit handler exists and Domain.command is used exactly once in
 // this module (the contact command only) — the monolithic save is not routed.
 check(/querySelector\('#empForm'\)\.addEventListener\('submit'/.test(empSrc), 'full employee save (empForm) submit handler still present');
-check((empSrc.match(/Domain\.command\(/g)||[]).length === 1, 'exactly one Domain.command() call site in employees.js (the contact command; monolithic save stays direct)');
+check((empSrc.match(/Domain\.command\(/g)||[]).length === 2, 'exactly two Domain.command() call sites in employees.js (contact + employment; monolithic save stays direct)');
 
 // PR-5D "The Steward" — first aggregate boundary (EmployeeContactAggregate).
 console.log('== EMPLOYEE CONTACT AGGREGATE (PR-5D — business authority) ==');
@@ -358,7 +361,7 @@ check(/const EmployeeContactAggregate = Object\.freeze\(/.test(aggSrc2), 'Employ
 check(/prepare:\s*function/.test(aggSrc2), 'aggregate exposes prepare()');
 // Exactly one operational aggregate: only one *Aggregate object with a prepare() exists in js/domain.
 const aggregateDefs = (srcJs.match(/const \w*Aggregate = Object\.freeze\(\{\s*[\s\S]*?prepare:\s*function/g)||[]).length;
-check(aggregateDefs === 1, 'exactly one operational aggregate defined (found '+aggregateDefs+')');
+check(aggregateDefs === 2, 'exactly two operational aggregates defined (found '+aggregateDefs+')');
 // The command registry binds the aggregate as the boundary for the one command.
 check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeContactAggregate'/.test(cmdSrc), 'employee.contact.update declares boundary EmployeeContactAggregate');
 // The facade routes a bounded command through the aggregate before the handler.
@@ -381,6 +384,58 @@ check(/return \{ ok: false, error: 'EmployeeNotFound' \}/.test(aggSrc2) && /erro
 check(ucBody.includes('persistEmployees('), 'handler still performs persistence (persistEmployees)');
 check(/e\.history/.test(ucBody) || /history/.test(ucBody), 'handler still performs history/audit');
 check(/e\[k\] = applied\[k\]|e\[k\]=applied\[k\]/.test(ucBody), 'handler still performs the field mutation');
+
+// PR-5E "The Custodian" — second aggregate boundary (EmployeeEmploymentAggregate).
+console.log('== EMPLOYEE EMPLOYMENT AGGREGATE (PR-5E — business authority) ==');
+const empAggPath = path.join(root,'js','domain','employee-employment-aggregate.js');
+check(fs.existsSync(empAggPath), 'aggregate module present: js/domain/employee-employment-aggregate.js');
+check(jsFiles.indexOf('domain/employee-employment-aggregate.js') !== -1, 'module-order.js includes domain/employee-employment-aggregate.js');
+check(indexHtml.includes('<script src="js/domain/employee-employment-aggregate.js"></script>'), 'index.html includes domain/employee-employment-aggregate.js');
+// Load order: the employment aggregate loads before the facade.
+check(jsFiles.indexOf('domain/employee-employment-aggregate.js') < jsFiles.indexOf('domain/domain-layer.js'), 'employment aggregate loads before domain-layer.js');
+const empAggSrc = read(empAggPath);
+check(/const EmployeeEmploymentAggregate = Object\.freeze\(/.test(empAggSrc), 'EmployeeEmploymentAggregate is a frozen object');
+check(/prepare:\s*function/.test(empAggSrc), 'employment aggregate exposes prepare()');
+// EmployeeContactAggregate remains operational; both boundaries are declared.
+check(/const EmployeeContactAggregate = Object\.freeze\(/.test(aggSrc2), 'EmployeeContactAggregate remains an operational aggregate');
+check(/'employee\.employment\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeEmploymentAggregate'/.test(cmdSrc), 'employee.employment.update declares boundary EmployeeEmploymentAggregate');
+check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeContactAggregate'/.test(cmdSrc), 'employee.contact.update still declares boundary EmployeeContactAggregate');
+// Exactly one operational query remains (employee.filtered) — unchanged by PR-5E.
+check(migratedQueryIds.length === 1 && migratedQueryIds[0] === 'employee.filtered', 'employee.filtered remains the only operational query');
+// Employment aggregate PURITY — no side effects (comments stripped).
+const empAggCode = empAggSrc.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+[['State mutation', /State\s*[.[]/],
+ ['persistEmployees', /persistEmployees\s*\(/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/]
+].forEach(([label,re])=>check(!re.test(empAggCode), 'employment aggregate never performs '+label));
+// Employment aggregate returns only a sanitized patch or typed business failures.
+check(/return \{ ok: true, patch:/.test(empAggSrc), 'employment aggregate returns only a sanitized patch on success');
+['EmployeeNotFound','NoEmploymentFieldsProvided','InvalidEmploymentStatus','InvalidContractType'].forEach((err)=>
+  check(empAggSrc.includes("error: '"+err+"'"), 'employment aggregate returns typed business failure: '+err));
+// Employment field allowlist is exactly the five approved fields.
+check(/const EMPLOYEE_EMPLOYMENT_FIELDS = \['jobTitle','department','employmentStatus','joinDate','contractType'\]/.test(empSrc), 'employment command allowlist is exactly [jobTitle, department, employmentStatus, joinDate, contractType]');
+// Handler owns mutation/persistence/history/rollback (implementation authority).
+const ueStart = empSrc.indexOf('async function updateEmployeeEmployment(');
+check(ueStart !== -1, 'updateEmployeeEmployment handler present');
+const ueRest = ueStart!==-1 ? empSrc.slice(ueStart+1) : '';
+const ueNext = ueRest.search(/\n(async function|function) /);
+const ueBody = ueNext>=0 ? ueRest.slice(0, ueNext) : ueRest;
+['monthlyBaseSalary','email','phone','notes','bankName','bankAccount','bankAccountNumber','bankAccountHolder','active','fullName','employeeId','createdAt'].forEach((f)=>
+  check(!ueBody.includes(f), 'employment handler does not touch forbidden field: '+f));
+check((ueBody.match(/persistEmployees\(/g)||[]).length === 1, 'employment handler persists exactly once (persistEmployees)');
+check(/e\[k\] = applied\[k\]/.test(ueBody), 'employment handler performs the field mutation');
+check(/e\.updatedAt = new Date/.test(ueBody), 'employment handler updates updatedAt');
+check(/event:'employment-edited'/.test(ueBody), 'employment handler appends exactly one employment-edited history entry');
+check(/e\.history\.pop\(\)/.test(ueBody) && /e\.updatedAt = prevUpdatedAt/.test(ueBody), 'employment handler performs full rollback on persist failure');
+check(/error:'PersistFailed'/.test(ueBody), 'employment handler returns PersistFailed on persistence failure');
+check(/success:\s*true/.test(ueBody) && /success:\s*false/.test(ueBody), 'employment handler returns a typed success/failure outcome');
+check(!/logActivity\(/.test(ueBody), 'employment handler adds no duplicate audit call (history-only)');
+// Aggregate failure never invokes the handler: the facade returns early on !decision.ok.
+check(/decision\.ok !== true/.test(facSrc) && /return \{ success: false, error:/.test(facSrc), 'facade returns a typed failure without invoking the handler when the aggregate rejects');
 
 // Extract command/query identifiers and their handler names.
 function idKeys(src){ return (src.match(/^\s*'([a-z][a-zA-Z]*\.[a-zA-Z]+)':/gm)||[]).map(s=>s.match(/'([^']+)'/)[1]); }
