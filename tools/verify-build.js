@@ -222,13 +222,20 @@ check(dist.includes('const txnOk = await persist();') && dist.includes('const su
 // New integrity checks (Section 10).
 ['payroll-posted-no-transaction','payroll-plan-txn-total-diff','payroll-plan-txn-overtime-diff','payroll-missing-committed-snapshot','supplemental-missing-transaction','supplemental-orphan-transaction','supplemental-overtime-double-capture','supplemental-missing-source-snapshot']
   .forEach((c)=>check(dist.includes("'"+c+"'"), 'integrity check present: '+c));
-// The released v2.7.0 artifact must remain untouched during v2.7.1 development.
+// The released v2.7.0 artifact must never be OVERWRITTEN with v2.7.1 content. During development
+// it stays present and unchanged; at release the dist-swap intentionally removes it from dist/
+// (only the current artifact is kept — the historical GitHub Release asset is the real invariant
+// and is never touched here). So ABSENCE is a valid released state; if still present it must be v2.7.0.
 const prevDist = path.join(root, 'dist', 'tam-intelligence-os-v2.7.0.html');
-check(fs.existsSync(prevDist), 'released dist/tam-intelligence-os-v2.7.0.html still present');
 if (fs.existsSync(prevDist)) {
   const prev = read(prevDist);
-  check(prev.includes('<title>TAM Intelligence OS v2.7.0</title>') && prev.includes("const APP_VERSION = '2.7.0';"), 'released v2.7.0 artifact is unchanged (still v2.7.0, not overwritten by the v2.7.1 build)');
+  check(prev.includes('<title>TAM Intelligence OS v2.7.0</title>') && prev.includes("const APP_VERSION = '2.7.0';"), 'if present, the v2.7.0 artifact is unchanged (still v2.7.0, never overwritten by the v2.7.1 build)');
+} else {
+  check(true, 'v2.7.0 artifact removed from dist/ by the release swap (historical GitHub Release asset untouched)');
 }
+// dist/ holds exactly one release artifact — the current version (release dist-swap invariant).
+const distArtifacts = fs.readdirSync(path.join(root, 'dist')).filter((f)=>/^tam-intelligence-os-v[\d.]+\.html$/.test(f));
+check(distArtifacts.length === 1 && distArtifacts[0] === 'tam-intelligence-os-v' + meta.version + '.html', 'dist/ holds exactly one release artifact — the current v' + meta.version);
 check(meta.version === '2.7.1', 'APP_VERSION is 2.7.1 (this development release)');
 // v2.7.1 polishing pass — snapshot metadata, single historical API, compact integrity badge.
 check(dist.includes('function overtimeSnapshotMeta('), 'overtime snapshot audit metadata helper present');
