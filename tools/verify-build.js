@@ -346,6 +346,42 @@ check(/success:\s*true/.test(ucBody) && /success:\s*false/.test(ucBody), 'contac
 // this module (the contact command only) — the monolithic save is not routed.
 check(/querySelector\('#empForm'\)\.addEventListener\('submit'/.test(empSrc), 'full employee save (empForm) submit handler still present');
 check((empSrc.match(/Domain\.command\(/g)||[]).length === 1, 'exactly one Domain.command() call site in employees.js (the contact command; monolithic save stays direct)');
+
+// PR-5D "The Steward" — first aggregate boundary (EmployeeContactAggregate).
+console.log('== EMPLOYEE CONTACT AGGREGATE (PR-5D — business authority) ==');
+const aggPath = path.join(root,'js','domain','employee-contact-aggregate.js');
+check(fs.existsSync(aggPath), 'aggregate module present: js/domain/employee-contact-aggregate.js');
+check(jsFiles.indexOf('domain/employee-contact-aggregate.js') !== -1, 'module-order.js includes domain/employee-contact-aggregate.js');
+check(indexHtml.includes('<script src="js/domain/employee-contact-aggregate.js"></script>'), 'index.html includes domain/employee-contact-aggregate.js');
+const aggSrc2 = read(aggPath);
+check(/const EmployeeContactAggregate = Object\.freeze\(/.test(aggSrc2), 'EmployeeContactAggregate is a frozen object');
+check(/prepare:\s*function/.test(aggSrc2), 'aggregate exposes prepare()');
+// Exactly one operational aggregate: only one *Aggregate object with a prepare() exists in js/domain.
+const aggregateDefs = (srcJs.match(/const \w*Aggregate = Object\.freeze\(\{\s*[\s\S]*?prepare:\s*function/g)||[]).length;
+check(aggregateDefs === 1, 'exactly one operational aggregate defined (found '+aggregateDefs+')');
+// The command registry binds the aggregate as the boundary for the one command.
+check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeContactAggregate'/.test(cmdSrc), 'employee.contact.update declares boundary EmployeeContactAggregate');
+// The facade routes a bounded command through the aggregate before the handler.
+check(/c\.boundary/.test(facSrc) && /agg\.prepare\(/.test(facSrc), 'Domain.command routes bounded commands through the aggregate before the handler');
+// Aggregate PURITY — it must have no side effects. Assert its CODE (comments
+// stripped) contains none of the forbidden operations. It reads existence via
+// empById only.
+const aggCode = aggSrc2.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+[['State mutation', /State\s*[.[]/],
+ ['persistEmployees', /persistEmployees\s*\(/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['UI render', /\brender\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/]
+].forEach(([label,re])=>check(!re.test(aggCode), 'aggregate never performs '+label));
+// Aggregate returns only a sanitized patch or a typed business failure.
+check(/return \{ ok: true, patch:/.test(aggSrc2), 'aggregate returns only a sanitized patch on success');
+check(/return \{ ok: false, error: 'EmployeeNotFound' \}/.test(aggSrc2) && /error: 'NoContactFieldsProvided'/.test(aggSrc2), 'aggregate returns typed business failures (EmployeeNotFound / NoContactFieldsProvided)');
+// Handler separation: mutation/persistence/history remain in the handler, NOT the aggregate.
+check(ucBody.includes('persistEmployees('), 'handler still performs persistence (persistEmployees)');
+check(/e\.history/.test(ucBody) || /history/.test(ucBody), 'handler still performs history/audit');
+check(/e\[k\] = applied\[k\]|e\[k\]=applied\[k\]/.test(ucBody), 'handler still performs the field mutation');
+
 // Extract command/query identifiers and their handler names.
 function idKeys(src){ return (src.match(/^\s*'([a-z][a-zA-Z]*\.[a-zA-Z]+)':/gm)||[]).map(s=>s.match(/'([^']+)'/)[1]); }
 function handlerNames(src){ return (src.match(/handler:\s*'([A-Za-z0-9_]+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1]); }

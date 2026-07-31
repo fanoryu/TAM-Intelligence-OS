@@ -10793,7 +10793,7 @@ const DOMAIN_INVARIANTS = Object.freeze([
 const DOMAIN_COMMANDS = Object.freeze({
   // PR-5C.1 — first OPERATIONAL command routed through Domain.command().
   // Narrow, non-financial, non-lifecycle: contact fields only.
-  'employee.contact.update': Object.freeze({ aggregate: 'Employee', handler: 'updateEmployeeContact', transition: 'update contact fields (phone/email/notes) — OPERATIONAL via Domain.command()' }),
+  'employee.contact.update': Object.freeze({ aggregate: 'Employee', boundary: 'EmployeeContactAggregate', handler: 'updateEmployeeContact', transition: 'update contact fields (phone/email/notes) — OPERATIONAL via Domain.command(); business authority = EmployeeContactAggregate (PR-5D)' }),
   // Payroll
   'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
   // Finance
@@ -10852,6 +10852,61 @@ const DOMAIN_EVENTS = Object.freeze({
   ImportCommitted:         'import.commit',
   ImportUndone:            'import.undo'
 });
+
+/* ============================================================
+   DOMAIN LAYER — EMPLOYEE CONTACT AGGREGATE (PR-5D "The Steward")
+   ------------------------------------------------------------
+   The FIRST aggregate boundary. It is the BUSINESS AUTHORITY for the
+   employee.contact.update command: it decides whether the command may
+   proceed and what the sanitized input is. It is pure until the handler
+   runs and has NO side effects.
+
+   Contract (enforced by the verifier):
+     - MUST NOT mutate State, call persistEmployees(), append history,
+       render UI, access localStorage, or perform audit logging.
+     - MAY only READ (existence check via empById) and RETURN either a
+       sanitized patch or a typed business failure.
+
+   The implementation authority remains updateEmployeeContact(), which
+   performs every mutation, persistence, and history/audit effect. The
+   handler keeps its own guards (defense in depth); this aggregate adds a
+   business-decision layer in front of it and changes no runtime behavior.
+
+   prepare(id, patch) returns:
+     { ok: true,  patch: <sanitized {phone?,email?,notes?}> }
+     { ok: false, error: 'EmployeeNotFound' | 'NoContactFieldsProvided' }
+   ============================================================ */
+const EmployeeContactAggregate = Object.freeze({
+  prepare: function (id, patch) {
+    // 1. Employee existence (read-only; never mutates State).
+    var e = (typeof empById === 'function') ? empById(id) : null;
+    if (!e) return { ok: false, error: 'EmployeeNotFound' };
+
+    // 2. Contact allowlist + 3. normalization (trim). Every other property
+    //    is discarded before the patch reaches the handler.
+    patch = patch || {};
+    var allow = (typeof EMPLOYEE_CONTACT_FIELDS !== 'undefined') ? EMPLOYEE_CONTACT_FIELDS : ['phone', 'email', 'notes'];
+    var clean = {};
+    for (var i = 0; i < allow.length; i++) {
+      var k = allow[i];
+      if (Object.prototype.hasOwnProperty.call(patch, k)) {
+        clean[k] = (patch[k] == null ? '' : String(patch[k])).trim();
+      }
+    }
+
+    // 5. Business error: no allowed field supplied.
+    var keys = Object.keys(clean);
+    if (keys.length === 0) return { ok: false, error: 'NoContactFieldsProvided' };
+
+    // 4. Return the sanitized command input only. No mutation performed.
+    return { ok: true, patch: clean };
+  }
+});
+
+// Expose on the global object so the Domain facade can resolve this aggregate by
+// name (top-level `const` objects are not attached to `window`, unlike function
+// declarations). No eval; classic shared global scope.
+if (typeof window !== 'undefined') { window.EmployeeContactAggregate = EmployeeContactAggregate; }
 
 /* ============================================================
    DOMAIN LAYER — READ-ONLY REGISTRY FACADE (Enterprise Foundation, PR-5A)
@@ -10921,18 +10976,31 @@ const Domain = (function () {
       return fn.apply(null, Array.prototype.slice.call(arguments, 1));
     },
 
-    // Operational command routing (PR-5C.1). Resolves and calls the registered
-    // handler EXACTLY ONCE and returns its typed outcome unchanged. The handler
-    // remains the implementation authority (its own validation, mutation,
-    // persistence, and audit). Throws clearly on an unknown command or missing
-    // handler. As of PR-5C.1 exactly ONE command (employee.contact.update) is
-    // routed here; no aggregate enforcement or authorization is performed.
+    // Operational command routing (PR-5C.1 + PR-5D). Resolves the registered
+    // handler and calls it EXACTLY ONCE, returning its typed outcome unchanged.
+    // PR-5D: if the command declares a `boundary` aggregate, that aggregate is
+    // the BUSINESS AUTHORITY — it runs first and either returns a typed business
+    // failure (the handler is then NOT called) or the sanitized input passed on
+    // to the handler. The handler remains the IMPLEMENTATION AUTHORITY (its own
+    // validation, mutation, persistence, and audit). Throws only on an unknown
+    // command / missing handler / missing aggregate (programmer errors).
     command: function (name) {
       var c = DOMAIN_COMMANDS[name];
       if (!c) throw new Error('Unknown domain command: ' + name);
       var fn = resolve(c.handler);
       if (!fn) throw new Error('Domain command handler not found: ' + c.handler);
-      return fn.apply(null, Array.prototype.slice.call(arguments, 1));
+      var args = Array.prototype.slice.call(arguments, 1);
+      if (c.boundary) {
+        // Aggregates are top-level const objects exposed on the global object.
+        var agg = (typeof window !== 'undefined') ? window[c.boundary] : null;
+        if (!agg || typeof agg.prepare !== 'function') throw new Error('Aggregate not found: ' + c.boundary);
+        var decision = agg.prepare(args[0], args[1]);   // business authority decides
+        if (!decision || decision.ok !== true) {
+          return { success: false, error: (decision && decision.error) || 'InvalidCommand' };
+        }
+        args = [args[0], decision.patch];   // sanitized command input
+      }
+      return fn.apply(null, args);   // implementation authority mutates
     }
   });
 })();
