@@ -69,6 +69,7 @@ module.exports = [
   'domain/commands.js',
   'domain/queries.js',
   'domain/events.js',
+  'domain/employee-contact-aggregate.js',
   'domain/domain-layer.js',
   // --- bootstrap (19) ---
   'core/app-bootstrap.js'

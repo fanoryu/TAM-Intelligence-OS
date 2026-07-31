@@ -66,18 +66,31 @@ const Domain = (function () {
       return fn.apply(null, Array.prototype.slice.call(arguments, 1));
     },
 
-    // Operational command routing (PR-5C.1). Resolves and calls the registered
-    // handler EXACTLY ONCE and returns its typed outcome unchanged. The handler
-    // remains the implementation authority (its own validation, mutation,
-    // persistence, and audit). Throws clearly on an unknown command or missing
-    // handler. As of PR-5C.1 exactly ONE command (employee.contact.update) is
-    // routed here; no aggregate enforcement or authorization is performed.
+    // Operational command routing (PR-5C.1 + PR-5D). Resolves the registered
+    // handler and calls it EXACTLY ONCE, returning its typed outcome unchanged.
+    // PR-5D: if the command declares a `boundary` aggregate, that aggregate is
+    // the BUSINESS AUTHORITY — it runs first and either returns a typed business
+    // failure (the handler is then NOT called) or the sanitized input passed on
+    // to the handler. The handler remains the IMPLEMENTATION AUTHORITY (its own
+    // validation, mutation, persistence, and audit). Throws only on an unknown
+    // command / missing handler / missing aggregate (programmer errors).
     command: function (name) {
       var c = DOMAIN_COMMANDS[name];
       if (!c) throw new Error('Unknown domain command: ' + name);
       var fn = resolve(c.handler);
       if (!fn) throw new Error('Domain command handler not found: ' + c.handler);
-      return fn.apply(null, Array.prototype.slice.call(arguments, 1));
+      var args = Array.prototype.slice.call(arguments, 1);
+      if (c.boundary) {
+        // Aggregates are top-level const objects exposed on the global object.
+        var agg = (typeof window !== 'undefined') ? window[c.boundary] : null;
+        if (!agg || typeof agg.prepare !== 'function') throw new Error('Aggregate not found: ' + c.boundary);
+        var decision = agg.prepare(args[0], args[1]);   // business authority decides
+        if (!decision || decision.ok !== true) {
+          return { success: false, error: (decision && decision.error) || 'InvalidCommand' };
+        }
+        args = [args[0], decision.patch];   // sanitized command input
+      }
+      return fn.apply(null, args);   // implementation authority mutates
     }
   });
 })();
