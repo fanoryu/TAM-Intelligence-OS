@@ -236,7 +236,7 @@ if (fs.existsSync(prevDist)) {
 // dist/ holds exactly one release artifact — the current version (release dist-swap invariant).
 const distArtifacts = fs.readdirSync(path.join(root, 'dist')).filter((f)=>/^tam-intelligence-os-v[\d.]+\.html$/.test(f));
 check(distArtifacts.length === 1 && distArtifacts[0] === 'tam-intelligence-os-v' + meta.version + '.html', 'dist/ holds exactly one release artifact — the current v' + meta.version);
-check(meta.version === '2.7.2', 'APP_VERSION is 2.7.2 (this development release)');
+check(meta.version === '2.7.3', 'APP_VERSION is 2.7.3 (this development release)');
 // v2.7.1 polishing pass — snapshot metadata, single historical API, compact integrity badge.
 check(dist.includes('function overtimeSnapshotMeta('), 'overtime snapshot audit metadata helper present');
 check((dist.match(/overtimeSnapshotMeta:\s*overtimeSnapshotMeta\(/g)||[]).length >= 2, 'both commit pipelines store overtimeSnapshotMeta {recordCount,totalHours}');

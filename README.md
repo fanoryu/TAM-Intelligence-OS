@@ -6,7 +6,7 @@ dependencies.
 
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.7.2-blue)
+![Version](https://img.shields.io/badge/version-2.7.3-blue)
 ![License](https://img.shields.io/badge/license-proprietary%20%26%20confidential-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
@@ -34,38 +34,36 @@ Design principles:
   app. The only external network references are the XLSX parser and web fonts (CDN).
 - **Two shippable forms.** A modular development source and a single portable HTML file that behaves
   identically.
-- **Data-safety first.** A 181-check verifier guards the persisted-data schema, storage keys,
+- **Data-safety first.** A 188-check verifier guards the persisted-data schema, storage keys,
   migration flags, and build fidelity on every change.
 
 ---
 
 ## Current release
 
-**v2.7.2 — Persistence & Transactional Integrity** · `SCHEMA_VERSION` 6
+**v2.7.3 — Supplemental-Aware Payroll History** · `SCHEMA_VERSION` 6
 
-A focused patch that fixes persistence/transactional-integrity defects in which a storage-write result
-was ignored or dropped. No new storage key, no schema change, no new migration; no committed
-payroll/finance amount or historical record is rewritten.
+A reporting/presentation patch so Payroll History correctly represents months that also have a
+Supplemental Payment. No new storage key, no schema change, no persistence or finance behaviour change;
+no historical record is rewritten.
 
-- **Strict persistence results** — `persistHR()` and every helper (`persist`, `saveSettings`,
-  `saveBackups`, the HR wrappers) now return a strict `true`/`false`, so callers can react to a failed
-  write instead of assuming success.
-- **Atomic supplemental posting** — fixes a critical bug where a dropped return value made posting
-  always take the failure path, orphaning a Posted supplemental against a rolled-back transaction. On
-  success exactly one Planned transaction exists with valid two-way links; on failure the rollback is
-  verified and nothing is left orphaned.
-- **Transaction-safe restore** — Complete Backup restore validates first, keeps a full pre-restore
-  snapshot, checks every write, rolls back in memory **and** re-persists originals on any failure, and
-  reports success only when every write succeeds.
-- **Checked execution** — transaction execution persists and verifies before writing an audit event or
-  closing a linked supplemental; a failed write restores the exact original and reports clearly.
-- **Startup recovery** — a supplemental left orphaned by the earlier bug is conservatively restored to a
-  re-postable Approved state with an audit entry; no monetary value is altered.
+- **Supplemental-aware Payroll History** — the Employee Detail Payroll History table now shows
+  **Base Payroll · Payroll OT · Supplemental · Total Compensation · Stage**, so overtime paid after
+  payroll posting is no longer invisible.
+- **`payrollTotalCompensation()` read-model** — a read-only aggregate: Total Compensation = immutable
+  Base Payroll + Payroll Overtime + committed (Posted/Executed) supplementals. The base payroll and its
+  finance transaction are never modified or redefined.
+- **Committed vs pending** — only Posted/Executed supplementals count toward Total Compensation;
+  Draft/Review/Approved appear as a subtle "Pending" figure and are excluded; Cancelled is ignored. The
+  Supplemental cell also shows a document count (e.g. "2 Supplementals").
+- **Clearer integrity wording** — a legacy (pre-v2.7.1) supplemental with no frozen source snapshot is
+  now an informational finding (display-only, payment unaffected), distinct from one approved under
+  v2.7.1+ that is genuinely missing its snapshot (a warning to investigate).
 
-Builds on the **v2.7.1 Payroll Integrity & Reporting Foundation** and the **v2.7.0 Supplemental Payroll
-Engine**. Download the portable build from the release page:
-**[Release v2.7.2](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.2)** →
-`tam-intelligence-os-v2.7.2.html`. See [`CHANGELOG.md`](CHANGELOG.md) and
+Builds on the **v2.7.2 Persistence & Transactional Integrity** patch and the **v2.7.1 Payroll Integrity
+& Reporting Foundation**. Download the portable build from the release page:
+**[Release v2.7.3](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.3)** →
+`tam-intelligence-os-v2.7.3.html`. See [`CHANGELOG.md`](CHANGELOG.md) and
 [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
 
 Two supported outputs:
@@ -73,7 +71,7 @@ Two supported outputs:
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (45 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/`), one shared global scope, no ES modules | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.7.2.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.7.3.html` |
 
 ---
 
@@ -114,7 +112,7 @@ Status legend: **Available** = shipped and in use · **Partial** = usable with d
 | Employees | Available | Records, work schedules, search/filters; bank from Bank Master, masked account |
 | Bank Accounts (Company) | Available | Settings → Bank Accounts: CRUD, purpose/status, masked numbers |
 | Indonesian Bank Master | Available | Reusable grouped bank reference (constant, single source) |
-| Employee Detail | Available | Profile + contract, payroll & overtime timeline |
+| Employee Detail | Available | Profile + contract, payroll & overtime timeline; supplemental-aware Payroll History with Total Compensation |
 | Contracts | Available | Contract lifecycle, coverage per month |
 | Payroll Workspace | Available | Draft → Review → Approved → Posted → Executed; generic bulk selection |
 | Payroll Detail | Available | Read-only payroll + generated finance transaction; integrity indicator |
@@ -161,9 +159,9 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(181 checks)"]
+    VERIFY["tools/verify-build.js<br/>(188 checks)"]
   end
-  DIST["dist/tam-intelligence-os-v2.7.2.html<br/>(portable single file)"]
+  DIST["dist/tam-intelligence-os-v2.7.3.html<br/>(portable single file)"]
 
   IDX --> JS --> STATE --> LS
   CSS --> IDX
@@ -216,7 +214,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.7.2.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.7.3.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
@@ -243,7 +241,7 @@ python -m http.server 8000
 
 Then open <http://localhost:8000>. Any static server works (`npx serve`, VS Code Live Server). The
 portable build in `dist/` — or the asset from
-[Release v2.7.2](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.2) — can also be
+[Release v2.7.3](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.3) — can also be
 opened directly in a browser.
 
 ---
@@ -278,7 +276,7 @@ Build the portable single file from the modular source:
 node tools/build-single-file.js
 ```
 
-Verify (181 checks):
+Verify (188 checks):
 
 ```bash
 node tools/verify-build.js
@@ -321,7 +319,7 @@ Releases are tag-driven and guarded end-to-end (see [`docs/RELEASE-PROCESS.md`](
 
 ```mermaid
 flowchart LR
-  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (181)"]
+  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (188)"]
   V --> C["commit source + dist"] --> T["push tag vX.Y.Z"]
   T --> GA["GitHub Actions: Release"]
   GA --> GATE{"tag matches<br/>v-APP_VERSION?"}
@@ -379,6 +377,8 @@ changes.
 Directions only — no release numbers are assigned unless already approved.
 
 **Released**
+- Supplemental-Aware Payroll History — `payrollTotalCompensation()` read-model, Total Compensation
+  reporting, pending/committed distinction (v2.7.3)
 - Persistence & Transactional Integrity — strict persistence results, atomic supplemental posting,
   transaction-safe restore, checked execution, orphan recovery (v2.7.2)
 - Payroll Integrity & Reporting Foundation — historical source-of-truth model, immutable committed

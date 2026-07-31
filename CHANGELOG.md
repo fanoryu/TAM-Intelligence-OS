@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.7.3 — Supplemental-Aware Payroll History
+
+**Type:** Reporting/presentation patch. **No** persistence, finance, schema, or storage-key change
+(still 15 keys, `SCHEMA_VERSION` 6); no historical record is rewritten.
+
+### Added
+- `payrollTotalCompensation(pp)` — a read-only aggregate over the immutable `payrollHistoricalSnapshot()`
+  plus committed supplementals. Total Compensation = Base Payroll + Payroll Overtime + committed
+  (Posted/Executed) supplementals; `baseTotal` is never redefined.
+
+### Changed
+- Employee Detail → Payroll History columns are now Base Payroll · Payroll OT · Supplemental · Total
+  Compensation · Stage, with a document count and a subtle Pending figure (Draft/Review/Approved,
+  excluded from the total; Cancelled ignored).
+- Integrity Check distinguishes a legacy (pre-v2.7.1) missing source snapshot (info, display-only) from
+  one approved under v2.7.1+ that is genuinely missing (warning). Verifier: **188** checks.
+
+## 2.7.2 — Persistence & Transactional Integrity
+
+**Type:** Persistence/transactional-integrity fix. **No** new storage key (still 15) and **no**
+`SCHEMA_VERSION` change (still 6); no committed payroll/finance amount or historical record is rewritten.
+
+### Fixed
+- Critical: `persistHR()` did not return its boolean, so Supplemental posting always took the failure
+  path — rolling the finance transaction out of storage while the supplemental stayed Posted, leaving an
+  orphaned supplemental after reload. Persistence helpers now return a strict `true`/`false`.
+- High: Complete Backup restore ignored write results; it is now transaction-safe (validate → snapshot →
+  checked writes → in-memory + storage rollback → `{ok}`).
+- Medium: transaction execution ignored persistence failure; it now snapshots, checks the write, rolls
+  back on failure, and only then writes the audit event / closes a linked supplemental.
+
+### Added
+- Startup recovery for the specific failed-post orphan supplemental (restored to a re-postable Approved
+  state with an audit entry; no monetary value altered). Verifier: **181** checks.
+
 ## 2.7.1 — Payroll Integrity & Reporting Foundation
 
 **Type:** Post-release integrity fix. **No** new storage key (still 15) and **no** `SCHEMA_VERSION`
