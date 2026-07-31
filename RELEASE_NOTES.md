@@ -53,9 +53,9 @@ storage key, and without rewriting any historical record.
 - The tracked company workbook remains a documented, accepted exception (untouched).
 
 ## Git Information
-- Commit: _pending approval — not committed_
-- Tag: _pending approval — not tagged_
+- Release commit (tagged): 97b8e89fa708b7b187f0c02a397d26c73983d063
+- Tag: v2.7.3 (annotated)
 - Branch: main
 
 ## Release Asset
-- dist/tam-intelligence-os-v2.7.3.html
+- dist/tam-intelligence-os-v2.7.3.html (776,541 bytes)
