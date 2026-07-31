@@ -5770,16 +5770,18 @@ function renderEmployeeDetail(main){
     <div class="card" style="margin-bottom:14px;">
       <h3>Payroll History</h3>
       <div class="table-wrap"><table>
-        <thead><tr><th>Period</th><th>Contract</th><th class="num">Base</th><th class="num">Overtime</th><th class="num">Total</th><th>Stage</th></tr></thead>
-        <tbody>${empPlans.map(p=>{ const snap=payrollHistoricalSnapshot(p); return `<tr>
+        <thead><tr><th>Period</th><th>Contract</th><th class="num">Base Payroll</th><th class="num">Payroll OT</th><th class="num">Supplemental</th><th class="num">Total Compensation</th><th>Stage</th></tr></thead>
+        <tbody>${empPlans.map(p=>{ const tc=payrollTotalCompensation(p); return `<tr>
           <td class="dim">${escapeHtml(p.month||'')} ${p.year||''}</td>
           <td class="dim">${escapeHtml(p.contractNumber||'—')}</td>
-          <td class="num">${fmtIDR(snap.baseSalary)}</td>
-          <td class="num">${fmtIDR(snap.overtimeAmount)}</td>
-          <td class="num"><b>${fmtIDR(snap.totalPayroll)}</b>${payrollSnapshotHasIssue(p)?' <span class="pill pill-status-cancelled" title="Disagrees with the committed transaction — see Payroll Detail">!</span>':''}</td>
-          <td>${payrollStagePill(p)}</td>
-        </tr>`; }).join('') || '<tr><td colspan="6" class="empty">No payroll generated for this employee yet.</td></tr>'}</tbody>
+          <td class="num">${fmtIDR(tc.baseSalary)}</td>
+          <td class="num">${fmtIDR(tc.overtimeAmount)}</td>
+          <td class="num">${tc.supplemental>0?`${fmtIDR(tc.supplemental)}<div class="faint" style="font-size:10px;">${tc.supplementalCount} Supplemental${tc.supplementalCount===1?'':'s'}</div>`:'<span class="dim">—</span>'}${tc.pendingSupplemental>0?`<div class="faint" style="font-size:10px;" title="Pending supplemental (Draft/Review/Approved) — not yet paid; excluded from Total Compensation">Pending ${fmtIDR(tc.pendingSupplemental)}</div>`:''}</td>
+          <td class="num"><b>${fmtIDR(tc.totalCompensation)}</b>${payrollSnapshotHasIssue(p)?' <span class="pill pill-status-cancelled" title="Base payroll disagrees with its committed transaction — see Payroll Detail">!</span>':''}</td>
+          <td style="font-weight:600;">${payrollStagePill(p)}</td>
+        </tr>`; }).join('') || '<tr><td colspan="7" class="empty">No payroll generated for this employee yet.</td></tr>'}</tbody>
       </table></div>
+      <p class="hint" style="margin-top:8px;">Total Compensation includes committed (Posted/Executed) Supplemental Payments. Base Payroll always remains immutable.</p>
     </div>
     <div class="card" style="margin-bottom:14px;">
       <h3>Overtime History</h3>
@@ -7345,10 +7347,18 @@ function runIntegrityCheck(){
   if(pSnapTxnDiff) add('warning','payroll-snapshot-txn-diff',`${pSnapTxnDiff} committed payroll snapshot total(s) differ from the linked transaction`);
 
   const supps = State.supplementalPayments||[];
-  let sMissingTxn=0, sOrphanTxn=0, sDupOtId=0, sPostedNoSnap=0, sMutable=0;
+  let sMissingTxn=0, sOrphanTxn=0, sDupOtId=0, sPostedNoSnapLegacy=0, sPostedNoSnapModern=0, sMutable=0;
+  // Source-overtime snapshots are frozen at Approve only since v2.7.1 (Payroll Integrity release).
+  // A Posted/Executed supplemental approved BEFORE that date legitimately has none — a legacy
+  // display-provenance gap, not a data-integrity fault. One approved on/after that date should have
+  // one, so its absence is a genuine concern worth investigating.
+  const V271_SNAPSHOT_DATE = Date.parse('2026-07-31');
   supps.forEach(s=>{
     if(s.financeTransactionId && !txIds.has(s.financeTransactionId)) sMissingTxn++;
-    if(['Posted','Executed'].includes(s.status) && !(Array.isArray(s.sourceOvertimeSnapshot) && s.sourceOvertimeSnapshot.length)) sPostedNoSnap++;
+    if(['Posted','Executed'].includes(s.status) && !(Array.isArray(s.sourceOvertimeSnapshot) && s.sourceOvertimeSnapshot.length)){
+      const ts = Date.parse(s.approvedAt||s.postedAt||s.createdAt||s.updatedAt||'') || 0;
+      if(ts && ts >= V271_SNAPSHOT_DATE) sPostedNoSnapModern++; else sPostedNoSnapLegacy++;
+    }
     if(['Posted','Executed'].includes(s.status)){
       // amount must equal the frozen source snapshot / source IDs basis (mutation detection)
       const basis = (Array.isArray(s.sourceOvertimeSnapshot)&&s.sourceOvertimeSnapshot.length)
@@ -7366,7 +7376,8 @@ function runIntegrityCheck(){
   if(sMissingTxn) add('critical','supplemental-missing-transaction',`${sMissingTxn} supplemental(s) linked to a missing finance transaction`);
   if(sOrphanTxn) add('critical','supplemental-orphan-transaction',`${sOrphanTxn} finance transaction(s) linked to a missing supplemental`);
   if(sDupOtId) add('critical','supplemental-overtime-double-capture',`${sDupOtId} overtime record(s) captured by more than one non-cancelled supplemental`);
-  if(sPostedNoSnap) add('warning','supplemental-missing-source-snapshot',`${sPostedNoSnap} Posted/Executed supplemental(s) missing a frozen source snapshot`);
+  if(sPostedNoSnapModern) add('warning','supplemental-missing-source-snapshot',`${sPostedNoSnapModern} Posted/Executed supplemental(s) approved under v2.7.1+ are missing a frozen source snapshot — investigate (source overtime may have been unresolvable at approval)`);
+  if(sPostedNoSnapLegacy) add('info','supplemental-missing-source-snapshot-legacy',`${sPostedNoSnapLegacy} legacy (pre-v2.7.1) Posted/Executed supplemental(s) have no frozen source snapshot — display-only; the payment and its amount are unaffected`);
   if(sMutable) add('warning','supplemental-amount-drift',`${sMutable} Posted/Executed supplemental(s) whose amount differs from their frozen source snapshot`);
 
   // run schema validators across every entity, roll warnings/errors up
@@ -9027,6 +9038,38 @@ function payrollHistoricalSnapshot(pp){
 }
 // Convenience: is a committed row's displayed history in conflict with its evidence?
 function payrollSnapshotHasIssue(pp){ const s=payrollHistoricalSnapshot(pp); return !!(s && (s.integrityStatus==='mismatch' || s.integrityStatus==='no-transaction')); }
+// v2.7.x reporting aggregate (read-only) — combines the IMMUTABLE payroll snapshot with the
+// committed supplementals linked to the same plan into a realized "total compensation". It NEVER
+// mutates anything and NEVER redefines the base payroll total: baseTotal stays exactly
+// payrollHistoricalSnapshot().totalPayroll, and supplemental is a separate, additive figure.
+//   totalCompensation = baseTotal (= base + payroll overtime) + committed supplementals
+// Only Posted/Executed supplementals count as realized; Draft/Review/Approved are surfaced
+// separately as pending (never added to the total); Cancelled is excluded. Supplemental amounts
+// follow the same "committed transaction is authoritative" rule as the payroll snapshot: the linked
+// finance transaction (actual for Executed, planned for Posted) with a fallback to the frozen amount.
+function payrollTotalCompensation(pp){
+  const snap = payrollHistoricalSnapshot(pp);
+  if(!snap) return null;
+  let committed=0, committedCount=0, pending=0, pendingCount=0;
+  const supps = (typeof supplementalsForPlan==='function') ? supplementalsForPlan(pp.id) : [];
+  supps.forEach(s=>{
+    if(s.status==='Posted' || s.status==='Executed'){
+      const t = (typeof supplementalTxnOf==='function') ? supplementalTxnOf(s) : null;
+      let amt = num(s.amount);
+      if(t){ amt = (s.status==='Executed' && t.actual!=null) ? num(t.actual) : num(t.planned); }
+      committed += amt; committedCount++;
+    } else if(s.status==='Draft' || s.status==='Review' || s.status==='Approved'){
+      pending += num(s.amount); pendingCount++;
+    } // Cancelled excluded
+  });
+  return {
+    baseSalary: snap.baseSalary, overtimeAmount: snap.overtimeAmount, baseTotal: num(snap.totalPayroll),
+    supplemental: committed, supplementalCount: committedCount,
+    pendingSupplemental: pending, pendingCount: pendingCount,
+    totalCompensation: num(snap.totalPayroll) + committed,
+    source: snap.source, integrityStatus: snap.integrityStatus,
+  };
+}
 // Shared "hours known?" formatter — explicit zero shows "0 hrs", unknown shows unavailable.
 function payrollHoursDisplay(snap){
   if(!snap) return '—';

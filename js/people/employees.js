@@ -242,16 +242,18 @@ function renderEmployeeDetail(main){
     <div class="card" style="margin-bottom:14px;">
       <h3>Payroll History</h3>
       <div class="table-wrap"><table>
-        <thead><tr><th>Period</th><th>Contract</th><th class="num">Base</th><th class="num">Overtime</th><th class="num">Total</th><th>Stage</th></tr></thead>
-        <tbody>${empPlans.map(p=>{ const snap=payrollHistoricalSnapshot(p); return `<tr>
+        <thead><tr><th>Period</th><th>Contract</th><th class="num">Base Payroll</th><th class="num">Payroll OT</th><th class="num">Supplemental</th><th class="num">Total Compensation</th><th>Stage</th></tr></thead>
+        <tbody>${empPlans.map(p=>{ const tc=payrollTotalCompensation(p); return `<tr>
           <td class="dim">${escapeHtml(p.month||'')} ${p.year||''}</td>
           <td class="dim">${escapeHtml(p.contractNumber||'—')}</td>
-          <td class="num">${fmtIDR(snap.baseSalary)}</td>
-          <td class="num">${fmtIDR(snap.overtimeAmount)}</td>
-          <td class="num"><b>${fmtIDR(snap.totalPayroll)}</b>${payrollSnapshotHasIssue(p)?' <span class="pill pill-status-cancelled" title="Disagrees with the committed transaction — see Payroll Detail">!</span>':''}</td>
-          <td>${payrollStagePill(p)}</td>
-        </tr>`; }).join('') || '<tr><td colspan="6" class="empty">No payroll generated for this employee yet.</td></tr>'}</tbody>
+          <td class="num">${fmtIDR(tc.baseSalary)}</td>
+          <td class="num">${fmtIDR(tc.overtimeAmount)}</td>
+          <td class="num">${tc.supplemental>0?`${fmtIDR(tc.supplemental)}<div class="faint" style="font-size:10px;">${tc.supplementalCount} Supplemental${tc.supplementalCount===1?'':'s'}</div>`:'<span class="dim">—</span>'}${tc.pendingSupplemental>0?`<div class="faint" style="font-size:10px;" title="Pending supplemental (Draft/Review/Approved) — not yet paid; excluded from Total Compensation">Pending ${fmtIDR(tc.pendingSupplemental)}</div>`:''}</td>
+          <td class="num"><b>${fmtIDR(tc.totalCompensation)}</b>${payrollSnapshotHasIssue(p)?' <span class="pill pill-status-cancelled" title="Base payroll disagrees with its committed transaction — see Payroll Detail">!</span>':''}</td>
+          <td style="font-weight:600;">${payrollStagePill(p)}</td>
+        </tr>`; }).join('') || '<tr><td colspan="7" class="empty">No payroll generated for this employee yet.</td></tr>'}</tbody>
       </table></div>
+      <p class="hint" style="margin-top:8px;">Total Compensation includes committed (Posted/Executed) Supplemental Payments. Base Payroll always remains immutable.</p>
     </div>
     <div class="card" style="margin-bottom:14px;">
       <h3>Overtime History</h3>

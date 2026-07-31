@@ -121,6 +121,38 @@ function payrollHistoricalSnapshot(pp){
 }
 // Convenience: is a committed row's displayed history in conflict with its evidence?
 function payrollSnapshotHasIssue(pp){ const s=payrollHistoricalSnapshot(pp); return !!(s && (s.integrityStatus==='mismatch' || s.integrityStatus==='no-transaction')); }
+// v2.7.x reporting aggregate (read-only) — combines the IMMUTABLE payroll snapshot with the
+// committed supplementals linked to the same plan into a realized "total compensation". It NEVER
+// mutates anything and NEVER redefines the base payroll total: baseTotal stays exactly
+// payrollHistoricalSnapshot().totalPayroll, and supplemental is a separate, additive figure.
+//   totalCompensation = baseTotal (= base + payroll overtime) + committed supplementals
+// Only Posted/Executed supplementals count as realized; Draft/Review/Approved are surfaced
+// separately as pending (never added to the total); Cancelled is excluded. Supplemental amounts
+// follow the same "committed transaction is authoritative" rule as the payroll snapshot: the linked
+// finance transaction (actual for Executed, planned for Posted) with a fallback to the frozen amount.
+function payrollTotalCompensation(pp){
+  const snap = payrollHistoricalSnapshot(pp);
+  if(!snap) return null;
+  let committed=0, committedCount=0, pending=0, pendingCount=0;
+  const supps = (typeof supplementalsForPlan==='function') ? supplementalsForPlan(pp.id) : [];
+  supps.forEach(s=>{
+    if(s.status==='Posted' || s.status==='Executed'){
+      const t = (typeof supplementalTxnOf==='function') ? supplementalTxnOf(s) : null;
+      let amt = num(s.amount);
+      if(t){ amt = (s.status==='Executed' && t.actual!=null) ? num(t.actual) : num(t.planned); }
+      committed += amt; committedCount++;
+    } else if(s.status==='Draft' || s.status==='Review' || s.status==='Approved'){
+      pending += num(s.amount); pendingCount++;
+    } // Cancelled excluded
+  });
+  return {
+    baseSalary: snap.baseSalary, overtimeAmount: snap.overtimeAmount, baseTotal: num(snap.totalPayroll),
+    supplemental: committed, supplementalCount: committedCount,
+    pendingSupplemental: pending, pendingCount: pendingCount,
+    totalCompensation: num(snap.totalPayroll) + committed,
+    source: snap.source, integrityStatus: snap.integrityStatus,
+  };
+}
 // Shared "hours known?" formatter — explicit zero shows "0 hrs", unknown shows unavailable.
 function payrollHoursDisplay(snap){
   if(!snap) return '—';

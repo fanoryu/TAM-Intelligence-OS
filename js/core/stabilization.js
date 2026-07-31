@@ -348,10 +348,18 @@ function runIntegrityCheck(){
   if(pSnapTxnDiff) add('warning','payroll-snapshot-txn-diff',`${pSnapTxnDiff} committed payroll snapshot total(s) differ from the linked transaction`);
 
   const supps = State.supplementalPayments||[];
-  let sMissingTxn=0, sOrphanTxn=0, sDupOtId=0, sPostedNoSnap=0, sMutable=0;
+  let sMissingTxn=0, sOrphanTxn=0, sDupOtId=0, sPostedNoSnapLegacy=0, sPostedNoSnapModern=0, sMutable=0;
+  // Source-overtime snapshots are frozen at Approve only since v2.7.1 (Payroll Integrity release).
+  // A Posted/Executed supplemental approved BEFORE that date legitimately has none — a legacy
+  // display-provenance gap, not a data-integrity fault. One approved on/after that date should have
+  // one, so its absence is a genuine concern worth investigating.
+  const V271_SNAPSHOT_DATE = Date.parse('2026-07-31');
   supps.forEach(s=>{
     if(s.financeTransactionId && !txIds.has(s.financeTransactionId)) sMissingTxn++;
-    if(['Posted','Executed'].includes(s.status) && !(Array.isArray(s.sourceOvertimeSnapshot) && s.sourceOvertimeSnapshot.length)) sPostedNoSnap++;
+    if(['Posted','Executed'].includes(s.status) && !(Array.isArray(s.sourceOvertimeSnapshot) && s.sourceOvertimeSnapshot.length)){
+      const ts = Date.parse(s.approvedAt||s.postedAt||s.createdAt||s.updatedAt||'') || 0;
+      if(ts && ts >= V271_SNAPSHOT_DATE) sPostedNoSnapModern++; else sPostedNoSnapLegacy++;
+    }
     if(['Posted','Executed'].includes(s.status)){
       // amount must equal the frozen source snapshot / source IDs basis (mutation detection)
       const basis = (Array.isArray(s.sourceOvertimeSnapshot)&&s.sourceOvertimeSnapshot.length)
@@ -369,7 +377,8 @@ function runIntegrityCheck(){
   if(sMissingTxn) add('critical','supplemental-missing-transaction',`${sMissingTxn} supplemental(s) linked to a missing finance transaction`);
   if(sOrphanTxn) add('critical','supplemental-orphan-transaction',`${sOrphanTxn} finance transaction(s) linked to a missing supplemental`);
   if(sDupOtId) add('critical','supplemental-overtime-double-capture',`${sDupOtId} overtime record(s) captured by more than one non-cancelled supplemental`);
-  if(sPostedNoSnap) add('warning','supplemental-missing-source-snapshot',`${sPostedNoSnap} Posted/Executed supplemental(s) missing a frozen source snapshot`);
+  if(sPostedNoSnapModern) add('warning','supplemental-missing-source-snapshot',`${sPostedNoSnapModern} Posted/Executed supplemental(s) approved under v2.7.1+ are missing a frozen source snapshot — investigate (source overtime may have been unresolvable at approval)`);
+  if(sPostedNoSnapLegacy) add('info','supplemental-missing-source-snapshot-legacy',`${sPostedNoSnapLegacy} legacy (pre-v2.7.1) Posted/Executed supplemental(s) have no frozen source snapshot — display-only; the payment and its amount are unaffected`);
   if(sMutable) add('warning','supplemental-amount-drift',`${sMutable} Posted/Executed supplemental(s) whose amount differs from their frozen source snapshot`);
 
   // run schema validators across every entity, roll warnings/errors up
