@@ -97,5 +97,6 @@ TAM Intelligence OS is client-only. Understanding its data posture helps scope r
 
 We ask reporters to give a reasonable opportunity to remediate before any public discussion, and to
 avoid accessing, modifying, or exfiltrating data beyond the minimum needed to demonstrate the issue.
-Good-faith research reported privately is welcomed. This is a private repository; disclosure is
-coordinated with the repository owner and PT Total Asset Manajemen.
+Good-faith research reported privately is welcomed. Disclosure is coordinated with the repository owner
+and PT Total Asset Manajemen. This is the public source core; it contains no company data, and any
+production/company data lives in a separate private layer (see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)).

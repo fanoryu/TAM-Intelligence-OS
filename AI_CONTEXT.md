@@ -186,8 +186,8 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
 - Heavy use of direct DOM string rendering — safe today because user data is escaped, but a
   standing reason to keep escaping disciplined.
 - Some persisted records carry legacy/compatibility fields retained to avoid migrations.
-- Optional security automation (secret scanning, CodeQL) is not enabled; on a private repository
-  these generally depend on the GitHub plan / Advanced Security.
+- Optional security automation (secret scanning, CodeQL) is not enabled; enabling it depends on the
+  repository's GitHub plan / Advanced Security settings.
 
 ## 19. Important Design Decisions
 

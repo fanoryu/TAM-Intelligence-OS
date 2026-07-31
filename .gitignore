@@ -34,6 +34,7 @@ id_rsa*
 #
 # Ignore real-data artifacts anywhere in the tree:
 *.xlsx
+*.xls
 *.xlsm
 *.csv
 *-backup*.json
@@ -46,6 +47,21 @@ private/
 backups-local/
 # ...but allow explicitly-fabricated samples committed on purpose:
 !samples/**
+
+# ---------------------------------------------------------------------------
+# PUBLIC-CORE / PRIVATE-COMPANY-LAYER SEPARATION
+# Production company data and configuration live OUTSIDE this public-core repo
+# (see docs/DEPLOYMENT.md). Never commit any of the following here:
+# ---------------------------------------------------------------------------
+company-data/
+production-data/
+exports/
+backups/
+deployment/production*
+*.prod.json
+*.production.*
+config.local.*
+settings.local.*
 
 # ---------------------------------------------------------------------------
 # Build scratch (NOT the release HTML — see the intentionally-tracked block below)

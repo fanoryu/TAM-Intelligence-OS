@@ -7,14 +7,18 @@ dependencies.
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
 ![Version](https://img.shields.io/badge/version-2.7.3-blue)
-![License](https://img.shields.io/badge/license-proprietary%20%26%20confidential-red)
+![License](https://img.shields.io/badge/license-see%20LICENSE-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
-![Repository](https://img.shields.io/badge/repository-private-lightgrey)
+![Core](https://img.shields.io/badge/core-public%20source-blue)
 
-> **Proprietary & confidential.** This repository is private and **not** open source — see
-> [`LICENSE`](LICENSE) and [`PROPRIETARY-LICENSE-NOTICE.md`](PROPRIETARY-LICENSE-NOTICE.md). Do not commit real company,
-> employee, payroll, or backup data.
+> **Public source repository — company data is separate.** This is the **public source core** of TAM
+> Intelligence OS: application source, tooling, docs, and an empty-data default. Production company data
+> and configuration are **maintained separately** in a private company layer (see
+> [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)); the application ships **no** company data and requires
+> none to run. **Licensing:** the current [`LICENSE`](LICENSE) is proprietary — reuse, redistribution,
+> or modification rights are **not** granted, and this repository is **not** (yet) declared open source.
+> Do **not** commit real company, employee, payroll, or backup data.
 
 ---
 
@@ -423,9 +427,13 @@ These are candidate directions, not commitments.
 
 ## License and security
 
-- **License:** proprietary and confidential — see [`LICENSE`](LICENSE) and
-  [`PROPRIETARY-LICENSE-NOTICE.md`](PROPRIETARY-LICENSE-NOTICE.md). Not open source; all rights reserved by PT Total Asset
-  Manajemen.
+- **License:** the current [`LICENSE`](LICENSE) is **proprietary** — all rights reserved by PT Total
+  Asset Manajemen; reuse, redistribution, and modification are **not** granted and this repository is
+  **not** declared open source (see also [`PROPRIETARY-LICENSE-NOTICE.md`](PROPRIETARY-LICENSE-NOTICE.md)).
+  A future licensing decision may relax this; until then, treat the source as source-visible only.
+- **Public core vs. private data:** this repository is the public source core and holds **no** company
+  data; production data and configuration are maintained separately (see
+  [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)).
 - **Security:** report vulnerabilities privately via GitHub Security Advisories — never in a public
   issue, and never with real data. See [`SECURITY.md`](SECURITY.md).
 
