@@ -195,6 +195,53 @@ check(dist.includes('<h3>Payroll Timeline</h3>') || dist.includes('Payroll Timel
 check(dist.includes('function openPostResultModal('), 'post-result summary modal defined (posted vs skipped)');
 check(dist.includes('skippedDetails') && dist.includes('posted:'), 'commitReadyPayroll returns posted + skippedDetails');
 
+console.log('== PAYROLL INTEGRITY & REPORTING FOUNDATION (v2.7.1) ==');
+// Stage-aware historical source-of-truth helper + integrity notice.
+check(dist.includes('function payrollHistoricalSnapshot('), 'stage-aware historical payroll helper (payrollHistoricalSnapshot) present');
+check(dist.includes('function payrollIntegrityNoticeHTML(') && dist.includes('Payroll snapshot mismatch'), 'payroll snapshot-mismatch integrity notice present');
+check(dist.includes('Base Payroll Snapshot'), 'Payroll Detail renders a committed Base Payroll Snapshot');
+check(dist.includes('function payrollHoursDisplay(') && dist.includes('(unavailable)'), 'unknown legacy overtime hours render as unavailable (not zero)');
+// Immutable overtime snapshots frozen at posting (both commit pipelines).
+check(dist.includes('function buildPayrollOvertimeSnapshot(') && dist.includes('function buildPayrollCommittedSnapshot('), 'immutable overtime + committed snapshot builders present');
+check((dist.match(/overtimeSnapshot:\s*otSnapshot\b/g)||[]).length >= 2 && (dist.match(/=\s*buildPayrollOvertimeSnapshot\(pp\.overtimeIds/g)||[]).length >= 2, 'both payroll commit pipelines freeze an overtimeSnapshot');
+check(dist.includes('pp.committedSnapshot = buildPayrollCommittedSnapshot(pp)'), 'committed snapshot frozen on the plan at post time');
+// Company-settings onboarding completion marker (Section 4).
+check(dist.includes('companySettingsConfiguredAt') && dist.includes('function legacyMeaningfulCompanyProfile('), 'company-settings completion marker + legacy fallback present');
+check(dist.includes('s.companySettingsConfiguredAt || legacyMeaningfulCompanyProfile(s)'), 'companySettingsConfigured uses explicit marker OR legacy fallback (not inference alone)');
+check(!/tam_company_settings_v\d/.test(dist), 'settings marker is a settings field, not a new storage key');
+// Supplemental hardening (Sections 11, 12).
+check(dist.includes('function overtimeCapturedByOtherSupplemental('), 'supplemental GLOBAL duplicate guard present');
+check(dist.includes('!overtimeCapturedByOtherSupplemental(id, exceptSupplementalId)') && dist.includes('!overtimeCapturedByOtherSupplemental(x, supp.id)'), 'global duplicate guard used by BOTH generation and refresh');
+check(dist.includes("['Posted','Executed','Cancelled'].includes(supp.status)) return {ok:false, reason:'Notes are locked once the supplemental is Posted"), 'Posted supplemental notes are immutable');
+check(dist.includes('supp.sourceOvertimeSnapshot = buildPayrollOvertimeSnapshot('), 'supplemental freezes a source-overtime snapshot at Approved');
+// Execution Center deep-link (Section 13).
+check(dist.includes('function focusTransactionInExecutionCenter(') && dist.includes('function execBucketKeyForTxn('), 'Execution Center deep-link/focus mechanism present');
+check(!dist.includes("State.view='executioncenter'; State.execFilter='today'; render();"), 'generic today-filter Execution Center navigation replaced by focused deep-link');
+// Persistence coordination (Section 15).
+check(dist.includes('const txnOk = await persist();') && dist.includes('const suppOk = await persistSupplementalPayments();'), 'supplemental posting checks persistence results (no half-written linkage)');
+// New integrity checks (Section 10).
+['payroll-posted-no-transaction','payroll-plan-txn-total-diff','payroll-plan-txn-overtime-diff','payroll-missing-committed-snapshot','supplemental-missing-transaction','supplemental-orphan-transaction','supplemental-overtime-double-capture','supplemental-missing-source-snapshot']
+  .forEach((c)=>check(dist.includes("'"+c+"'"), 'integrity check present: '+c));
+// The released v2.7.0 artifact must remain untouched during v2.7.1 development.
+const prevDist = path.join(root, 'dist', 'tam-intelligence-os-v2.7.0.html');
+check(fs.existsSync(prevDist), 'released dist/tam-intelligence-os-v2.7.0.html still present');
+if (fs.existsSync(prevDist)) {
+  const prev = read(prevDist);
+  check(prev.includes('<title>TAM Intelligence OS v2.7.0</title>') && prev.includes("const APP_VERSION = '2.7.0';"), 'released v2.7.0 artifact is unchanged (still v2.7.0, not overwritten by the v2.7.1 build)');
+}
+check(meta.version === '2.7.1', 'APP_VERSION is 2.7.1 (this development release)');
+// v2.7.1 polishing pass — snapshot metadata, single historical API, compact integrity badge.
+check(dist.includes('function overtimeSnapshotMeta('), 'overtime snapshot audit metadata helper present');
+check((dist.match(/overtimeSnapshotMeta:\s*overtimeSnapshotMeta\(/g)||[]).length >= 2, 'both commit pipelines store overtimeSnapshotMeta {recordCount,totalHours}');
+check(dist.includes('if(txn.overtimeSnapshotMeta){') , 'historical snapshot reads frozen metadata (no recompute)');
+check(dist.includes('function payrollIntegrityBadge(') && dist.includes('Integrity Verified') && dist.includes('Snapshot Mismatch'), 'compact Payroll Detail integrity badge present');
+check(dist.includes('${payrollIntegrityBadge(p)}'), 'integrity badge rendered in Payroll Detail');
+// Single historical API: Posted/Executed renderers migrated off direct plan-derived values.
+check(dist.includes('empPlans.map(p=>{ const snap=payrollHistoricalSnapshot(p)'), 'Employee Detail payroll history uses payrollHistoricalSnapshot');
+check((dist.match(/const s=payrollHistoricalSnapshot\(p\); return \[p\.employeeName/g)||[]).length >= 1, 'payroll register/components reports use payrollHistoricalSnapshot');
+check(!/<td class="num">\$\{fmtIDR\(payrollBaseSalary\(p\)\)\}<\/td>/.test(dist), 'no Employee Detail row renders payrollBaseSalary(p) directly');
+check(!/fmtIDR\(p\.overtimeAmount\),fmtIDR\(num\(p\.allowance\)/.test(dist), 'payroll register no longer renders p.overtimeAmount directly');
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');

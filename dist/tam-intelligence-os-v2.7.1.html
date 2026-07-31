@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TAM Intelligence OS v2.7.0</title>
+<title>TAM Intelligence OS v2.7.1</title>
 <meta name="theme-color" content="#0E1420">
 <meta name="color-scheme" content="dark light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -358,8 +358,8 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.7.0';
-const APP_RELEASE_NAME = 'Supplemental Payroll Engine';
+const APP_VERSION = '2.7.1';
+const APP_RELEASE_NAME = 'Payroll Integrity & Reporting Foundation';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
@@ -1096,6 +1096,7 @@ const State = {
   compareTrendRange: 'all',
   txFilter: {month:'all', category:'all', search:'', budget:'all', type:'all', status:'all', method:'all', bank:'all'},
   execFilter: 'today', // Execution Center active view
+  execFocusTxnId: null, // v2.7.1 — deep-link: linked transaction to reveal/highlight
   execModalTxnId: null, // transaction currently being executed
   detailTxnId: null, // transaction whose detail/history panel is open
   pendingImport: null, // {batches, fileName}
@@ -1253,11 +1254,13 @@ async function saveSettings(){
   // StorageAdapter.set reports failures (toast + status) itself — no silent failures.
   const ok = await StorageAdapter.set('tam_settings_v1', JSON.stringify(State.settings));
   if(!ok) console.error('saveSettings: settings were not persisted');
+  return ok;
 }
 
 async function persist(){
   const ok = await StorageAdapter.set('tam_txns_v1', JSON.stringify(State.txns));
   if(!ok) console.error('persist: transactions were not persisted');
+  return ok;
 }
 
 /* ---------- Company Bank Accounts + Bank Master helpers (v2.6.9) ----------
@@ -2310,9 +2313,30 @@ function execBuckets(){
   const pendingCount = partial.length + unscheduled.length + todaysPlanned.length + upcoming.length + overdue.length;
   return {todaysPlanned, upcoming, overdue, partial, unscheduled, completedToday, recent, planned:pending, pendingCount};
 }
-function renderExecutionCenter(main){
-  if(!State.txns.length){ main.innerHTML = emptyState('No data yet','Add or upload monthly data first.'); return; }
+// v2.7.1 (Section 13) — deep-link focus. Which tab bucket currently holds a transaction?
+function execBucketKeyForTxn(txnId){
   const b = execBuckets();
+  const map = {todaysPlanned:'today', upcoming:'upcoming', overdue:'overdue', unscheduled:'unscheduled', partial:'partial', completedToday:'completedToday', recent:'recent'};
+  for(const bk in map){ if((b[bk]||[]).some(t=>t.id===txnId)) return map[bk]; }
+  return null;
+}
+// Navigate to the Execution Center and reveal a specific linked transaction, regardless of
+// its date bucket. If it sits in a tab, that tab is opened; otherwise a focus card shows it.
+// Missing transactions produce a clear warning instead of a silent generic view.
+function focusTransactionInExecutionCenter(txnId){
+  State.view = 'executioncenter';
+  const t = txnId ? findTxn(txnId) : null;
+  if(!t){ State.execFocusTxnId = null; render(); showWarning('The linked transaction could not be found — it may have been removed.'); return; }
+  const bk = execBucketKeyForTxn(txnId);
+  if(bk) State.execFilter = bk;
+  State.execFocusTxnId = txnId;
+  render();
+}
+function renderExecutionCenter(main){
+  if(!State.txns.length){ main.innerHTML = emptyState('No data yet','Add or upload monthly data first.'); State.execFocusTxnId=null; return; }
+  const b = execBuckets();
+  const focusId = State.execFocusTxnId;
+  const focusTxn = focusId ? findTxn(focusId) : null;
   const views = [
     ['today', "Today's Planned", b.todaysPlanned.length],
     ['upcoming', 'Upcoming', b.upcoming.length],
@@ -2328,9 +2352,22 @@ function renderExecutionCenter(main){
   const bucketOf = {today:'todaysPlanned', upcoming:'upcoming', overdue:'overdue', unscheduled:'unscheduled', partial:'partial', completedToday:'completedToday', recent:'recent'};
   const activeRows = b[bucketOf[State.execFilter]] || [];
   const emptyMsg = State.execFilter==='unscheduled' ? 'No unscheduled transactions.' : 'Nothing in this view.';
+  // v2.7.1 — focus card: shown when a deep-linked transaction exists but is not in the active
+  // tab (e.g. executed on a prior day, in no pending bucket), so it is always reachable.
+  const focusInActive = focusTxn && activeRows.some(t=>t.id===focusId);
+  const focusCard = (focusTxn && !focusInActive) ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+      <h3>Linked transaction</h3>
+      <div style="font-size:13px;line-height:1.8;">
+        <div><button class="linklike" data-open-detail="${focusTxn.id}"><b>${escapeHtml(focusTxn.uraian)}</b></button> · ${statusBadge(statusOf(focusTxn))}</div>
+        <div>${escapeHtml(focusTxn.month)} ${focusTxn.year} · Planned <b class="mono">${fmtIDR(focusTxn.planned)}</b> · Actual <b class="mono">${focusTxn.actual!=null?fmtIDR(focusTxn.actual):'—'}</b></div>
+      </div>
+      <div class="small-btn-row" style="margin-top:8px;"><button class="btn btn-sm" data-open-detail="${focusTxn.id}">Open Detail</button><button class="btn btn-sm" id="execClearFocus">Clear</button></div>
+    </div>` : '';
+  const focusMissing = (focusId && !focusTxn) ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--brick);"><h3 style="color:var(--brick);">Linked transaction not found</h3><p class="hint">It may have been removed. Showing the normal Execution Center.</p></div>` : '';
 
   main.innerHTML = `
     <div class="page-head"><div><h1>Execution Center</h1><p class="desc">Process planned transactions and record real payments.</p></div></div>
+    ${focusMissing}${focusCard}
     <div class="grid grid-3" style="margin-bottom:14px;">
       <div class="card stat-card"><div class="stat-label">Pending Execution</div><div class="stat-value">${b.pendingCount}</div><div class="stat-sub dim">unscheduled · today · upcoming · overdue · partial</div></div>
       <div class="card stat-card"><div class="stat-label">Overdue</div><div class="stat-value" style="color:${b.overdue.length?'var(--brick)':'inherit'}">${b.overdue.length}</div><div class="stat-sub dim">past planned date, not executed</div></div>
@@ -2347,8 +2384,9 @@ function renderExecutionCenter(main){
             const d = execScheduleDate(t);
             const dateCell = d ? `<span class="dim">${escapeHtml(d)}</span>` : `<span class="pill pill-status-cancelled" title="No valid scheduled or transaction date">Missing schedule date</span>`;
             const canSchedule = statusOf(t)!=='partial'; // partial rows keep only the standard actions
-            return `<tr>
-            <td><button class="linklike" data-open-detail="${t.id}">${escapeHtml(t.uraian)}</button></td>
+            const isFocus = t.id===focusId;
+            return `<tr${isFocus?' style="outline:2px solid var(--accent);outline-offset:-2px;"':''}>
+            <td>${isFocus?'<span class="pill pill-status-partial" title="Linked transaction">linked</span> ':''}<button class="linklike" data-open-detail="${t.id}">${escapeHtml(t.uraian)}</button></td>
             <td>${categoryPill(t.category)}</td>
             <td class="dim">${escapeHtml(t.month)} ${t.year}</td>
             <td>${dateCell}</td>
@@ -2364,7 +2402,8 @@ function renderExecutionCenter(main){
   // renderExecutionCenter binds its own menus below — the tab handler must NOT
   // call bindActionMenus again (double-binding made menus toggle open+closed
   // instantly and fire every action twice on all non-initial tabs).
-  main.querySelectorAll('[data-execview]').forEach(btn=>btn.addEventListener('click', ()=>{ State.execFilter=btn.dataset.execview; renderExecutionCenter(main); }));
+  main.querySelectorAll('[data-execview]').forEach(btn=>btn.addEventListener('click', ()=>{ State.execFilter=btn.dataset.execview; State.execFocusTxnId=null; renderExecutionCenter(main); }));
+  const clrFocus=document.getElementById('execClearFocus'); if(clrFocus) clrFocus.addEventListener('click', ()=>{ State.execFocusTxnId=null; renderExecutionCenter(main); });
   main.querySelectorAll('[data-schedule-txn]').forEach(btn=>btn.addEventListener('click', async e=>{
     e.stopPropagation();
     const id = btn.dataset.scheduleTxn, t = findTxn(id); if(!t) return;
@@ -4692,9 +4731,18 @@ function renderSettings(main){
     State.settings.requireOvertimeApproval = fd.get('requireOvertimeApproval')==='yes';
     State.settings.highOvertimeWarningHours = Number(fd.get('highOvertimeWarningHours'))||0;
     State.settings.allowPayrollCommitWithUnapprovedOvertime = fd.get('allowPayrollCommitWithUnapprovedOvertime')==='yes';
-    await saveSettings();
+    // v2.7.1 (Section 4) — explicit onboarding completion marker, set only after a successful
+    // save. On failure it is reverted so a failed save never completes the step.
+    const firstConfig = !State.settings.companySettingsConfiguredAt;
+    if(firstConfig) State.settings.companySettingsConfiguredAt = new Date().toISOString();
+    const saved = await saveSettings();
+    if(!saved){
+      if(firstConfig) State.settings.companySettingsConfiguredAt = null;
+      showWarning('Settings could not be saved — please try again. Nothing was changed.');
+      return;
+    }
     applyTheme();               // reflect any Appearance change immediately (charts redraw on render)
-    toast('Settings saved.');
+    showSuccess('Settings saved — company settings are configured.');
     render();
   });
   document.getElementById('drExportBackup').addEventListener('click', ()=>{ downloadBlob(JSON.stringify(buildCompleteBackup(),null,2), `${FILE_BASE}-complete-backup-${new Date().toISOString().slice(0,10)}.json`, 'application/json'); showSuccess('Complete backup downloaded.'); });
@@ -4966,6 +5014,7 @@ function renderAbout(main){
 }
 function renderReleaseNotes(main){
   const notes = [
+    {v:'2.7.1 — Payroll Integrity & Reporting Foundation', items:['Fixed a historical payroll rendering defect: a Posted/Executed payroll could show a plan total (e.g. Rp7,000,000, 0 overtime) that disagreed with its committed finance transaction (e.g. Rp8,750,000). Posted/Executed payroll now renders immutable committed values, never reconstructed from current contract or overtime data','New centralized stage-aware source-of-truth helper (payrollHistoricalSnapshot): Draft/Review/Approved show working-plan values; Posted/Executed derive from the strongest committed evidence in priority order — an explicit committed snapshot, then the immutable linked transaction, then committed plan fields — with a visible "Payroll snapshot mismatch" notice when sources disagree. The posted transaction is never altered','Immutable overtime snapshots: new payroll postings freeze an overtime breakdown (overtimeSnapshot) on the transaction and a committed snapshot on the plan, so historical detail survives later edits or deletion of the source overtime. Unknown legacy hours display "— / unavailable" (distinct from an explicit 0 hrs)','Payroll Detail, worksheet rows, period totals/summary and CSV export are now stage-aware and consistent; Base Payroll Snapshot is shown separately from supplementals','Company settings onboarding: "Configure company settings" now completes via an explicit persisted marker (companySettingsConfiguredAt) set only after a successful Settings save, with a conservative legacy fallback for older settings; opening Settings without saving, or a failed save, does not complete it','Supplemental hardening: Posted supplemental notes are now immutable; an overtime ID cannot be captured by more than one non-cancelled supplemental anywhere in the store (global duplicate guard); Execution Center deep-link focuses the exact linked transaction; empty company-account posting state is clearer; new integrity checks for payroll/supplemental linkage','No storage key added or renamed (15); SCHEMA_VERSION unchanged (6); no historical payroll or finance amount is auto-repaired']},
     {v:'2.7.0 — Supplemental Payroll Engine', items:['Supplemental Payments: a new module that settles overtime approved AFTER the base payroll became immutable (Posted/Executed). It is a separate accounting document — the base payroll total, its finance transaction, and its execution history are never modified','The authoritative amount reuses the existing overtime-drift calculation (no second formula). Duplicate prevention: an overtime record is never paid twice across supplementals, at most one open Draft/Review exists per employee/period, and later overtime after a frozen supplemental forms a new record','Lifecycle: Draft → Review → Approved → Post to Finance → Execute. Amount and source overtime freeze at Approved. Posting creates exactly one Planned finance transaction (linked both ways, with an immutable company-account snapshot); execution runs through the existing Execution Center and records the actual payment','The v2.6.8 overtime-drift warning is now actionable — Generate a supplemental directly from the Payroll Workspace, Payroll Detail, or Overtime page. A Supplemental Payments page lists, filters and manages records; Payroll Detail and Employee Detail show related supplementals separately from base payroll','One new additive storage key (tam_supplemental_payments_v1); SCHEMA_VERSION unchanged (6); backup/restore include supplementals and older backups restore cleanly','Housekeeping: a centralized feature-status registry replaces the hardcoded sidebar badge (Projects / Vendors / Financial Calendar show SOON; Recurring Expenses is stable with no badge); general employee CSV export now masks bank-account numbers (import still accepts full numbers); count-neutral CI/Release verify labels','Source in v2.7.0 is overtime only; other adjustment types (bonuses, reimbursements) are intentionally out of scope']},
     {v:'2.6.9 — Enterprise Banking Foundation', items:['Indonesian Bank Master: a single, reusable reference list of Indonesian banks grouped by type (State, Private, Digital, Islamic, Regional, International) plus “Other Bank”, alphabetically sorted within each group. It is a constant (one source of truth, no duplicated arrays, no storage key) used by both employee banking and company accounts','Company Bank Accounts: a new Settings → Bank Accounts page to create, edit, deactivate, archive, search and filter company accounts. Each account has a Label, Bank (from the Bank Master), Account Holder, Account Number, Purpose (Operational / Payroll / Tax / Savings / Petty Cash / Other) and Status (Active / Inactive / Archived). Account numbers are stored masked in lists (only the last 4 shown) and never a PIN, OTP, password or token. Only Active accounts appear in transaction dropdowns, displayed as “Label — Bank”','Employee banking: the employee Bank is now chosen from the Bank Master, with a new Account Holder field. Existing values map correctly (e.g. Mandiri → Bank Mandiri, BSI → Bank Syariah Indonesia) and any other existing free-text bank is preserved as a “(current)” option — no bulk data migration. Employee account numbers are masked in the profile view','Transaction & execution integration: the Bank Account dropdowns in Add/Execute transactions, the transactions filter, recurring expenses and the default-bank setting now list only Active company accounts. Transactions that stored a legacy bank string keep resolving','Backward compatibility: on installs that already have data, the five legacy bank strings seed structured company accounts once (guarded, non-destructive) so existing references resolve; a fresh install starts empty. Complete Backup / Restore now include company accounts, and older backups without them restore cleanly','Data safety: one new additive storage key (tam_company_accounts_v1); SCHEMA_VERSION is unchanged (6); no storage key was renamed or removed; committed payroll/finance remain untouched','Supplemental Payment remains planned for a future release (v2.7.0). The existing overtime-drift warning and its disabled placeholder are unchanged in this release']},
     {v:'2.6.8 — Payroll Selection and Overtime Drift UX Fixes', items:['Generic payroll selection model: Select All and the header checkbox now select all visible rows, and the selected count is the actual number of selected rows. Each bulk action owns its eligibility and reports eligible / skipped / reason independently — Review applies to Draft, Approve applies to Draft and Review, Post applies to Approved. Adding a future action (Export, Delete, …) just declares its own eligible stages','This fixes the original confusion (previously "16 selected → 0 approved"): Approve now acts only on its eligible rows and clearly reports the rest, e.g. "Approved 3 payroll(s). 2 skipped — 1 already at Posted stage; 1 already at Executed stage"','The header checkbox stays synchronized with the visible rows (checked / indeterminate / unchecked), each action auto-disables when the period has no row eligible for that action, and Post to Finance reports rows skipped because they are not at the Approved stage alongside any commit blockers','Overtime Drift Visibility: approving overtime after payroll already exists now shows an immediate warning — no need to click Generate Payroll first — on the Overtime page, the Payroll Workspace and Payroll Detail. Draft/Review/Approved payroll shows "Overtime approved. Regenerate payroll to include the updated overtime"; Posted/Executed payroll shows that the original payroll is unchanged and a supplemental payment will be required (with a disabled "Supplemental Payment (Coming in a future release)" placeholder)','Posted and Executed payroll stays fully immutable — payroll totals and posted/executed transactions are never modified. The drift warning is derived from existing overtime-comparison logic, so it appears immediately, survives reload and never duplicates','No payroll status rules, committed-payroll immutability, storage key, backup format, migration or SCHEMA_VERSION (still 6) changed; Supplemental Payment itself is intentionally deferred to a future release']},
@@ -5665,14 +5714,14 @@ function renderEmployeeDetail(main){
       <h3>Payroll History</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Period</th><th>Contract</th><th class="num">Base</th><th class="num">Overtime</th><th class="num">Total</th><th>Stage</th></tr></thead>
-        <tbody>${empPlans.map(p=>`<tr>
+        <tbody>${empPlans.map(p=>{ const snap=payrollHistoricalSnapshot(p); return `<tr>
           <td class="dim">${escapeHtml(p.month||'')} ${p.year||''}</td>
           <td class="dim">${escapeHtml(p.contractNumber||'—')}</td>
-          <td class="num">${fmtIDR(payrollBaseSalary(p))}</td>
-          <td class="num">${fmtIDR(p.overtimeAmount)}</td>
-          <td class="num"><b>${fmtIDR(computePayrollPlanned(p))}</b></td>
+          <td class="num">${fmtIDR(snap.baseSalary)}</td>
+          <td class="num">${fmtIDR(snap.overtimeAmount)}</td>
+          <td class="num"><b>${fmtIDR(snap.totalPayroll)}</b>${payrollSnapshotHasIssue(p)?' <span class="pill pill-status-cancelled" title="Disagrees with the committed transaction — see Payroll Detail">!</span>':''}</td>
           <td>${payrollStagePill(p)}</td>
-        </tr>`).join('') || '<tr><td colspan="6" class="empty">No payroll generated for this employee yet.</td></tr>'}</tbody>
+        </tr>`; }).join('') || '<tr><td colspan="6" class="empty">No payroll generated for this employee yet.</td></tr>'}</tbody>
       </table></div>
     </div>
     <div class="card" style="margin-bottom:14px;">
@@ -5771,7 +5820,7 @@ function bindHRActions(main){
     else if(a==='prow-ready') { await setPayrollStatus(id,'Ready'); render(); }
     else if(a==='prow-draft') { await setPayrollStatus(id,'Draft'); render(); }
     else if(a==='prow-cancel') { if(confirmAction('Cancel this payroll row? It will not create a finance transaction.')){ await setPayrollStatus(id,'Cancelled'); render(); } }
-    else if(a==='prow-exec') { State.view='executioncenter'; State.execFilter='today'; render(); }
+    else if(a==='prow-exec') { const pp=payrollPlanById(id); const t=pp&&payrollTxnOf(pp); if(t) focusTransactionInExecutionCenter(t.id); else { State.view='executioncenter'; render(); } }
     else if(a==='ot-view') openOvertimeBreakdown(id);
     else if(a==='ot-edit') openOvertimeModal(id);
     else if(a==='ot-duplicate') duplicateOvertimeRecord(id);
@@ -6157,6 +6206,7 @@ function ensureMonthlyPlan(monthKey){
 // links (never description text alone) so it round-trips to employee/contract.
 function buildPayrollTxn(pp, mo, uraian){
   const ts = new Date().toISOString();
+  const otSnapshot = buildPayrollOvertimeSnapshot(pp.overtimeIds||[]);
   return {
     id: uid('pay'), monthKey:pp.monthKey, month:mo.month, year:mo.year, monthNum:mo.monthNum,
     category: State.settings.defaultPayrollCategory||'Gaji', categoryCode:'A', no:null,
@@ -6167,6 +6217,7 @@ function buildPayrollTxn(pp, mo, uraian){
     executionId:null, executionTimestamp:null, execution:null, status:'planned',
     employeeId:pp.employeeId, contractId:pp.contractId, payrollPlanId:pp.id, monthlyPlanId:pp.monthlyPlanId||null,
     overtimeIds: Array.isArray(pp.overtimeIds)?pp.overtimeIds.slice():[], overtimeAmount: num(pp.overtime),
+    overtimeSnapshot: otSnapshot, overtimeSnapshotMeta: overtimeSnapshotMeta(otSnapshot), // v2.7.1 immutable breakdown + audit metadata
     payrollMeta:{employeeName:pp.employeeName, contractNumber:pp.contractNumber, contractProgress:pp.contractProgress},
     history:[{event:'created', ts, note:'Generated from Payroll Planning'}],
   };
@@ -6190,6 +6241,7 @@ async function commitPayroll(monthKey, rows){
       overtimeIds: otIds,
       plannedAmount:amount, notes:r.notes||'', status:'committed', monthlyPlanId:plan.id, updatedAt:now,
     });
+    if(!pp.committedSnapshot && typeof buildPayrollCommittedSnapshot==='function') pp.committedSnapshot = buildPayrollCommittedSnapshot(pp); // v2.7.1 freeze historical evidence
     const uraian = `${r.employeeName} · ${r.contractNumber} · ${r.contractProgress}`;
     let txn = pp.committedTxnId ? findTxn(pp.committedTxnId) : null;
     if(!txn){
@@ -6855,21 +6907,21 @@ function hrReportRows(id, monthKey){
   if(id==='payroll-register'){
     const ps=payrollPlansForMonth(monthKey,true);
     return {headers:['Employee','Contract','Progress','Department','Base','Overtime','Additions','Deductions','Planned','Status'],
-      rows:ps.map(p=>[p.employeeName,p.contractNumber,p.contractProgress,p.department,fmtIDR(payrollBaseSalary(p)),fmtIDR(p.overtimeAmount),fmtIDR(num(p.allowance)+num(p.bonus)+num(p.benefits)+num(p.otherAddition)),fmtIDR(num(p.deduction)+num(p.otherDeduction)),fmtIDR(computePayrollPlanned(p)),p.status])};
+      rows:ps.map(p=>{ const s=payrollHistoricalSnapshot(p); return [p.employeeName,p.contractNumber,p.contractProgress,p.department,fmtIDR(s.baseSalary),fmtIDR(s.overtimeAmount),fmtIDR(num(p.allowance)+num(p.bonus)+num(p.benefits)+num(p.otherAddition)),fmtIDR(num(p.deduction)+num(p.otherDeduction)),fmtIDR(s.totalPayroll),p.status]; })};
   }
   if(id==='payroll-department'){
-    const map={}; payrollPlansForMonth(monthKey).forEach(p=>{ const d=p.department||'—'; (map[d]=map[d]||{n:0,sum:0}); map[d].n++; map[d].sum+=computePayrollPlanned(p); });
+    const map={}; payrollPlansForMonth(monthKey).forEach(p=>{ const d=p.department||'—'; (map[d]=map[d]||{n:0,sum:0}); map[d].n++; map[d].sum+=num(payrollHistoricalSnapshot(p).totalPayroll); });
     return {headers:['Department','Employees','Total Planned'], rows:Object.entries(map).map(([k,v])=>[k,v.n,fmtIDR(v.sum)])};
   }
   if(id==='payroll-components'){
     const ps=payrollPlansForMonth(monthKey);
     return {headers:['Employee','Base','Overtime','Allowance','Bonus','Benefits','Other +','Deduction','Other −','Planned'],
-      rows:ps.map(p=>[p.employeeName,fmtIDR(payrollBaseSalary(p)),fmtIDR(p.overtimeAmount),fmtIDR(p.allowance),fmtIDR(p.bonus),fmtIDR(p.benefits),fmtIDR(p.otherAddition),fmtIDR(p.deduction),fmtIDR(p.otherDeduction),fmtIDR(computePayrollPlanned(p))])};
+      rows:ps.map(p=>{ const s=payrollHistoricalSnapshot(p); return [p.employeeName,fmtIDR(s.baseSalary),fmtIDR(s.overtimeAmount),fmtIDR(p.allowance),fmtIDR(p.bonus),fmtIDR(p.benefits),fmtIDR(p.otherAddition),fmtIDR(p.deduction),fmtIDR(p.otherDeduction),fmtIDR(s.totalPayroll)]; })};
   }
   if(id==='payroll-execution'){
     const ps=payrollPlansForMonth(monthKey).filter(p=>p.status==='Committed');
     return {headers:['Employee','Planned','Actual Paid','Remaining','Transaction Status','Execution Date'],
-      rows:ps.map(p=>{ const t=payrollTxnOf(p); return [p.employeeName,fmtIDR(p.plannedAmount),t&&t.actual!=null?fmtIDR(t.actual):'—',t?fmtIDR(num(t.planned)-num(t.actual)):'—',t?statusOf(t):'—',(t&&t.execution&&t.execution.executionDate)||'—']; })};
+      rows:ps.map(p=>{ const t=payrollTxnOf(p); return [p.employeeName,fmtIDR(payrollHistoricalSnapshot(p).totalPayroll),t&&t.actual!=null?fmtIDR(t.actual):'—',t?fmtIDR(num(t.planned)-num(t.actual)):'—',t?statusOf(t):'—',(t&&t.execution&&t.execution.executionDate)||'—']; })};
   }
   if(id==='payroll-excluded'){
     const ex=State.employees.map(e=>({e,reason:payrollExclusionReason(e,monthKey)})).filter(x=>x.reason);
@@ -7207,6 +7259,58 @@ function runIntegrityCheck(){
   let batchMultiCand=0;
   (State.importBatches||[]).forEach(b=>{ if(b.undone || !b.candidateMap) return; const created=(b.created&&b.created.employees)||[]; if(created.length > new Set(Object.values(b.candidateMap)).size) batchMultiCand++; });
   if(batchMultiCand) add('warning','import-multiple-employees-per-candidate',`${batchMultiCand} Smart Import batch(es) created more than one employee for a single candidate`);
+
+  // ----- Payroll historical source-of-truth & Supplemental integrity (v2.7.1) -----
+  // NEVER auto-repairs; only detects and classifies. Uses the immutable transaction as truth.
+  let pPostedNoTxn=0, pTxnNoPlanId=0, pPlanTxnTotalDiff=0, pPlanTxnOtDiff=0, pMissingOtIds=0, pNewNoSnapshot=0, pSnapTxnDiff=0;
+  State.payrollPlans.forEach(p=>{
+    if(p.status==='Cancelled') return;
+    const stage = (typeof payrollStage==='function') ? payrollStage(p) : (p.status==='Committed'?'Posted':'Draft');
+    if(stage!=='Posted' && stage!=='Executed') return;
+    const t = payrollTxnOf(p);
+    if(!t){ pPostedNoTxn++; return; }
+    if(!t.payrollPlanId) pTxnNoPlanId++;
+    const planTotal = num(p.plannedAmount!=null?p.plannedAmount:computePayrollPlanned(p));
+    const planOt = num(p.overtimeAmount!=null?p.overtimeAmount:p.overtime);
+    if(Math.abs(planTotal-num(t.planned))>1) pPlanTxnTotalDiff++;
+    if(Math.abs(planOt-num(t.overtimeAmount))>1) pPlanTxnOtDiff++;
+    if(num(t.overtimeAmount)>0 && !((p.overtimeIds||[]).length) && !((t.overtimeIds||[]).length)) pMissingOtIds++;
+    // v2.7.1-committed rows must carry a frozen snapshot; legacy rows are exempt (warning only if new)
+    if(p.committedSnapshot){ if(Math.abs(num(p.committedSnapshot.totalPayroll)-num(t.planned))>1) pSnapTxnDiff++; }
+    else if(p.committedAt && new Date(p.committedAt).getTime() >= Date.parse('2026-07-31')) pNewNoSnapshot++;
+  });
+  if(pPostedNoTxn) add('critical','payroll-posted-no-transaction',`${pPostedNoTxn} Posted/Executed payroll(s) with no linked finance transaction`);
+  if(pTxnNoPlanId) add('warning','payroll-txn-missing-planid',`${pTxnNoPlanId} linked payroll transaction(s) missing payrollPlanId`);
+  if(pPlanTxnTotalDiff) add('warning','payroll-plan-txn-total-diff',`${pPlanTxnTotalDiff} payroll plan total(s) differ from the linked transaction planned amount`);
+  if(pPlanTxnOtDiff) add('warning','payroll-plan-txn-overtime-diff',`${pPlanTxnOtDiff} payroll plan overtime amount(s) differ from the committed transaction overtime`);
+  if(pMissingOtIds) add('warning','payroll-missing-overtime-ids',`${pMissingOtIds} committed payroll transaction(s) carry overtime but no linked overtime IDs`);
+  if(pNewNoSnapshot) add('warning','payroll-missing-committed-snapshot',`${pNewNoSnapshot} newly posted payroll(s) are missing the immutable overtime snapshot`);
+  if(pSnapTxnDiff) add('warning','payroll-snapshot-txn-diff',`${pSnapTxnDiff} committed payroll snapshot total(s) differ from the linked transaction`);
+
+  const supps = State.supplementalPayments||[];
+  let sMissingTxn=0, sOrphanTxn=0, sDupOtId=0, sPostedNoSnap=0, sMutable=0;
+  supps.forEach(s=>{
+    if(s.financeTransactionId && !txIds.has(s.financeTransactionId)) sMissingTxn++;
+    if(['Posted','Executed'].includes(s.status) && !(Array.isArray(s.sourceOvertimeSnapshot) && s.sourceOvertimeSnapshot.length)) sPostedNoSnap++;
+    if(['Posted','Executed'].includes(s.status)){
+      // amount must equal the frozen source snapshot / source IDs basis (mutation detection)
+      const basis = (Array.isArray(s.sourceOvertimeSnapshot)&&s.sourceOvertimeSnapshot.length)
+        ? s.sourceOvertimeSnapshot.reduce((n,o)=>n+num(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount),0)
+        : null;
+      if(basis!=null && Math.abs(basis-num(s.amount))>1) sMutable++;
+    }
+  });
+  // finance transaction linked to a missing supplemental
+  State.txns.forEach(t=>{ if(t.supplementalId && !supps.some(s=>s.id===t.supplementalId)) sOrphanTxn++; });
+  // an overtime ID captured by more than one non-cancelled supplemental anywhere
+  const suppOtCount={};
+  supps.filter(s=>s.status!=='Cancelled').forEach(s=>{ (s.sourceOvertimeIds||[]).forEach(id=>{ suppOtCount[id]=(suppOtCount[id]||0)+1; }); });
+  sDupOtId = Object.values(suppOtCount).filter(n=>n>1).length;
+  if(sMissingTxn) add('critical','supplemental-missing-transaction',`${sMissingTxn} supplemental(s) linked to a missing finance transaction`);
+  if(sOrphanTxn) add('critical','supplemental-orphan-transaction',`${sOrphanTxn} finance transaction(s) linked to a missing supplemental`);
+  if(sDupOtId) add('critical','supplemental-overtime-double-capture',`${sDupOtId} overtime record(s) captured by more than one non-cancelled supplemental`);
+  if(sPostedNoSnap) add('warning','supplemental-missing-source-snapshot',`${sPostedNoSnap} Posted/Executed supplemental(s) missing a frozen source snapshot`);
+  if(sMutable) add('warning','supplemental-amount-drift',`${sMutable} Posted/Executed supplemental(s) whose amount differs from their frozen source snapshot`);
 
   // run schema validators across every entity, roll warnings/errors up
   let vErr=0, vWarn=0;
@@ -7743,7 +7847,9 @@ function bindActionEmptyState(main){
    non-default Product Name OR an Opening Cash Balance that has been set. Unchanged shipped
    defaults do NOT count (a fresh install is "not configured"), and a theme-only save does not
    count (Appearance is not a company-identity field). Optional blank fields never block it. */
-function companySettingsConfigured(s){
+// v2.7.1 — legacy inference retained ONLY as a conservative one-time fallback for
+// settings/backups saved before the explicit marker existed (see companySettingsConfigured).
+function legacyMeaningfulCompanyProfile(s){
   s = s || (typeof State!=='undefined' && State.settings) || {};
   const name = (s.companyName||'').trim();
   const product = (s.productName||'').trim();
@@ -7751,6 +7857,14 @@ function companySettingsConfigured(s){
   const productSet = !!product && product !== APP_NAME;         // intentional, non-default product name
   const cashSet = s.openingCashBalance != null;                 // opening cash balance supplied
   return nameSet || productSet || cashSet;
+}
+// v2.7.1 — completion is driven by an explicit persisted marker set only after a successful
+// Settings save (companySettingsConfiguredAt); the legacy inference is a fallback for older
+// data so pre-marker backups with a meaningful identity stay checked. A fresh install has
+// neither, so it is correctly "not configured".
+function companySettingsConfigured(s){
+  s = s || (typeof State!=='undefined' && State.settings) || {};
+  return Boolean(s.companySettingsConfiguredAt || legacyMeaningfulCompanyProfile(s));
 }
 function onboardingSteps(){
   return [
@@ -8762,6 +8876,127 @@ function payrollIsNegative(pp){ return computePayrollPlanned(pp) < 0; }
 function payrollTxnOf(pp){ return findTxn(pp.committedTxnId || pp.transactionId); }
 function sameIdSet(a,b){ a=a||[]; b=b||[]; if(a.length!==b.length) return false; const sb=new Set(b); return a.every(x=>sb.has(x)); }
 
+/* ---------- immutable overtime snapshot (v2.7.1) ----------
+   Frozen at payroll posting/commit — the historical breakdown must survive later
+   edits/deletion of the source overtime records. Per-ID basis mirrors the drift/
+   supplemental money formula (approvedAmount when set, else calculatedAmount). */
+function buildPayrollOvertimeSnapshot(ids){
+  return (ids||[]).map(id=>{ const o=overtimeById(id); if(!o) return null;
+    return {id:o.id, overtimeDate:o.overtimeDate||null, overtimeHours:num(o.overtimeHours),
+      approvedAmount:(o.approvedAmount!=null?num(o.approvedAmount):null), calculatedAmount:num(o.calculatedAmount),
+      workDescription:o.workDescription||'', statusAtCommit:o.status||null};
+  }).filter(Boolean);
+}
+// Lightweight audit metadata for a frozen overtime snapshot array (v2.7.1). Stored alongside
+// the snapshot on the committed transaction so Payroll Reporting and Integrity Checks can read
+// recordCount / totalHours without re-iterating the array or re-resolving live overtime.
+function overtimeSnapshotMeta(otSnap){
+  otSnap = otSnap || [];
+  return {recordCount: otSnap.length, totalHours: otSnap.reduce((s,o)=>s+num(o.overtimeHours),0)};
+}
+// A committed-payroll snapshot object stored on the plan at post time (v2.7.1). This is
+// the strongest historical evidence and is never reconstructed from current master data.
+function buildPayrollCommittedSnapshot(pp){
+  const otSnap = buildPayrollOvertimeSnapshot(pp.overtimeIds||[]);
+  const otAmt = num(pp.overtimeAmount!=null?pp.overtimeAmount:pp.overtime);
+  return {baseSalary:payrollBaseSalary(pp), overtimeAmount:otAmt,
+    overtimeHours:num(pp.overtimeHours), overtimeRecordCount:otSnap.length,
+    totalPayroll:num(pp.plannedAmount!=null?pp.plannedAmount:computePayrollPlanned(pp)),
+    overtimeSnapshot:otSnap, committedAt:new Date().toISOString(), schemaTag:'v2.7.1'};
+}
+
+/* ---------- stage-aware historical source-of-truth (v2.7.1, Part 5) ----------
+   ONE centralized view model for how a payroll row should be displayed.
+   Draft/Review/Approved → live working-plan values (unchanged behavior).
+   Posted/Executed → immutable committed evidence, in priority order:
+     1) explicit committed payroll snapshot on the plan (v2.7.1+)
+     2) the immutable linked finance transaction
+     3) persisted committed plan fields (broken linkage → integrity finding)
+     4) legacy fallback (clearly marked)
+   It NEVER reconstructs a historical payroll from current master data and never
+   mutates the plan or its transaction. Unknown historical hours are returned as
+   null (render "— / unavailable"), which is distinct from an explicit zero. */
+function payrollHistoricalSnapshot(pp){
+  if(!pp) return null;
+  const stage = payrollStage(pp);
+  const committed = (stage==='Posted' || stage==='Executed');
+  const planTotal = num(pp.plannedAmount!=null?pp.plannedAmount:computePayrollPlanned(pp));
+  const planOt = num(pp.overtimeAmount!=null?pp.overtimeAmount:pp.overtime);
+  if(!committed){
+    return {baseSalary:payrollBaseSalary(pp), overtimeAmount:planOt, overtimeHours:num(pp.overtimeHours),
+      overtimeRecordCount:(pp.overtimeIds||[]).length, totalPayroll:planTotal,
+      source:'working', sourceLabel:'Working plan', integrityStatus:'ok', differences:[]};
+  }
+  const txn = payrollTxnOf(pp);
+  const diffs = [];
+  // priority 1 — explicit committed snapshot on the plan
+  const cs = pp.committedSnapshot;
+  if(cs && cs.totalPayroll!=null){
+    if(txn && Math.abs(num(txn.planned)-num(cs.totalPayroll))>1) diffs.push({label:'Committed snapshot vs posted transaction', a:num(cs.totalPayroll), b:num(txn.planned)});
+    return {baseSalary:num(cs.baseSalary), overtimeAmount:num(cs.overtimeAmount),
+      overtimeHours: cs.overtimeHours!=null?num(cs.overtimeHours):null,
+      overtimeRecordCount: cs.overtimeRecordCount!=null?cs.overtimeRecordCount:(Array.isArray(cs.overtimeSnapshot)?cs.overtimeSnapshot.length:null),
+      totalPayroll:num(cs.totalPayroll), overtimeSnapshot:Array.isArray(cs.overtimeSnapshot)?cs.overtimeSnapshot:null,
+      source:'snapshot', sourceLabel:'Committed snapshot', integrityStatus: diffs.length?'mismatch':'ok', differences:diffs};
+  }
+  // priority 2 — the immutable linked finance transaction
+  if(txn){
+    const total = num(txn.planned);
+    const ot = num(txn.overtimeAmount);
+    const base = total - ot;
+    let hours=null, recCount=null, src='transaction', srcLabel='Posted transaction';
+    if(txn.overtimeSnapshotMeta){                                 // v2.7.1 frozen audit metadata (no recompute)
+      hours = num(txn.overtimeSnapshotMeta.totalHours); recCount = num(txn.overtimeSnapshotMeta.recordCount);
+    } else if(Array.isArray(txn.overtimeSnapshot) && txn.overtimeSnapshot.length){
+      hours = txn.overtimeSnapshot.reduce((s,o)=>s+num(o.overtimeHours),0); recCount = txn.overtimeSnapshot.length;
+    } else {
+      const ids = (txn.overtimeIds && txn.overtimeIds.length) ? txn.overtimeIds : (pp.overtimeIds||[]);
+      const live = ids.map(overtimeById).filter(Boolean);
+      if(ids.length && live.length===ids.length){ hours = live.reduce((s,o)=>s+num(o.overtimeHours),0); recCount = live.length; src='legacy-live'; srcLabel='Legacy (live overtime)'; }
+      else if(ot===0){ hours = 0; recCount = ids.length; } // explicit known-zero overtime
+      else { hours = null; recCount = ids.length || null; src='legacy-fallback'; srcLabel='Legacy (transaction only)'; } // unknown — do NOT invent
+    }
+    if(Math.abs(planTotal-total)>1) diffs.push({label:'Payroll plan total vs posted transaction', a:planTotal, b:total});
+    if(Math.abs(planOt-ot)>1) diffs.push({label:'Payroll plan overtime vs committed overtime', a:planOt, b:ot});
+    return {baseSalary:base, overtimeAmount:ot, overtimeHours:hours, overtimeRecordCount:recCount,
+      totalPayroll:total, overtimeSnapshot:Array.isArray(txn.overtimeSnapshot)?txn.overtimeSnapshot:null,
+      source:src, sourceLabel:srcLabel, integrityStatus: diffs.length?'mismatch':(src==='transaction'?'ok':'legacy'), differences:diffs};
+  }
+  // priority 3/4 — committed plan fields with no linked transaction (broken linkage)
+  return {baseSalary:payrollBaseSalary(pp), overtimeAmount:planOt, overtimeHours:num(pp.overtimeHours),
+    overtimeRecordCount:(pp.overtimeIds||[]).length, totalPayroll:planTotal, overtimeSnapshot:null,
+    source:'plan-committed', sourceLabel:'Plan (no transaction)', integrityStatus:'no-transaction',
+    differences:[{label:'Posted payroll has no linked finance transaction', a:planTotal, b:null}]};
+}
+// Convenience: is a committed row's displayed history in conflict with its evidence?
+function payrollSnapshotHasIssue(pp){ const s=payrollHistoricalSnapshot(pp); return !!(s && (s.integrityStatus==='mismatch' || s.integrityStatus==='no-transaction')); }
+// Shared "hours known?" formatter — explicit zero shows "0 hrs", unknown shows unavailable.
+function payrollHoursDisplay(snap){
+  if(!snap) return '—';
+  if(snap.overtimeHours==null) return '<span class="dim" title="Historical overtime hours are not recoverable for this legacy record">— hrs <span class="faint">(unavailable)</span></span>';
+  return `${num(snap.overtimeHours)} hrs`;
+}
+// Compact integrity indicator for Payroll Detail (v2.7.1) — summarizes the source-of-truth
+// state at a glance; the full explanation (payrollIntegrityNoticeHTML) stays below on mismatch.
+function payrollIntegrityBadge(pp){
+  const s=payrollHistoricalSnapshot(pp); if(!s || s.source==='working') return '';
+  const bad=(s.integrityStatus==='mismatch' || s.integrityStatus==='no-transaction');
+  return bad
+    ? '<span class="pill pill-status-partial" title="Mismatch detected — the committed transaction is authoritative. See the details below.">🟡 Snapshot Mismatch</span>'
+    : '<span class="pill pill-status-completed" title="Snapshot verified — the committed transaction is authoritative.">🟢 Integrity Verified</span>';
+}
+// Read-only integrity notice rendered between base payroll and its transaction on mismatch.
+function payrollIntegrityNoticeHTML(pp){
+  const s = payrollHistoricalSnapshot(pp);
+  if(!s || !(s.integrityStatus==='mismatch' || s.integrityStatus==='no-transaction')) return '';
+  const rows = (s.differences||[]).map(d=>`<div>${escapeHtml(d.label)}: <b class="mono">${fmtIDR(d.a)}</b>${d.b!=null?` vs <b class="mono">${fmtIDR(d.b)}</b> <span class="faint">(difference ${fmtIDR(Math.abs(num(d.a)-num(d.b)))})</span>`:''}</div>`).join('');
+  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--brick);">
+    <h3 style="color:var(--brick);">Payroll snapshot mismatch</h3>
+    <div style="font-size:13px;line-height:1.8;">${rows}</div>
+    <p class="hint" style="margin-top:8px;">The posted transaction is the committed record and remains unchanged. The historical figures shown above are read from the strongest available committed evidence (${escapeHtml(s.sourceLabel)}); the payroll plan's current figures differ. Nothing was altered.</p>
+  </div>`;
+}
+
 /* ---------- recurring payroll adjustments (Part 14) ---------- */
 function adjustmentsForMonth(empId, monthKey){
   return State.payrollAdjustments.filter(a=>{
@@ -8878,11 +9113,12 @@ function payrollMonthTotals(monthKey){
   const t={base:0, overtime:0, additions:0, deductions:0, planned:0, count:plans.length,
     committed:0, ready:0, reviewed:0, draft:0, paid:0, remaining:0};
   plans.forEach(p=>{
-    t.base += payrollBaseSalary(p);
-    t.overtime += num(p.overtimeAmount!=null?p.overtimeAmount:p.overtime);
+    const snap = payrollHistoricalSnapshot(p);            // v2.7.1 stage-aware
+    t.base += num(snap.baseSalary);
+    t.overtime += num(snap.overtimeAmount);
     t.additions += num(p.allowance)+num(p.bonus)+num(p.benefits)+num(p.otherAddition!=null?p.otherAddition:p.otherAdjustment);
     t.deductions += num(p.deduction)+num(p.otherDeduction);
-    t.planned += num(p.plannedAmount!=null?p.plannedAmount:computePayrollPlanned(p));
+    t.planned += num(snap.totalPayroll);
     if(p.status==='Committed') t.committed++; else if(p.status==='Ready') t.ready++; else if(p.status==='Reviewed') t.reviewed++; else t.draft++;
     const txn = payrollTxnOf(p);
     if(txn && txn.actual!=null){ t.paid += num(txn.actual); }
@@ -8962,6 +9198,7 @@ function openSalaryOverride(id, main){
 /* ---------- commit ready payroll (Part 10) ---------- */
 function payrollCommitTxn(pp, mo){
   const ts=new Date().toISOString();
+  const otSnapshot=buildPayrollOvertimeSnapshot(pp.overtimeIds||[]);
   const uraian=`${pp.employeeName}${pp.contractNumber?' · '+pp.contractNumber:''}${pp.contractProgress?' · '+pp.contractProgress:''}`;
   return {id:uid('pay'), monthKey:pp.monthKey, month:mo.month, year:mo.year, monthNum:mo.monthNum,
     category:State.settings.defaultPayrollCategory||'Gaji', categoryCode:'A', no:null, uraian, vol:1, satuan:'bulan', hargaSatuan:pp.plannedAmount,
@@ -8969,6 +9206,7 @@ function payrollCommitTxn(pp, mo){
     scheduledDate:null, paymentMethod:null, bankAccount:null, referenceNumber:null, notes:'Native payroll', vendor:null,
     executionId:null, executionTimestamp:null, execution:null, status:'planned',
     employeeId:pp.employeeId, contractId:pp.contractId, payrollPlanId:pp.id, overtimeIds:(pp.overtimeIds||[]).slice(), overtimeAmount:num(pp.overtimeAmount),
+    overtimeSnapshot:otSnapshot, overtimeSnapshotMeta:overtimeSnapshotMeta(otSnapshot), // v2.7.1 immutable breakdown + audit metadata
     monthlyPlanId:pp.monthlyPlanId||null, payrollMeta:{employeeName:pp.employeeName, contractNumber:pp.contractNumber, contractProgress:pp.contractProgress},
     history:[{event:'created', ts, note:'Created from Payroll Planning commit'}]};
 }
@@ -8998,6 +9236,7 @@ async function commitReadyPayroll(monthKey, ids){
     const blockers = payrollCommitBlockers(pp);
     if(blockers.length){ skipped++; skippedDetails.push({name:pp.employeeName, reasons:blockers}); continue; }
     pp.status='Committed'; pp.monthlyPlanId=plan.id; pp.plannedAmount=computePayrollPlanned(pp); pp.committedAt=now; pp.updatedAt=now;
+    if(!pp.committedSnapshot) pp.committedSnapshot = buildPayrollCommittedSnapshot(pp); // v2.7.1 freeze historical evidence at first post
     let txn = payrollTxnOf(pp); let wasCreated=false;
     if(!txn){ txn=payrollCommitTxn(pp, mo); State.txns.push(txn); pp.committedTxnId=txn.id; pp.transactionId=txn.id; created++; wasCreated=true; (pp.history=pp.history||[]).push({event:'transaction-created', ts:now, note:'Planned Gaji transaction created'}); }
     else if(txn.actual==null){ txn.planned=pp.plannedAmount; txn.hargaSatuan=pp.plannedAmount; txn.overtimeIds=(pp.overtimeIds||[]).slice(); txn.overtimeAmount=num(pp.overtimeAmount); pushHistory(txn,'edited','Payroll re-committed'); updated++; }
@@ -9104,9 +9343,10 @@ function payrollStageCounts(monthKey){
 // Period summary: totals + average/highest/lowest (Feature 9).
 function payrollSummary(monthKey){
   const plans=payrollPlansForMonth(monthKey);
-  const amts=plans.map(p=>num(p.plannedAmount!=null?p.plannedAmount:computePayrollPlanned(p)));
+  const snaps=plans.map(payrollHistoricalSnapshot);        // v2.7.1 stage-aware
+  const amts=snaps.map(s=>num(s.totalPayroll));
   const total=amts.reduce((s,x)=>s+x,0);
-  return {count:plans.length, total, overtime:plans.reduce((s,p)=>s+num(p.overtimeAmount),0),
+  return {count:plans.length, total, overtime:snaps.reduce((s,x)=>s+num(x.overtimeAmount),0),
     average: plans.length?Math.round(total/plans.length):0,
     highest: amts.length?Math.max(...amts):0, lowest: amts.length?Math.min(...amts):0};
 }
@@ -9295,7 +9535,7 @@ function renderPayrollWorkspace(main){
   const plans = payrollPlansForMonth(monthKey);
   const counts = payrollStageCounts(monthKey);
   const summary = payrollSummary(monthKey);
-  const otHours = plans.reduce((s,p)=>s+num(p.overtimeHours),0);
+  const otHours = plans.reduce((s,p)=>{ const h=payrollHistoricalSnapshot(p).overtimeHours; return s+(h==null?0:num(h)); },0);
   const eligible = State.employees.filter(e=>!payrollExclusionReason(e, monthKey));
   const excludedNow = State.employees.map(e=>({e, reason:payrollExclusionReason(e, monthKey)}))
     .filter(x=>x.reason && x.e.active!==false && x.e.employmentStatus==='Active');
@@ -9461,7 +9701,7 @@ function bindPayrollRows(area, monthKey, main, sel){
     else if(act==='ready'){ await setPayrollStatus(id,'Ready'); render(); }
     else if(act==='draft'){ await setPayrollStatus(id,'Draft'); render(); }
     else if(act==='cancel'){ if(confirmAction('Cancel this payroll row? It will not be posted to finance.')){ await setPayrollStatus(id,'Cancelled'); render(); } }
-    else if(act==='exec'){ const pp=payrollPlanById(id); const t=payrollTxnOf(pp); if(t){ State.view='executioncenter'; State.execFilter='today'; render(); } else showWarning('Not posted to a transaction yet.'); }
+    else if(act==='exec'){ const pp=payrollPlanById(id); const t=payrollTxnOf(pp); if(t){ focusTransactionInExecutionCenter(t.id); } else showWarning('Not posted to a transaction yet.'); }
   }));
   bindHRActions(area);
   updCount();
@@ -9522,16 +9762,19 @@ function payrollWorksheetRowHTML(p, sel){
   const driftPill = drift ? (drift.committed
     ? '<span class="pill pill-status-cancelled" title="Approved overtime added after this payroll was posted — a supplemental payment is required">OT after posting</span> '
     : '<span class="pill pill-status-partial" title="Approved overtime changed since this payroll — regenerate to include it">OT drift</span> ') : '';
-  const flags=(p.missingSalary?'<span class="pill pill-status-cancelled">no salary</span> ':'')+(p.missingSchedule?'<span class="pill pill-status-partial">no schedule</span> ':'')+driftPill+(p.otChanged?'<span class="pill pill-status-partial" title="Approved overtime changed since generation">OT changed</span> ':'');
-  const otCell = `${fmtIDR(p.overtimeAmount)}${num(p.overtimeHours)?` <span class="faint">(${num(p.overtimeHours)}h)</span>`:''}`;
+  const snap=payrollHistoricalSnapshot(p);                  // v2.7.1 stage-aware figures
+  const mismatchPill=payrollSnapshotHasIssue(p)?'<span class="pill pill-status-cancelled" title="This posted payroll disagrees with its committed transaction — see Payroll Detail">snapshot mismatch</span> ':'';
+  const flags=(p.missingSalary?'<span class="pill pill-status-cancelled">no salary</span> ':'')+(p.missingSchedule?'<span class="pill pill-status-partial">no schedule</span> ':'')+driftPill+mismatchPill+(p.otChanged?'<span class="pill pill-status-partial" title="Approved overtime changed since generation">OT changed</span> ':'');
+  const otHrs = snap.overtimeHours==null?' <span class="faint">(—h)</span>':(num(snap.overtimeHours)?` <span class="faint">(${num(snap.overtimeHours)}h)</span>`:'');
+  const otCell = `${fmtIDR(snap.overtimeAmount)}${otHrs}`;
   return `<tr>
     <td><input type="checkbox" data-psel="${p.id}" ${sel.has(p.id)?'checked':''}></td>
     <td><button class="linklike" data-pact="detail" data-pid="${p.id}"><b>${escapeHtml(p.employeeName||'—')}</b></button>${flags?`<div class="faint" style="font-size:10px;">${flags}</div>`:''}</td>
     <td class="dim">${escapeHtml(p.contractNumber||'—')}</td>
     <td>${escapeHtml(p.contractProgress||'—')}</td>
-    <td class="num">${fmtIDR(payrollBaseSalary(p))}</td>
+    <td class="num">${fmtIDR(snap.baseSalary)}</td>
     <td class="num">${otCell}</td>
-    <td class="num"><b${payrollIsNegative(p)?' style="color:var(--brick);"':''}>${fmtIDR(computePayrollPlanned(p))}</b></td>
+    <td class="num"><b${snap.totalPayroll<0?' style="color:var(--brick);"':''}>${fmtIDR(snap.totalPayroll)}</b></td>
     <td>${payrollStagePill(p)}</td>
     <td>${hrActionsMenu('prow', p.id, [
       ['prow-detail','View Detail'],
@@ -9545,10 +9788,15 @@ function payrollWorksheetRowHTML(p, sel){
 }
 function openPayrollOvertimeBreakdown(id){
   const pp=payrollPlanById(id); if(!pp) return;
-  const recs=(pp.overtimeIds||[]).map(overtimeById).filter(Boolean);
-  openModalHTML(`<h3>Overtime Breakdown — ${escapeHtml(pp.employeeName)}</h3>
+  const snap=payrollHistoricalSnapshot(pp);
+  const frozen=snap&&Array.isArray(snap.overtimeSnapshot)&&snap.overtimeSnapshot.length?snap.overtimeSnapshot:null;
+  const note=frozen?'<p class="hint" style="margin-bottom:8px;">Frozen at posting — this breakdown reflects the overtime as committed and does not change if the source records are later edited or deleted.</p>':'';
+  const bodyRows = frozen
+    ? frozen.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td>${escapeHtml(o.workDescription||'')}</td><td class="num">—</td><td class="num">—</td><td class="num">${fmtIDR(o.calculatedAmount)}</td><td class="num">${o.approvedAmount!=null?fmtIDR(o.approvedAmount):'—'}</td><td>${escapeHtml(o.statusAtCommit||'—')}</td></tr>`).join('')
+    : (pp.overtimeIds||[]).map(overtimeById).filter(Boolean).map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td>${escapeHtml(o.workDescription||'')}</td><td class="num">${o.monthlyStandardHours}</td><td class="num">${fmtIDRfull(o.hourlyRate)}</td><td class="num">${fmtIDR(o.calculatedAmount)}</td><td class="num">${o.approvedAmount!=null?fmtIDR(o.approvedAmount):'—'}</td><td>${hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('');
+  openModalHTML(`<h3>Overtime Breakdown — ${escapeHtml(pp.employeeName)}</h3>${note}
     <div class="table-wrap"><table><thead><tr><th>Date</th><th class="num">Hours</th><th>Description</th><th class="num">Std Hrs</th><th class="num">Rate</th><th class="num">Calc</th><th class="num">Approved</th><th>Status</th></tr></thead>
-    <tbody>${recs.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td>${escapeHtml(o.workDescription||'')}</td><td class="num">${o.monthlyStandardHours}</td><td class="num">${fmtIDRfull(o.hourlyRate)}</td><td class="num">${fmtIDR(o.calculatedAmount)}</td><td class="num">${o.approvedAmount!=null?fmtIDR(o.approvedAmount):'—'}</td><td>${hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">No approved overtime.</td></tr>'}</tbody></table></div>
+    <tbody>${bodyRows||'<tr><td colspan="8" class="empty">No overtime recorded for this payroll.</td></tr>'}</tbody></table></div>
     <div class="modal-actions"><button type="button" class="btn" id="obc">Close</button></div>`, {width:720, onMount:(r)=>r.querySelector('#obc').addEventListener('click', closeModal)});
 }
 function openCommitPayrollModal(monthKey, main){
@@ -9620,9 +9868,9 @@ function payrollTimelineHTML(events){
 }
 function exportPayrollCsv(monthKey){
   const plans=payrollPlansForMonth(monthKey, true);
-  const headers=['Employee','Contract','Progress','Department','Base Salary','Approved Overtime','Total Payroll','Stage'];
+  const headers=['Employee','Contract','Progress','Department','Base Salary','Approved Overtime','Total Payroll','Stage','Source'];
   const lines=[`# ${APP_NAME} v${APP_VERSION} — Payroll ${keyToMonthObj(monthKey).month} ${keyToMonthObj(monthKey).year}`, headers.join(',')];
-  plans.forEach(p=>lines.push([p.employeeName,p.contractNumber,p.contractProgress,p.department,payrollBaseSalary(p),num(p.overtimeAmount),computePayrollPlanned(p),payrollStage(p)].map(csvSafe).join(',')));
+  plans.forEach(p=>{ const snap=payrollHistoricalSnapshot(p); lines.push([p.employeeName,p.contractNumber,p.contractProgress,p.department,snap.baseSalary,snap.overtimeAmount,snap.totalPayroll,payrollStage(p),snap.sourceLabel].map(csvSafe).join(',')); });
   downloadBlob(lines.join('\n'), `${FILE_BASE}-payroll-${monthKey}.csv`, 'text/csv'); showSuccess('Payroll exported.');
 }
 
@@ -9631,22 +9879,24 @@ function renderPayrollDetail(main){
   const p = payrollPlanById(State.detailPayrollId);
   if(!p){ main.innerHTML=emptyState('Payroll row not found','It may have been cancelled or removed.'); return; }
   const emp=empById(p.employeeId), ct=contractById(p.contractId), txn=payrollTxnOf(p);
-  const recs=(p.overtimeIds||[]).map(overtimeById).filter(Boolean);
+  const snap=payrollHistoricalSnapshot(p);                 // v2.7.1 stage-aware source of truth
+  const committedStage=(payrollStage(p)==='Posted'||payrollStage(p)==='Executed');
   main.innerHTML = pageHeader(p.employeeName||'Payroll', `${escapeHtml(p.month)} ${p.year} · ${escapeHtml(p.contractNumber||'—')} · ${escapeHtml(p.contractProgress||'')}`,
       `<button class="btn" id="pdBack">← Payroll Workspace</button>${emp?`<button class="btn" id="pdEmp">Employee</button>`:''}${ct?`<button class="btn" id="pdCt">Contract</button>`:''}${txn?`<button class="btn" id="pdTxn">Transaction</button>`:''}`)
     + payrollDriftBannerHTML([p])
+    + payrollIntegrityNoticeHTML(p)                          // v2.7.1 mismatch notice (between/above the panels)
     + `<div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
-      <div class="card"><h3>Payroll <span class="tag">read-only</span></h3><div style="font-size:13px;line-height:1.75;">
+      <div class="card"><h3>Base Payroll Snapshot <span class="tag">${committedStage?'committed':'read-only'}</span> ${payrollIntegrityBadge(p)}</h3><div style="font-size:13px;line-height:1.75;">
         <div>Employee: <b>${escapeHtml(p.employeeName||'—')}</b></div>
         <div>Contract: <b>${escapeHtml(p.contractNumber||'—')}</b></div>
         <div>Current Contract Progress: <b>${escapeHtml(p.contractProgress||'—')}</b></div>
         <div class="divider" style="margin:8px 0;"></div>
-        <div>Base Salary: <b class="mono">${fmtIDR(payrollBaseSalary(p))}</b> <span class="faint">from contract</span></div>
-        <div>Approved Overtime: <b class="mono">${fmtIDR(p.overtimeAmount)}</b> <span class="faint">(${num(p.overtimeHours)} hrs · ${recs.length} record(s))</span>${(p.overtimeIds&&p.overtimeIds.length)?` · <button class="linklike" id="pdOt">breakdown</button>`:''}</div>
+        <div>Base Salary: <b class="mono">${fmtIDR(snap.baseSalary)}</b> <span class="faint">${committedStage?'committed at posting':'from contract'}</span></div>
+        <div>Approved Overtime: <b class="mono">${fmtIDR(snap.overtimeAmount)}</b> <span class="faint">(${payrollHoursDisplay(snap)}${snap.overtimeRecordCount!=null?` · ${snap.overtimeRecordCount} record(s)`:''})</span>${(p.overtimeIds&&p.overtimeIds.length)||(snap.overtimeSnapshot&&snap.overtimeSnapshot.length)?` · <button class="linklike" id="pdOt">breakdown</button>`:''}</div>
         <div class="divider" style="margin:8px 0;"></div>
-        <div style="font-size:15px;">Total Payroll: <b class="mono" style="color:var(--accent);">${fmtIDR(computePayrollPlanned(p))}</b> ${payrollIsNegative(p)?'<span class="pill pill-status-cancelled">negative</span>':''}</div>
-        <div>Stage: ${payrollStagePill(p)}</div>
-        <p class="hint" style="margin-top:8px;">Payroll = Base Salary + Approved Overtime. Edit salary via the Contract; edit overtime via Overtime. Generated finance transaction is shown at right.</p>
+        <div style="font-size:15px;">Total Payroll: <b class="mono" style="color:var(--accent);">${fmtIDR(snap.totalPayroll)}</b> ${snap.totalPayroll<0?'<span class="pill pill-status-cancelled">negative</span>':''}</div>
+        <div>Stage: ${payrollStagePill(p)} <span class="faint" style="font-size:11px;">source: ${escapeHtml(snap.sourceLabel)}</span></div>
+        <p class="hint" style="margin-top:8px;">Payroll = Base Salary + Approved Overtime. ${committedStage?'This is the committed historical record — it is not reconstructed from current contract or overtime data. Supplemental payments (if any) are shown separately below.':'Edit salary via the Contract; edit overtime via Overtime. Generated finance transaction is shown at right.'}</p>
       </div></div>
       <div class="card"><h3>Generated Finance Transaction</h3>${txn?`<div style="font-size:13px;line-height:1.75;">
         <div>Transaction Status: ${statusBadge(statusOf(txn))}</div>
@@ -9667,7 +9917,7 @@ function renderPayrollDetail(main){
   const gc=document.getElementById('pdCt'); if(gc) gc.addEventListener('click', ()=>hrNavTo('contractDetail',{detailContractId:ct.id}));
   const gt=document.getElementById('pdTxn'); if(gt) gt.addEventListener('click', ()=>openDetailModal(txn.id));
   const go=document.getElementById('pdOt'); if(go) go.addEventListener('click', ()=>openPayrollOvertimeBreakdown(p.id));
-  const ge2=document.getElementById('pdExec'); if(ge2) ge2.addEventListener('click', ()=>{ State.view='executioncenter'; State.execFilter='today'; render(); });
+  const ge2=document.getElementById('pdExec'); if(ge2) ge2.addEventListener('click', ()=>{ if(txn) focusTransactionInExecutionCenter(txn.id); else { State.view='executioncenter'; render(); } });
 }
 
 /* ---------- recurring payroll adjustments UI (retained; not featured in the simplified workspace) ---------- */
@@ -9775,12 +10025,21 @@ function capturedOvertimeIdsForPlan(planId, exceptSupplementalId){
 function overtimeIdCapturedAnywhere(oid){
   return (State.supplementalPayments||[]).some(s=>s.status!=='Cancelled' && (s.sourceOvertimeIds||[]).includes(oid));
 }
+// v2.7.1 — global duplicate guard: is this overtime ID already captured by ANY other
+// non-cancelled supplemental anywhere in the store (across all payroll plans)? Generation
+// and refresh both use this so an overtime record can never be paid twice, even when two
+// payroll plans reference the same overtime ID. Excludes the supplemental being refreshed.
+function overtimeCapturedByOtherSupplemental(oid, exceptSupplementalId){
+  return (State.supplementalPayments||[]).some(s=>s.status!=='Cancelled' && s.id!==exceptSupplementalId && (s.sourceOvertimeIds||[]).includes(oid));
+}
 // Unpaid, uncaptured overtime that can seed/refresh a delta for this plan.
 function supplementalEligibleOvertime(pp, exceptSupplementalId){
   const drift = payrollOvertimeDrift(pp);
   if(!drift) return {ids:[], amount:0, drift:null, committed:false};
   const captured = capturedOvertimeIdsForPlan(pp.id, exceptSupplementalId);
-  const ids = drift.addedIds.filter(id=>!captured.has(id));
+  // Exclude IDs captured for this plan AND any ID captured by another supplemental anywhere
+  // (cross-plan global guard) — prevents double payment when two plans share an overtime ID.
+  const ids = drift.addedIds.filter(id=>!captured.has(id) && !overtimeCapturedByOtherSupplemental(id, exceptSupplementalId));
   return {ids, amount:supplementalAmountForIds(ids), drift, committed:drift.committed};
 }
 
@@ -9834,7 +10093,7 @@ async function refreshSupplemental(id){
   if(!pp) return {ok:false, reason:'Linked payroll plan is missing.'};
   const drift = payrollOvertimeDrift(pp);
   const capturedByOthers = capturedOvertimeIdsForPlan(pp.id, supp.id);
-  const eligibleIds = (drift ? drift.addedIds : []).filter(x=>!capturedByOthers.has(x));
+  const eligibleIds = (drift ? drift.addedIds : []).filter(x=>!capturedByOthers.has(x) && !overtimeCapturedByOtherSupplemental(x, supp.id));
   const added   = eligibleIds.filter(x=>!(supp.sourceOvertimeIds||[]).includes(x));
   const removed = (supp.sourceOvertimeIds||[]).filter(x=>!eligibleIds.includes(x));
   if(!added.length && !removed.length) return {ok:true, changed:false, supplemental:supp};
@@ -9873,6 +10132,11 @@ async function transitionSupplemental(id, action){
   if(action==='approve' && (!(supp.sourceOvertimeIds||[]).length || num(supp.amount)<=0)) return {ok:false, reason:'Nothing to approve (zero amount).'};
   if(action==='cancel' && supp.financeTransactionId) return {ok:false, reason:'A posted supplemental cannot be cancelled.'};
   const now = new Date().toISOString();
+  // v2.7.1 — freeze an immutable source-overtime snapshot no later than Approved, so the
+  // Supplemental Detail source table survives later edits/deletion of the source overtime.
+  if(action==='approve' && !supp.sourceOvertimeSnapshot && typeof buildPayrollOvertimeSnapshot==='function'){
+    supp.sourceOvertimeSnapshot = buildPayrollOvertimeSnapshot(supp.sourceOvertimeIds||[]);
+  }
   supp.status = t.to; supp.updatedAt = now;
   if(t.tsField && !supp[t.tsField]) supp[t.tsField] = now;
   (supp.history=supp.history||[]).push({event:t.event, ts:now, note:`${t.label} → ${t.to}`});
@@ -9894,7 +10158,8 @@ async function setSupplementalAccount(id, acctId){
 }
 async function setSupplementalNotes(id, notes){
   const supp = supplementalById(id); if(!supp) return {ok:false};
-  if(['Executed','Cancelled'].includes(supp.status)) return {ok:false, reason:'Notes are locked.'};
+  // v2.7.1 — Posted/Executed/Cancelled supplementals are immutable (notes included).
+  if(['Posted','Executed','Cancelled'].includes(supp.status)) return {ok:false, reason:'Notes are locked once the supplemental is Posted.'};
   supp.notes = (notes||'').trim(); supp.updatedAt = new Date().toISOString();
   await persistSupplementalPayments();
   return {ok:true, supplemental:supp};
@@ -9932,10 +10197,20 @@ async function postSupplemental(id){
   Object.assign(supp, supplementalAccountSnapshot(acct.id)); // freeze the snapshot at post time
   const now = new Date().toISOString();
   const txn = supplementalCommitTxn(supp);
+  // v2.7.1 (Section 15) — coordinated persistence to avoid half-written linkage/orphans.
+  // 1) create + persist the transaction first; roll back in-memory if it does not persist.
   State.txns.push(txn);
+  const txnOk = await persist();
+  if(!txnOk){ State.txns = State.txns.filter(t=>t.id!==txn.id); return {ok:false, reason:'Posting failed — the transaction could not be saved. Nothing was changed.'}; }
+  // 2) link the supplemental and persist it; on failure, undo the transaction so no orphan remains.
   supp.financeTransactionId = txn.id; supp.status = 'Posted'; supp.postedAt = now; supp.updatedAt = now;
   (supp.history=supp.history||[]).push({event:'post', ts:now, note:`Posted to finance — Planned ${fmtIDR(supp.amount)} (${acct.label})`});
-  await persistSupplementalPayments(); await persist();
+  const suppOk = await persistSupplementalPayments();
+  if(!suppOk){
+    supp.financeTransactionId = null; supp.status = 'Approved'; supp.postedAt = null; (supp.history||[]).pop();
+    State.txns = State.txns.filter(t=>t.id!==txn.id); await persist();
+    return {ok:false, reason:'Posting failed — the supplemental could not be saved. The transaction was rolled back; nothing was changed.'};
+  }
   logActivity({type:'supplemental.post', module:'Supplemental Payroll', entity:supp.employeeName, entityId:supp.id,
     desc:`Posted supplemental to finance — ${fmtIDR(supp.amount)} (${acct.label})`,
     refs:{employeeId:supp.employeeId, payrollPlanId:supp.payrollPlanId, supplementalId:supp.id, transactionId:txn.id, monthKey:supp.payrollPeriod}});
@@ -10066,7 +10341,9 @@ function renderSupplementalDetail(main){
   const s = supplementalById(State.detailSupplementalId);
   if(!s){ main.innerHTML=emptyState('Supplemental not found','It may have been cancelled or removed.'); return; }
   const emp=empById(s.employeeId), pp=payrollPlanById(s.payrollPlanId), txn=supplementalTxnOf(s);
-  const recs=(s.sourceOvertimeIds||[]).map(overtimeById).filter(Boolean);
+  const frozenSnap = (SUPPLEMENTAL_FROZEN_STATUSES.includes(s.status) && Array.isArray(s.sourceOvertimeSnapshot) && s.sourceOvertimeSnapshot.length) ? s.sourceOvertimeSnapshot : null;
+  const liveRecs=(s.sourceOvertimeIds||[]).map(overtimeById).filter(Boolean);
+  const recs = frozenSnap || liveRecs;                       // v2.7.1 prefer frozen snapshot after Approved
   const acctDisplay = s.companyAccountSnapshotLabel ? `${escapeHtml(s.companyAccountSnapshotLabel)}${s.companyAccountSnapshotBank?' — '+escapeHtml(s.companyAccountSnapshotBank):''}` : '<span class="dim">not selected</span>';
   main.innerHTML = pageHeader(`Supplemental — ${escapeHtml(s.employeeName||'')}`, `${escapeHtml(s.periodLabel||'')} · ${escapeHtml(supplementalSourceLabel(s.sourceType))}`,
       `<button class="btn" id="spBack">← Supplemental Payments</button>${emp?`<button class="btn" id="spEmp">Employee</button>`:''}${pp?`<button class="btn" id="spPay">Base Payroll</button>`:''}${txn?`<button class="btn" id="spTxn">Transaction</button>`:''}`)
@@ -10090,9 +10367,10 @@ function renderSupplementalDetail(main){
         <div style="margin-top:8px;"><button class="btn btn-sm" id="spExec">Open in Execution Center</button></div>
       </div>`:'<div class="empty">Not posted to finance yet. Approve, then Post to Finance to create a Planned transaction.</div>'}</div>
     </div>
-    <div class="card" style="margin-bottom:14px;"><h3>Source Overtime <span class="tag">${recs.length}</span></h3>
+    <div class="card" style="margin-bottom:14px;"><h3>Source Overtime <span class="tag">${recs.length}</span>${frozenSnap?' <span class="pill pill-status-completed" title="Frozen at Approved — does not change if source overtime is later edited or deleted">frozen</span>':''}</h3>
+      ${frozenSnap?'<p class="hint" style="margin-top:-2px;margin-bottom:8px;">Frozen source snapshot — captured when this supplemental was approved.</p>':''}
       <div class="table-wrap"><table><thead><tr><th>Date</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th></tr></thead>
-      <tbody>${recs.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td class="num">${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}</td><td>${hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">No linked overtime.</td></tr>'}</tbody></table></div></div>
+      <tbody>${recs.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td class="num">${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}</td><td>${frozenSnap?escapeHtml(o.statusAtCommit||'—'):hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">No linked overtime.</td></tr>'}</tbody></table></div></div>
     <div class="card"><h3>History</h3><div class="hist-list">${(s.history||[]).map(h=>`<div class="hist-row"><span class="hist-event">${escapeHtml((h.event||'').replace(/_/g,' '))}</span><span class="hist-note">${escapeHtml(h.note||'')}</span><span class="hist-ts faint">${h.ts?new Date(h.ts).toLocaleString('id-ID'):'—'}</span></div>`).join('')||'<div class="empty">No history.</div>'}</div></div>
     <div class="small-btn-row" style="margin-top:14px;flex-wrap:wrap;gap:8px;">${supplementalDetailActionsHTML(s)}</div>`;
   const on=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', fn); };
@@ -10100,7 +10378,7 @@ function renderSupplementalDetail(main){
   on('spEmp', ()=>hrNavTo('employeeDetail',{detailEmpId:emp.id}));
   on('spPay', ()=>hrNavTo('payrollDetail',{detailPayrollId:pp.id}));
   on('spTxn', ()=>{ if(txn) openDetailModal(txn.id); });
-  on('spExec', ()=>{ State.view='executioncenter'; State.execFilter='today'; render(); });
+  on('spExec', ()=>{ if(txn) focusTransactionInExecutionCenter(txn.id); else showWarning('Not posted to a transaction yet.'); });
   bindSupplementalDetailActions(main, s);
 }
 function supplementalDetailActionsHTML(s){
@@ -10122,7 +10400,7 @@ function bindSupplementalDetailActions(main, s){
 async function handleSupplementalAction(act, id){
   const s=supplementalById(id); if(!s) return;
   if(act==='detail'){ hrNavTo('supplementalDetail',{detailSupplementalId:id}); return; }
-  if(act==='exec'){ State.view='executioncenter'; State.execFilter='today'; render(); return; }
+  if(act==='exec'){ const t=supplementalTxnOf(s); if(t) focusTransactionInExecutionCenter(t.id); else showWarning('Not posted to a transaction yet.'); return; }
   if(act==='post'){ openSupplementalPostModal(id); return; }
   if(act==='refresh'){ const r=await refreshSupplemental(id); if(r.ok&&r.changed) showSuccess(`Refreshed — now ${fmtIDR(supplementalById(id).amount)}.`); else if(r.ok) showSuccess('Already up to date.'); else showWarning(r.reason); render(); return; }
   const map={submit:'submit', returnDraft:'returnDraft', approve:'approve', returnReview:'returnReview', cancel:'cancel'};
@@ -10136,13 +10414,32 @@ async function handleSupplementalAction(act, id){
 function openSupplementalPostModal(id){
   const s=supplementalById(id); if(!s) return;
   if(s.status!=='Approved'){ showWarning('Only Approved supplementals can be posted.'); return; }
+  // v2.7.1 (Section 14) — company-account empty state. Disable Post and guide the user to
+  // Bank Accounts instead of showing an unusable empty dropdown; distinguish "none" from
+  // "all Inactive/Archived". The supplemental and its status are preserved; no transaction.
+  const active = activeCompanyAccounts();
+  const anyAccounts = (State.companyAccounts||[]).length>0;
+  if(!active.length){
+    const msg = anyAccounts
+      ? 'All company accounts are Inactive or Archived. Activate one in Settings → Bank Accounts before posting.'
+      : 'No Active company account is available.';
+    openModalHTML(`<h3>Post Supplemental to Finance</h3>
+      <div class="insight-item warn" style="display:block;margin-bottom:10px;">${escapeHtml(msg)}</div>
+      <p class="hint">The supplemental stays Approved and no transaction is created. Add or activate a company account, then Post again.</p>
+      <div class="modal-actions"><button type="button" class="btn" id="spPostCancel">Cancel</button><button type="button" class="btn btn-accent" id="spOpenBanks">Open Bank Accounts</button></div>`,
+      {width:520, onMount:(root)=>{
+        root.querySelector('#spPostCancel').addEventListener('click', closeModal);
+        root.querySelector('#spOpenBanks').addEventListener('click', ()=>{ closeModal(); State.view='bankaccounts'; render(); });
+      }});
+    return;
+  }
   openModalHTML(`<h3>Post Supplemental to Finance</h3>
     <div style="font-size:12.5px;line-height:1.9;">
       <div>Employee: <b>${escapeHtml(s.employeeName)}</b> · ${escapeHtml(s.periodLabel)}</div>
       <div>Amount: <b class="mono" style="color:var(--accent);">${fmtIDR(s.amount)}</b> · ${(s.sourceOvertimeIds||[]).length} overtime record(s)</div>
     </div>
     <form id="spPostForm"><div class="form-grid" style="grid-template-columns:1fr;margin-top:10px;">
-      <div class="field"><label>Company Account (Active only)</label><select class="input" name="companyAccountId" required>${activeCompanyAccounts().map(a=>`<option value="${a.id}" ${s.companyAccountId===a.id?'selected':''}>${escapeHtml(companyAccountLabel(a))}</option>`).join('')||'<option value="">— no active accounts (add in Bank Accounts) —</option>'}</select></div>
+      <div class="field"><label>Company Account (Active only)</label><select class="input" name="companyAccountId" required>${active.map(a=>`<option value="${a.id}" ${s.companyAccountId===a.id?'selected':''}>${escapeHtml(companyAccountLabel(a))}</option>`).join('')}</select></div>
     </div>
     <p class="hint" style="margin-top:6px;">Creates one Planned finance transaction (not executed). Execute it later in the Execution Center. The account is snapshotted and will not change if the account is later renamed.</p>
     <div class="modal-actions"><button type="button" class="btn" id="spPostCancel">Cancel</button><button type="submit" class="btn btn-accent">Post ${fmtIDR(s.amount)}</button></div></form>`,

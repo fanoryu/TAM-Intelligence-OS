@@ -55,12 +55,21 @@ function capturedOvertimeIdsForPlan(planId, exceptSupplementalId){
 function overtimeIdCapturedAnywhere(oid){
   return (State.supplementalPayments||[]).some(s=>s.status!=='Cancelled' && (s.sourceOvertimeIds||[]).includes(oid));
 }
+// v2.7.1 — global duplicate guard: is this overtime ID already captured by ANY other
+// non-cancelled supplemental anywhere in the store (across all payroll plans)? Generation
+// and refresh both use this so an overtime record can never be paid twice, even when two
+// payroll plans reference the same overtime ID. Excludes the supplemental being refreshed.
+function overtimeCapturedByOtherSupplemental(oid, exceptSupplementalId){
+  return (State.supplementalPayments||[]).some(s=>s.status!=='Cancelled' && s.id!==exceptSupplementalId && (s.sourceOvertimeIds||[]).includes(oid));
+}
 // Unpaid, uncaptured overtime that can seed/refresh a delta for this plan.
 function supplementalEligibleOvertime(pp, exceptSupplementalId){
   const drift = payrollOvertimeDrift(pp);
   if(!drift) return {ids:[], amount:0, drift:null, committed:false};
   const captured = capturedOvertimeIdsForPlan(pp.id, exceptSupplementalId);
-  const ids = drift.addedIds.filter(id=>!captured.has(id));
+  // Exclude IDs captured for this plan AND any ID captured by another supplemental anywhere
+  // (cross-plan global guard) — prevents double payment when two plans share an overtime ID.
+  const ids = drift.addedIds.filter(id=>!captured.has(id) && !overtimeCapturedByOtherSupplemental(id, exceptSupplementalId));
   return {ids, amount:supplementalAmountForIds(ids), drift, committed:drift.committed};
 }
 
@@ -114,7 +123,7 @@ async function refreshSupplemental(id){
   if(!pp) return {ok:false, reason:'Linked payroll plan is missing.'};
   const drift = payrollOvertimeDrift(pp);
   const capturedByOthers = capturedOvertimeIdsForPlan(pp.id, supp.id);
-  const eligibleIds = (drift ? drift.addedIds : []).filter(x=>!capturedByOthers.has(x));
+  const eligibleIds = (drift ? drift.addedIds : []).filter(x=>!capturedByOthers.has(x) && !overtimeCapturedByOtherSupplemental(x, supp.id));
   const added   = eligibleIds.filter(x=>!(supp.sourceOvertimeIds||[]).includes(x));
   const removed = (supp.sourceOvertimeIds||[]).filter(x=>!eligibleIds.includes(x));
   if(!added.length && !removed.length) return {ok:true, changed:false, supplemental:supp};
@@ -153,6 +162,11 @@ async function transitionSupplemental(id, action){
   if(action==='approve' && (!(supp.sourceOvertimeIds||[]).length || num(supp.amount)<=0)) return {ok:false, reason:'Nothing to approve (zero amount).'};
   if(action==='cancel' && supp.financeTransactionId) return {ok:false, reason:'A posted supplemental cannot be cancelled.'};
   const now = new Date().toISOString();
+  // v2.7.1 — freeze an immutable source-overtime snapshot no later than Approved, so the
+  // Supplemental Detail source table survives later edits/deletion of the source overtime.
+  if(action==='approve' && !supp.sourceOvertimeSnapshot && typeof buildPayrollOvertimeSnapshot==='function'){
+    supp.sourceOvertimeSnapshot = buildPayrollOvertimeSnapshot(supp.sourceOvertimeIds||[]);
+  }
   supp.status = t.to; supp.updatedAt = now;
   if(t.tsField && !supp[t.tsField]) supp[t.tsField] = now;
   (supp.history=supp.history||[]).push({event:t.event, ts:now, note:`${t.label} → ${t.to}`});
@@ -174,7 +188,8 @@ async function setSupplementalAccount(id, acctId){
 }
 async function setSupplementalNotes(id, notes){
   const supp = supplementalById(id); if(!supp) return {ok:false};
-  if(['Executed','Cancelled'].includes(supp.status)) return {ok:false, reason:'Notes are locked.'};
+  // v2.7.1 — Posted/Executed/Cancelled supplementals are immutable (notes included).
+  if(['Posted','Executed','Cancelled'].includes(supp.status)) return {ok:false, reason:'Notes are locked once the supplemental is Posted.'};
   supp.notes = (notes||'').trim(); supp.updatedAt = new Date().toISOString();
   await persistSupplementalPayments();
   return {ok:true, supplemental:supp};
@@ -212,10 +227,20 @@ async function postSupplemental(id){
   Object.assign(supp, supplementalAccountSnapshot(acct.id)); // freeze the snapshot at post time
   const now = new Date().toISOString();
   const txn = supplementalCommitTxn(supp);
+  // v2.7.1 (Section 15) — coordinated persistence to avoid half-written linkage/orphans.
+  // 1) create + persist the transaction first; roll back in-memory if it does not persist.
   State.txns.push(txn);
+  const txnOk = await persist();
+  if(!txnOk){ State.txns = State.txns.filter(t=>t.id!==txn.id); return {ok:false, reason:'Posting failed — the transaction could not be saved. Nothing was changed.'}; }
+  // 2) link the supplemental and persist it; on failure, undo the transaction so no orphan remains.
   supp.financeTransactionId = txn.id; supp.status = 'Posted'; supp.postedAt = now; supp.updatedAt = now;
   (supp.history=supp.history||[]).push({event:'post', ts:now, note:`Posted to finance — Planned ${fmtIDR(supp.amount)} (${acct.label})`});
-  await persistSupplementalPayments(); await persist();
+  const suppOk = await persistSupplementalPayments();
+  if(!suppOk){
+    supp.financeTransactionId = null; supp.status = 'Approved'; supp.postedAt = null; (supp.history||[]).pop();
+    State.txns = State.txns.filter(t=>t.id!==txn.id); await persist();
+    return {ok:false, reason:'Posting failed — the supplemental could not be saved. The transaction was rolled back; nothing was changed.'};
+  }
   logActivity({type:'supplemental.post', module:'Supplemental Payroll', entity:supp.employeeName, entityId:supp.id,
     desc:`Posted supplemental to finance — ${fmtIDR(supp.amount)} (${acct.label})`,
     refs:{employeeId:supp.employeeId, payrollPlanId:supp.payrollPlanId, supplementalId:supp.id, transactionId:txn.id, monthKey:supp.payrollPeriod}});
@@ -346,7 +371,9 @@ function renderSupplementalDetail(main){
   const s = supplementalById(State.detailSupplementalId);
   if(!s){ main.innerHTML=emptyState('Supplemental not found','It may have been cancelled or removed.'); return; }
   const emp=empById(s.employeeId), pp=payrollPlanById(s.payrollPlanId), txn=supplementalTxnOf(s);
-  const recs=(s.sourceOvertimeIds||[]).map(overtimeById).filter(Boolean);
+  const frozenSnap = (SUPPLEMENTAL_FROZEN_STATUSES.includes(s.status) && Array.isArray(s.sourceOvertimeSnapshot) && s.sourceOvertimeSnapshot.length) ? s.sourceOvertimeSnapshot : null;
+  const liveRecs=(s.sourceOvertimeIds||[]).map(overtimeById).filter(Boolean);
+  const recs = frozenSnap || liveRecs;                       // v2.7.1 prefer frozen snapshot after Approved
   const acctDisplay = s.companyAccountSnapshotLabel ? `${escapeHtml(s.companyAccountSnapshotLabel)}${s.companyAccountSnapshotBank?' — '+escapeHtml(s.companyAccountSnapshotBank):''}` : '<span class="dim">not selected</span>';
   main.innerHTML = pageHeader(`Supplemental — ${escapeHtml(s.employeeName||'')}`, `${escapeHtml(s.periodLabel||'')} · ${escapeHtml(supplementalSourceLabel(s.sourceType))}`,
       `<button class="btn" id="spBack">← Supplemental Payments</button>${emp?`<button class="btn" id="spEmp">Employee</button>`:''}${pp?`<button class="btn" id="spPay">Base Payroll</button>`:''}${txn?`<button class="btn" id="spTxn">Transaction</button>`:''}`)
@@ -370,9 +397,10 @@ function renderSupplementalDetail(main){
         <div style="margin-top:8px;"><button class="btn btn-sm" id="spExec">Open in Execution Center</button></div>
       </div>`:'<div class="empty">Not posted to finance yet. Approve, then Post to Finance to create a Planned transaction.</div>'}</div>
     </div>
-    <div class="card" style="margin-bottom:14px;"><h3>Source Overtime <span class="tag">${recs.length}</span></h3>
+    <div class="card" style="margin-bottom:14px;"><h3>Source Overtime <span class="tag">${recs.length}</span>${frozenSnap?' <span class="pill pill-status-completed" title="Frozen at Approved — does not change if source overtime is later edited or deleted">frozen</span>':''}</h3>
+      ${frozenSnap?'<p class="hint" style="margin-top:-2px;margin-bottom:8px;">Frozen source snapshot — captured when this supplemental was approved.</p>':''}
       <div class="table-wrap"><table><thead><tr><th>Date</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th></tr></thead>
-      <tbody>${recs.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td class="num">${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}</td><td>${hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">No linked overtime.</td></tr>'}</tbody></table></div></div>
+      <tbody>${recs.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td class="num">${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}</td><td>${frozenSnap?escapeHtml(o.statusAtCommit||'—'):hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">No linked overtime.</td></tr>'}</tbody></table></div></div>
     <div class="card"><h3>History</h3><div class="hist-list">${(s.history||[]).map(h=>`<div class="hist-row"><span class="hist-event">${escapeHtml((h.event||'').replace(/_/g,' '))}</span><span class="hist-note">${escapeHtml(h.note||'')}</span><span class="hist-ts faint">${h.ts?new Date(h.ts).toLocaleString('id-ID'):'—'}</span></div>`).join('')||'<div class="empty">No history.</div>'}</div></div>
     <div class="small-btn-row" style="margin-top:14px;flex-wrap:wrap;gap:8px;">${supplementalDetailActionsHTML(s)}</div>`;
   const on=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', fn); };
@@ -380,7 +408,7 @@ function renderSupplementalDetail(main){
   on('spEmp', ()=>hrNavTo('employeeDetail',{detailEmpId:emp.id}));
   on('spPay', ()=>hrNavTo('payrollDetail',{detailPayrollId:pp.id}));
   on('spTxn', ()=>{ if(txn) openDetailModal(txn.id); });
-  on('spExec', ()=>{ State.view='executioncenter'; State.execFilter='today'; render(); });
+  on('spExec', ()=>{ if(txn) focusTransactionInExecutionCenter(txn.id); else showWarning('Not posted to a transaction yet.'); });
   bindSupplementalDetailActions(main, s);
 }
 function supplementalDetailActionsHTML(s){
@@ -402,7 +430,7 @@ function bindSupplementalDetailActions(main, s){
 async function handleSupplementalAction(act, id){
   const s=supplementalById(id); if(!s) return;
   if(act==='detail'){ hrNavTo('supplementalDetail',{detailSupplementalId:id}); return; }
-  if(act==='exec'){ State.view='executioncenter'; State.execFilter='today'; render(); return; }
+  if(act==='exec'){ const t=supplementalTxnOf(s); if(t) focusTransactionInExecutionCenter(t.id); else showWarning('Not posted to a transaction yet.'); return; }
   if(act==='post'){ openSupplementalPostModal(id); return; }
   if(act==='refresh'){ const r=await refreshSupplemental(id); if(r.ok&&r.changed) showSuccess(`Refreshed — now ${fmtIDR(supplementalById(id).amount)}.`); else if(r.ok) showSuccess('Already up to date.'); else showWarning(r.reason); render(); return; }
   const map={submit:'submit', returnDraft:'returnDraft', approve:'approve', returnReview:'returnReview', cancel:'cancel'};
@@ -416,13 +444,32 @@ async function handleSupplementalAction(act, id){
 function openSupplementalPostModal(id){
   const s=supplementalById(id); if(!s) return;
   if(s.status!=='Approved'){ showWarning('Only Approved supplementals can be posted.'); return; }
+  // v2.7.1 (Section 14) — company-account empty state. Disable Post and guide the user to
+  // Bank Accounts instead of showing an unusable empty dropdown; distinguish "none" from
+  // "all Inactive/Archived". The supplemental and its status are preserved; no transaction.
+  const active = activeCompanyAccounts();
+  const anyAccounts = (State.companyAccounts||[]).length>0;
+  if(!active.length){
+    const msg = anyAccounts
+      ? 'All company accounts are Inactive or Archived. Activate one in Settings → Bank Accounts before posting.'
+      : 'No Active company account is available.';
+    openModalHTML(`<h3>Post Supplemental to Finance</h3>
+      <div class="insight-item warn" style="display:block;margin-bottom:10px;">${escapeHtml(msg)}</div>
+      <p class="hint">The supplemental stays Approved and no transaction is created. Add or activate a company account, then Post again.</p>
+      <div class="modal-actions"><button type="button" class="btn" id="spPostCancel">Cancel</button><button type="button" class="btn btn-accent" id="spOpenBanks">Open Bank Accounts</button></div>`,
+      {width:520, onMount:(root)=>{
+        root.querySelector('#spPostCancel').addEventListener('click', closeModal);
+        root.querySelector('#spOpenBanks').addEventListener('click', ()=>{ closeModal(); State.view='bankaccounts'; render(); });
+      }});
+    return;
+  }
   openModalHTML(`<h3>Post Supplemental to Finance</h3>
     <div style="font-size:12.5px;line-height:1.9;">
       <div>Employee: <b>${escapeHtml(s.employeeName)}</b> · ${escapeHtml(s.periodLabel)}</div>
       <div>Amount: <b class="mono" style="color:var(--accent);">${fmtIDR(s.amount)}</b> · ${(s.sourceOvertimeIds||[]).length} overtime record(s)</div>
     </div>
     <form id="spPostForm"><div class="form-grid" style="grid-template-columns:1fr;margin-top:10px;">
-      <div class="field"><label>Company Account (Active only)</label><select class="input" name="companyAccountId" required>${activeCompanyAccounts().map(a=>`<option value="${a.id}" ${s.companyAccountId===a.id?'selected':''}>${escapeHtml(companyAccountLabel(a))}</option>`).join('')||'<option value="">— no active accounts (add in Bank Accounts) —</option>'}</select></div>
+      <div class="field"><label>Company Account (Active only)</label><select class="input" name="companyAccountId" required>${active.map(a=>`<option value="${a.id}" ${s.companyAccountId===a.id?'selected':''}>${escapeHtml(companyAccountLabel(a))}</option>`).join('')}</select></div>
     </div>
     <p class="hint" style="margin-top:6px;">Creates one Planned finance transaction (not executed). Execute it later in the Execution Center. The account is snapshotted and will not change if the account is later renamed.</p>
     <div class="modal-actions"><button type="button" class="btn" id="spPostCancel">Cancel</button><button type="submit" class="btn btn-accent">Post ${fmtIDR(s.amount)}</button></div></form>`,

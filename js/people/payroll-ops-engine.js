@@ -27,6 +27,127 @@ function payrollIsNegative(pp){ return computePayrollPlanned(pp) < 0; }
 function payrollTxnOf(pp){ return findTxn(pp.committedTxnId || pp.transactionId); }
 function sameIdSet(a,b){ a=a||[]; b=b||[]; if(a.length!==b.length) return false; const sb=new Set(b); return a.every(x=>sb.has(x)); }
 
+/* ---------- immutable overtime snapshot (v2.7.1) ----------
+   Frozen at payroll posting/commit — the historical breakdown must survive later
+   edits/deletion of the source overtime records. Per-ID basis mirrors the drift/
+   supplemental money formula (approvedAmount when set, else calculatedAmount). */
+function buildPayrollOvertimeSnapshot(ids){
+  return (ids||[]).map(id=>{ const o=overtimeById(id); if(!o) return null;
+    return {id:o.id, overtimeDate:o.overtimeDate||null, overtimeHours:num(o.overtimeHours),
+      approvedAmount:(o.approvedAmount!=null?num(o.approvedAmount):null), calculatedAmount:num(o.calculatedAmount),
+      workDescription:o.workDescription||'', statusAtCommit:o.status||null};
+  }).filter(Boolean);
+}
+// Lightweight audit metadata for a frozen overtime snapshot array (v2.7.1). Stored alongside
+// the snapshot on the committed transaction so Payroll Reporting and Integrity Checks can read
+// recordCount / totalHours without re-iterating the array or re-resolving live overtime.
+function overtimeSnapshotMeta(otSnap){
+  otSnap = otSnap || [];
+  return {recordCount: otSnap.length, totalHours: otSnap.reduce((s,o)=>s+num(o.overtimeHours),0)};
+}
+// A committed-payroll snapshot object stored on the plan at post time (v2.7.1). This is
+// the strongest historical evidence and is never reconstructed from current master data.
+function buildPayrollCommittedSnapshot(pp){
+  const otSnap = buildPayrollOvertimeSnapshot(pp.overtimeIds||[]);
+  const otAmt = num(pp.overtimeAmount!=null?pp.overtimeAmount:pp.overtime);
+  return {baseSalary:payrollBaseSalary(pp), overtimeAmount:otAmt,
+    overtimeHours:num(pp.overtimeHours), overtimeRecordCount:otSnap.length,
+    totalPayroll:num(pp.plannedAmount!=null?pp.plannedAmount:computePayrollPlanned(pp)),
+    overtimeSnapshot:otSnap, committedAt:new Date().toISOString(), schemaTag:'v2.7.1'};
+}
+
+/* ---------- stage-aware historical source-of-truth (v2.7.1, Part 5) ----------
+   ONE centralized view model for how a payroll row should be displayed.
+   Draft/Review/Approved → live working-plan values (unchanged behavior).
+   Posted/Executed → immutable committed evidence, in priority order:
+     1) explicit committed payroll snapshot on the plan (v2.7.1+)
+     2) the immutable linked finance transaction
+     3) persisted committed plan fields (broken linkage → integrity finding)
+     4) legacy fallback (clearly marked)
+   It NEVER reconstructs a historical payroll from current master data and never
+   mutates the plan or its transaction. Unknown historical hours are returned as
+   null (render "— / unavailable"), which is distinct from an explicit zero. */
+function payrollHistoricalSnapshot(pp){
+  if(!pp) return null;
+  const stage = payrollStage(pp);
+  const committed = (stage==='Posted' || stage==='Executed');
+  const planTotal = num(pp.plannedAmount!=null?pp.plannedAmount:computePayrollPlanned(pp));
+  const planOt = num(pp.overtimeAmount!=null?pp.overtimeAmount:pp.overtime);
+  if(!committed){
+    return {baseSalary:payrollBaseSalary(pp), overtimeAmount:planOt, overtimeHours:num(pp.overtimeHours),
+      overtimeRecordCount:(pp.overtimeIds||[]).length, totalPayroll:planTotal,
+      source:'working', sourceLabel:'Working plan', integrityStatus:'ok', differences:[]};
+  }
+  const txn = payrollTxnOf(pp);
+  const diffs = [];
+  // priority 1 — explicit committed snapshot on the plan
+  const cs = pp.committedSnapshot;
+  if(cs && cs.totalPayroll!=null){
+    if(txn && Math.abs(num(txn.planned)-num(cs.totalPayroll))>1) diffs.push({label:'Committed snapshot vs posted transaction', a:num(cs.totalPayroll), b:num(txn.planned)});
+    return {baseSalary:num(cs.baseSalary), overtimeAmount:num(cs.overtimeAmount),
+      overtimeHours: cs.overtimeHours!=null?num(cs.overtimeHours):null,
+      overtimeRecordCount: cs.overtimeRecordCount!=null?cs.overtimeRecordCount:(Array.isArray(cs.overtimeSnapshot)?cs.overtimeSnapshot.length:null),
+      totalPayroll:num(cs.totalPayroll), overtimeSnapshot:Array.isArray(cs.overtimeSnapshot)?cs.overtimeSnapshot:null,
+      source:'snapshot', sourceLabel:'Committed snapshot', integrityStatus: diffs.length?'mismatch':'ok', differences:diffs};
+  }
+  // priority 2 — the immutable linked finance transaction
+  if(txn){
+    const total = num(txn.planned);
+    const ot = num(txn.overtimeAmount);
+    const base = total - ot;
+    let hours=null, recCount=null, src='transaction', srcLabel='Posted transaction';
+    if(txn.overtimeSnapshotMeta){                                 // v2.7.1 frozen audit metadata (no recompute)
+      hours = num(txn.overtimeSnapshotMeta.totalHours); recCount = num(txn.overtimeSnapshotMeta.recordCount);
+    } else if(Array.isArray(txn.overtimeSnapshot) && txn.overtimeSnapshot.length){
+      hours = txn.overtimeSnapshot.reduce((s,o)=>s+num(o.overtimeHours),0); recCount = txn.overtimeSnapshot.length;
+    } else {
+      const ids = (txn.overtimeIds && txn.overtimeIds.length) ? txn.overtimeIds : (pp.overtimeIds||[]);
+      const live = ids.map(overtimeById).filter(Boolean);
+      if(ids.length && live.length===ids.length){ hours = live.reduce((s,o)=>s+num(o.overtimeHours),0); recCount = live.length; src='legacy-live'; srcLabel='Legacy (live overtime)'; }
+      else if(ot===0){ hours = 0; recCount = ids.length; } // explicit known-zero overtime
+      else { hours = null; recCount = ids.length || null; src='legacy-fallback'; srcLabel='Legacy (transaction only)'; } // unknown — do NOT invent
+    }
+    if(Math.abs(planTotal-total)>1) diffs.push({label:'Payroll plan total vs posted transaction', a:planTotal, b:total});
+    if(Math.abs(planOt-ot)>1) diffs.push({label:'Payroll plan overtime vs committed overtime', a:planOt, b:ot});
+    return {baseSalary:base, overtimeAmount:ot, overtimeHours:hours, overtimeRecordCount:recCount,
+      totalPayroll:total, overtimeSnapshot:Array.isArray(txn.overtimeSnapshot)?txn.overtimeSnapshot:null,
+      source:src, sourceLabel:srcLabel, integrityStatus: diffs.length?'mismatch':(src==='transaction'?'ok':'legacy'), differences:diffs};
+  }
+  // priority 3/4 — committed plan fields with no linked transaction (broken linkage)
+  return {baseSalary:payrollBaseSalary(pp), overtimeAmount:planOt, overtimeHours:num(pp.overtimeHours),
+    overtimeRecordCount:(pp.overtimeIds||[]).length, totalPayroll:planTotal, overtimeSnapshot:null,
+    source:'plan-committed', sourceLabel:'Plan (no transaction)', integrityStatus:'no-transaction',
+    differences:[{label:'Posted payroll has no linked finance transaction', a:planTotal, b:null}]};
+}
+// Convenience: is a committed row's displayed history in conflict with its evidence?
+function payrollSnapshotHasIssue(pp){ const s=payrollHistoricalSnapshot(pp); return !!(s && (s.integrityStatus==='mismatch' || s.integrityStatus==='no-transaction')); }
+// Shared "hours known?" formatter — explicit zero shows "0 hrs", unknown shows unavailable.
+function payrollHoursDisplay(snap){
+  if(!snap) return '—';
+  if(snap.overtimeHours==null) return '<span class="dim" title="Historical overtime hours are not recoverable for this legacy record">— hrs <span class="faint">(unavailable)</span></span>';
+  return `${num(snap.overtimeHours)} hrs`;
+}
+// Compact integrity indicator for Payroll Detail (v2.7.1) — summarizes the source-of-truth
+// state at a glance; the full explanation (payrollIntegrityNoticeHTML) stays below on mismatch.
+function payrollIntegrityBadge(pp){
+  const s=payrollHistoricalSnapshot(pp); if(!s || s.source==='working') return '';
+  const bad=(s.integrityStatus==='mismatch' || s.integrityStatus==='no-transaction');
+  return bad
+    ? '<span class="pill pill-status-partial" title="Mismatch detected — the committed transaction is authoritative. See the details below.">🟡 Snapshot Mismatch</span>'
+    : '<span class="pill pill-status-completed" title="Snapshot verified — the committed transaction is authoritative.">🟢 Integrity Verified</span>';
+}
+// Read-only integrity notice rendered between base payroll and its transaction on mismatch.
+function payrollIntegrityNoticeHTML(pp){
+  const s = payrollHistoricalSnapshot(pp);
+  if(!s || !(s.integrityStatus==='mismatch' || s.integrityStatus==='no-transaction')) return '';
+  const rows = (s.differences||[]).map(d=>`<div>${escapeHtml(d.label)}: <b class="mono">${fmtIDR(d.a)}</b>${d.b!=null?` vs <b class="mono">${fmtIDR(d.b)}</b> <span class="faint">(difference ${fmtIDR(Math.abs(num(d.a)-num(d.b)))})</span>`:''}</div>`).join('');
+  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--brick);">
+    <h3 style="color:var(--brick);">Payroll snapshot mismatch</h3>
+    <div style="font-size:13px;line-height:1.8;">${rows}</div>
+    <p class="hint" style="margin-top:8px;">The posted transaction is the committed record and remains unchanged. The historical figures shown above are read from the strongest available committed evidence (${escapeHtml(s.sourceLabel)}); the payroll plan's current figures differ. Nothing was altered.</p>
+  </div>`;
+}
+
 /* ---------- recurring payroll adjustments (Part 14) ---------- */
 function adjustmentsForMonth(empId, monthKey){
   return State.payrollAdjustments.filter(a=>{
@@ -143,11 +264,12 @@ function payrollMonthTotals(monthKey){
   const t={base:0, overtime:0, additions:0, deductions:0, planned:0, count:plans.length,
     committed:0, ready:0, reviewed:0, draft:0, paid:0, remaining:0};
   plans.forEach(p=>{
-    t.base += payrollBaseSalary(p);
-    t.overtime += num(p.overtimeAmount!=null?p.overtimeAmount:p.overtime);
+    const snap = payrollHistoricalSnapshot(p);            // v2.7.1 stage-aware
+    t.base += num(snap.baseSalary);
+    t.overtime += num(snap.overtimeAmount);
     t.additions += num(p.allowance)+num(p.bonus)+num(p.benefits)+num(p.otherAddition!=null?p.otherAddition:p.otherAdjustment);
     t.deductions += num(p.deduction)+num(p.otherDeduction);
-    t.planned += num(p.plannedAmount!=null?p.plannedAmount:computePayrollPlanned(p));
+    t.planned += num(snap.totalPayroll);
     if(p.status==='Committed') t.committed++; else if(p.status==='Ready') t.ready++; else if(p.status==='Reviewed') t.reviewed++; else t.draft++;
     const txn = payrollTxnOf(p);
     if(txn && txn.actual!=null){ t.paid += num(txn.actual); }
@@ -227,6 +349,7 @@ function openSalaryOverride(id, main){
 /* ---------- commit ready payroll (Part 10) ---------- */
 function payrollCommitTxn(pp, mo){
   const ts=new Date().toISOString();
+  const otSnapshot=buildPayrollOvertimeSnapshot(pp.overtimeIds||[]);
   const uraian=`${pp.employeeName}${pp.contractNumber?' · '+pp.contractNumber:''}${pp.contractProgress?' · '+pp.contractProgress:''}`;
   return {id:uid('pay'), monthKey:pp.monthKey, month:mo.month, year:mo.year, monthNum:mo.monthNum,
     category:State.settings.defaultPayrollCategory||'Gaji', categoryCode:'A', no:null, uraian, vol:1, satuan:'bulan', hargaSatuan:pp.plannedAmount,
@@ -234,6 +357,7 @@ function payrollCommitTxn(pp, mo){
     scheduledDate:null, paymentMethod:null, bankAccount:null, referenceNumber:null, notes:'Native payroll', vendor:null,
     executionId:null, executionTimestamp:null, execution:null, status:'planned',
     employeeId:pp.employeeId, contractId:pp.contractId, payrollPlanId:pp.id, overtimeIds:(pp.overtimeIds||[]).slice(), overtimeAmount:num(pp.overtimeAmount),
+    overtimeSnapshot:otSnapshot, overtimeSnapshotMeta:overtimeSnapshotMeta(otSnapshot), // v2.7.1 immutable breakdown + audit metadata
     monthlyPlanId:pp.monthlyPlanId||null, payrollMeta:{employeeName:pp.employeeName, contractNumber:pp.contractNumber, contractProgress:pp.contractProgress},
     history:[{event:'created', ts, note:'Created from Payroll Planning commit'}]};
 }
@@ -263,6 +387,7 @@ async function commitReadyPayroll(monthKey, ids){
     const blockers = payrollCommitBlockers(pp);
     if(blockers.length){ skipped++; skippedDetails.push({name:pp.employeeName, reasons:blockers}); continue; }
     pp.status='Committed'; pp.monthlyPlanId=plan.id; pp.plannedAmount=computePayrollPlanned(pp); pp.committedAt=now; pp.updatedAt=now;
+    if(!pp.committedSnapshot) pp.committedSnapshot = buildPayrollCommittedSnapshot(pp); // v2.7.1 freeze historical evidence at first post
     let txn = payrollTxnOf(pp); let wasCreated=false;
     if(!txn){ txn=payrollCommitTxn(pp, mo); State.txns.push(txn); pp.committedTxnId=txn.id; pp.transactionId=txn.id; created++; wasCreated=true; (pp.history=pp.history||[]).push({event:'transaction-created', ts:now, note:'Planned Gaji transaction created'}); }
     else if(txn.actual==null){ txn.planned=pp.plannedAmount; txn.hargaSatuan=pp.plannedAmount; txn.overtimeIds=(pp.overtimeIds||[]).slice(); txn.overtimeAmount=num(pp.overtimeAmount); pushHistory(txn,'edited','Payroll re-committed'); updated++; }
@@ -369,9 +494,10 @@ function payrollStageCounts(monthKey){
 // Period summary: totals + average/highest/lowest (Feature 9).
 function payrollSummary(monthKey){
   const plans=payrollPlansForMonth(monthKey);
-  const amts=plans.map(p=>num(p.plannedAmount!=null?p.plannedAmount:computePayrollPlanned(p)));
+  const snaps=plans.map(payrollHistoricalSnapshot);        // v2.7.1 stage-aware
+  const amts=snaps.map(s=>num(s.totalPayroll));
   const total=amts.reduce((s,x)=>s+x,0);
-  return {count:plans.length, total, overtime:plans.reduce((s,p)=>s+num(p.overtimeAmount),0),
+  return {count:plans.length, total, overtime:snaps.reduce((s,x)=>s+num(x.overtimeAmount),0),
     average: plans.length?Math.round(total/plans.length):0,
     highest: amts.length?Math.max(...amts):0, lowest: amts.length?Math.min(...amts):0};
 }

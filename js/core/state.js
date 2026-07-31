@@ -43,6 +43,7 @@ const State = {
   compareTrendRange: 'all',
   txFilter: {month:'all', category:'all', search:'', budget:'all', type:'all', status:'all', method:'all', bank:'all'},
   execFilter: 'today', // Execution Center active view
+  execFocusTxnId: null, // v2.7.1 — deep-link: linked transaction to reveal/highlight
   execModalTxnId: null, // transaction currently being executed
   detailTxnId: null, // transaction whose detail/history panel is open
   pendingImport: null, // {batches, fileName}

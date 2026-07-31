@@ -150,21 +150,21 @@ function hrReportRows(id, monthKey){
   if(id==='payroll-register'){
     const ps=payrollPlansForMonth(monthKey,true);
     return {headers:['Employee','Contract','Progress','Department','Base','Overtime','Additions','Deductions','Planned','Status'],
-      rows:ps.map(p=>[p.employeeName,p.contractNumber,p.contractProgress,p.department,fmtIDR(payrollBaseSalary(p)),fmtIDR(p.overtimeAmount),fmtIDR(num(p.allowance)+num(p.bonus)+num(p.benefits)+num(p.otherAddition)),fmtIDR(num(p.deduction)+num(p.otherDeduction)),fmtIDR(computePayrollPlanned(p)),p.status])};
+      rows:ps.map(p=>{ const s=payrollHistoricalSnapshot(p); return [p.employeeName,p.contractNumber,p.contractProgress,p.department,fmtIDR(s.baseSalary),fmtIDR(s.overtimeAmount),fmtIDR(num(p.allowance)+num(p.bonus)+num(p.benefits)+num(p.otherAddition)),fmtIDR(num(p.deduction)+num(p.otherDeduction)),fmtIDR(s.totalPayroll),p.status]; })};
   }
   if(id==='payroll-department'){
-    const map={}; payrollPlansForMonth(monthKey).forEach(p=>{ const d=p.department||'—'; (map[d]=map[d]||{n:0,sum:0}); map[d].n++; map[d].sum+=computePayrollPlanned(p); });
+    const map={}; payrollPlansForMonth(monthKey).forEach(p=>{ const d=p.department||'—'; (map[d]=map[d]||{n:0,sum:0}); map[d].n++; map[d].sum+=num(payrollHistoricalSnapshot(p).totalPayroll); });
     return {headers:['Department','Employees','Total Planned'], rows:Object.entries(map).map(([k,v])=>[k,v.n,fmtIDR(v.sum)])};
   }
   if(id==='payroll-components'){
     const ps=payrollPlansForMonth(monthKey);
     return {headers:['Employee','Base','Overtime','Allowance','Bonus','Benefits','Other +','Deduction','Other −','Planned'],
-      rows:ps.map(p=>[p.employeeName,fmtIDR(payrollBaseSalary(p)),fmtIDR(p.overtimeAmount),fmtIDR(p.allowance),fmtIDR(p.bonus),fmtIDR(p.benefits),fmtIDR(p.otherAddition),fmtIDR(p.deduction),fmtIDR(p.otherDeduction),fmtIDR(computePayrollPlanned(p))])};
+      rows:ps.map(p=>{ const s=payrollHistoricalSnapshot(p); return [p.employeeName,fmtIDR(s.baseSalary),fmtIDR(s.overtimeAmount),fmtIDR(p.allowance),fmtIDR(p.bonus),fmtIDR(p.benefits),fmtIDR(p.otherAddition),fmtIDR(p.deduction),fmtIDR(p.otherDeduction),fmtIDR(s.totalPayroll)]; })};
   }
   if(id==='payroll-execution'){
     const ps=payrollPlansForMonth(monthKey).filter(p=>p.status==='Committed');
     return {headers:['Employee','Planned','Actual Paid','Remaining','Transaction Status','Execution Date'],
-      rows:ps.map(p=>{ const t=payrollTxnOf(p); return [p.employeeName,fmtIDR(p.plannedAmount),t&&t.actual!=null?fmtIDR(t.actual):'—',t?fmtIDR(num(t.planned)-num(t.actual)):'—',t?statusOf(t):'—',(t&&t.execution&&t.execution.executionDate)||'—']; })};
+      rows:ps.map(p=>{ const t=payrollTxnOf(p); return [p.employeeName,fmtIDR(payrollHistoricalSnapshot(p).totalPayroll),t&&t.actual!=null?fmtIDR(t.actual):'—',t?fmtIDR(num(t.planned)-num(t.actual)):'—',t?statusOf(t):'—',(t&&t.execution&&t.execution.executionDate)||'—']; })};
   }
   if(id==='payroll-excluded'){
     const ex=State.employees.map(e=>({e,reason:payrollExclusionReason(e,monthKey)})).filter(x=>x.reason);

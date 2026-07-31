@@ -243,14 +243,14 @@ function renderEmployeeDetail(main){
       <h3>Payroll History</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Period</th><th>Contract</th><th class="num">Base</th><th class="num">Overtime</th><th class="num">Total</th><th>Stage</th></tr></thead>
-        <tbody>${empPlans.map(p=>`<tr>
+        <tbody>${empPlans.map(p=>{ const snap=payrollHistoricalSnapshot(p); return `<tr>
           <td class="dim">${escapeHtml(p.month||'')} ${p.year||''}</td>
           <td class="dim">${escapeHtml(p.contractNumber||'—')}</td>
-          <td class="num">${fmtIDR(payrollBaseSalary(p))}</td>
-          <td class="num">${fmtIDR(p.overtimeAmount)}</td>
-          <td class="num"><b>${fmtIDR(computePayrollPlanned(p))}</b></td>
+          <td class="num">${fmtIDR(snap.baseSalary)}</td>
+          <td class="num">${fmtIDR(snap.overtimeAmount)}</td>
+          <td class="num"><b>${fmtIDR(snap.totalPayroll)}</b>${payrollSnapshotHasIssue(p)?' <span class="pill pill-status-cancelled" title="Disagrees with the committed transaction — see Payroll Detail">!</span>':''}</td>
           <td>${payrollStagePill(p)}</td>
-        </tr>`).join('') || '<tr><td colspan="6" class="empty">No payroll generated for this employee yet.</td></tr>'}</tbody>
+        </tr>`; }).join('') || '<tr><td colspan="6" class="empty">No payroll generated for this employee yet.</td></tr>'}</tbody>
       </table></div>
     </div>
     <div class="card" style="margin-bottom:14px;">
@@ -349,7 +349,7 @@ function bindHRActions(main){
     else if(a==='prow-ready') { await setPayrollStatus(id,'Ready'); render(); }
     else if(a==='prow-draft') { await setPayrollStatus(id,'Draft'); render(); }
     else if(a==='prow-cancel') { if(confirmAction('Cancel this payroll row? It will not create a finance transaction.')){ await setPayrollStatus(id,'Cancelled'); render(); } }
-    else if(a==='prow-exec') { State.view='executioncenter'; State.execFilter='today'; render(); }
+    else if(a==='prow-exec') { const pp=payrollPlanById(id); const t=pp&&payrollTxnOf(pp); if(t) focusTransactionInExecutionCenter(t.id); else { State.view='executioncenter'; render(); } }
     else if(a==='ot-view') openOvertimeBreakdown(id);
     else if(a==='ot-edit') openOvertimeModal(id);
     else if(a==='ot-duplicate') duplicateOvertimeRecord(id);

@@ -38,7 +38,7 @@ function renderPayrollWorkspace(main){
   const plans = payrollPlansForMonth(monthKey);
   const counts = payrollStageCounts(monthKey);
   const summary = payrollSummary(monthKey);
-  const otHours = plans.reduce((s,p)=>s+num(p.overtimeHours),0);
+  const otHours = plans.reduce((s,p)=>{ const h=payrollHistoricalSnapshot(p).overtimeHours; return s+(h==null?0:num(h)); },0);
   const eligible = State.employees.filter(e=>!payrollExclusionReason(e, monthKey));
   const excludedNow = State.employees.map(e=>({e, reason:payrollExclusionReason(e, monthKey)}))
     .filter(x=>x.reason && x.e.active!==false && x.e.employmentStatus==='Active');
@@ -204,7 +204,7 @@ function bindPayrollRows(area, monthKey, main, sel){
     else if(act==='ready'){ await setPayrollStatus(id,'Ready'); render(); }
     else if(act==='draft'){ await setPayrollStatus(id,'Draft'); render(); }
     else if(act==='cancel'){ if(confirmAction('Cancel this payroll row? It will not be posted to finance.')){ await setPayrollStatus(id,'Cancelled'); render(); } }
-    else if(act==='exec'){ const pp=payrollPlanById(id); const t=payrollTxnOf(pp); if(t){ State.view='executioncenter'; State.execFilter='today'; render(); } else showWarning('Not posted to a transaction yet.'); }
+    else if(act==='exec'){ const pp=payrollPlanById(id); const t=payrollTxnOf(pp); if(t){ focusTransactionInExecutionCenter(t.id); } else showWarning('Not posted to a transaction yet.'); }
   }));
   bindHRActions(area);
   updCount();
@@ -265,16 +265,19 @@ function payrollWorksheetRowHTML(p, sel){
   const driftPill = drift ? (drift.committed
     ? '<span class="pill pill-status-cancelled" title="Approved overtime added after this payroll was posted — a supplemental payment is required">OT after posting</span> '
     : '<span class="pill pill-status-partial" title="Approved overtime changed since this payroll — regenerate to include it">OT drift</span> ') : '';
-  const flags=(p.missingSalary?'<span class="pill pill-status-cancelled">no salary</span> ':'')+(p.missingSchedule?'<span class="pill pill-status-partial">no schedule</span> ':'')+driftPill+(p.otChanged?'<span class="pill pill-status-partial" title="Approved overtime changed since generation">OT changed</span> ':'');
-  const otCell = `${fmtIDR(p.overtimeAmount)}${num(p.overtimeHours)?` <span class="faint">(${num(p.overtimeHours)}h)</span>`:''}`;
+  const snap=payrollHistoricalSnapshot(p);                  // v2.7.1 stage-aware figures
+  const mismatchPill=payrollSnapshotHasIssue(p)?'<span class="pill pill-status-cancelled" title="This posted payroll disagrees with its committed transaction — see Payroll Detail">snapshot mismatch</span> ':'';
+  const flags=(p.missingSalary?'<span class="pill pill-status-cancelled">no salary</span> ':'')+(p.missingSchedule?'<span class="pill pill-status-partial">no schedule</span> ':'')+driftPill+mismatchPill+(p.otChanged?'<span class="pill pill-status-partial" title="Approved overtime changed since generation">OT changed</span> ':'');
+  const otHrs = snap.overtimeHours==null?' <span class="faint">(—h)</span>':(num(snap.overtimeHours)?` <span class="faint">(${num(snap.overtimeHours)}h)</span>`:'');
+  const otCell = `${fmtIDR(snap.overtimeAmount)}${otHrs}`;
   return `<tr>
     <td><input type="checkbox" data-psel="${p.id}" ${sel.has(p.id)?'checked':''}></td>
     <td><button class="linklike" data-pact="detail" data-pid="${p.id}"><b>${escapeHtml(p.employeeName||'—')}</b></button>${flags?`<div class="faint" style="font-size:10px;">${flags}</div>`:''}</td>
     <td class="dim">${escapeHtml(p.contractNumber||'—')}</td>
     <td>${escapeHtml(p.contractProgress||'—')}</td>
-    <td class="num">${fmtIDR(payrollBaseSalary(p))}</td>
+    <td class="num">${fmtIDR(snap.baseSalary)}</td>
     <td class="num">${otCell}</td>
-    <td class="num"><b${payrollIsNegative(p)?' style="color:var(--brick);"':''}>${fmtIDR(computePayrollPlanned(p))}</b></td>
+    <td class="num"><b${snap.totalPayroll<0?' style="color:var(--brick);"':''}>${fmtIDR(snap.totalPayroll)}</b></td>
     <td>${payrollStagePill(p)}</td>
     <td>${hrActionsMenu('prow', p.id, [
       ['prow-detail','View Detail'],
@@ -288,10 +291,15 @@ function payrollWorksheetRowHTML(p, sel){
 }
 function openPayrollOvertimeBreakdown(id){
   const pp=payrollPlanById(id); if(!pp) return;
-  const recs=(pp.overtimeIds||[]).map(overtimeById).filter(Boolean);
-  openModalHTML(`<h3>Overtime Breakdown — ${escapeHtml(pp.employeeName)}</h3>
+  const snap=payrollHistoricalSnapshot(pp);
+  const frozen=snap&&Array.isArray(snap.overtimeSnapshot)&&snap.overtimeSnapshot.length?snap.overtimeSnapshot:null;
+  const note=frozen?'<p class="hint" style="margin-bottom:8px;">Frozen at posting — this breakdown reflects the overtime as committed and does not change if the source records are later edited or deleted.</p>':'';
+  const bodyRows = frozen
+    ? frozen.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td>${escapeHtml(o.workDescription||'')}</td><td class="num">—</td><td class="num">—</td><td class="num">${fmtIDR(o.calculatedAmount)}</td><td class="num">${o.approvedAmount!=null?fmtIDR(o.approvedAmount):'—'}</td><td>${escapeHtml(o.statusAtCommit||'—')}</td></tr>`).join('')
+    : (pp.overtimeIds||[]).map(overtimeById).filter(Boolean).map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td>${escapeHtml(o.workDescription||'')}</td><td class="num">${o.monthlyStandardHours}</td><td class="num">${fmtIDRfull(o.hourlyRate)}</td><td class="num">${fmtIDR(o.calculatedAmount)}</td><td class="num">${o.approvedAmount!=null?fmtIDR(o.approvedAmount):'—'}</td><td>${hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('');
+  openModalHTML(`<h3>Overtime Breakdown — ${escapeHtml(pp.employeeName)}</h3>${note}
     <div class="table-wrap"><table><thead><tr><th>Date</th><th class="num">Hours</th><th>Description</th><th class="num">Std Hrs</th><th class="num">Rate</th><th class="num">Calc</th><th class="num">Approved</th><th>Status</th></tr></thead>
-    <tbody>${recs.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td>${escapeHtml(o.workDescription||'')}</td><td class="num">${o.monthlyStandardHours}</td><td class="num">${fmtIDRfull(o.hourlyRate)}</td><td class="num">${fmtIDR(o.calculatedAmount)}</td><td class="num">${o.approvedAmount!=null?fmtIDR(o.approvedAmount):'—'}</td><td>${hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">No approved overtime.</td></tr>'}</tbody></table></div>
+    <tbody>${bodyRows||'<tr><td colspan="8" class="empty">No overtime recorded for this payroll.</td></tr>'}</tbody></table></div>
     <div class="modal-actions"><button type="button" class="btn" id="obc">Close</button></div>`, {width:720, onMount:(r)=>r.querySelector('#obc').addEventListener('click', closeModal)});
 }
 function openCommitPayrollModal(monthKey, main){
@@ -363,9 +371,9 @@ function payrollTimelineHTML(events){
 }
 function exportPayrollCsv(monthKey){
   const plans=payrollPlansForMonth(monthKey, true);
-  const headers=['Employee','Contract','Progress','Department','Base Salary','Approved Overtime','Total Payroll','Stage'];
+  const headers=['Employee','Contract','Progress','Department','Base Salary','Approved Overtime','Total Payroll','Stage','Source'];
   const lines=[`# ${APP_NAME} v${APP_VERSION} — Payroll ${keyToMonthObj(monthKey).month} ${keyToMonthObj(monthKey).year}`, headers.join(',')];
-  plans.forEach(p=>lines.push([p.employeeName,p.contractNumber,p.contractProgress,p.department,payrollBaseSalary(p),num(p.overtimeAmount),computePayrollPlanned(p),payrollStage(p)].map(csvSafe).join(',')));
+  plans.forEach(p=>{ const snap=payrollHistoricalSnapshot(p); lines.push([p.employeeName,p.contractNumber,p.contractProgress,p.department,snap.baseSalary,snap.overtimeAmount,snap.totalPayroll,payrollStage(p),snap.sourceLabel].map(csvSafe).join(',')); });
   downloadBlob(lines.join('\n'), `${FILE_BASE}-payroll-${monthKey}.csv`, 'text/csv'); showSuccess('Payroll exported.');
 }
 
@@ -374,22 +382,24 @@ function renderPayrollDetail(main){
   const p = payrollPlanById(State.detailPayrollId);
   if(!p){ main.innerHTML=emptyState('Payroll row not found','It may have been cancelled or removed.'); return; }
   const emp=empById(p.employeeId), ct=contractById(p.contractId), txn=payrollTxnOf(p);
-  const recs=(p.overtimeIds||[]).map(overtimeById).filter(Boolean);
+  const snap=payrollHistoricalSnapshot(p);                 // v2.7.1 stage-aware source of truth
+  const committedStage=(payrollStage(p)==='Posted'||payrollStage(p)==='Executed');
   main.innerHTML = pageHeader(p.employeeName||'Payroll', `${escapeHtml(p.month)} ${p.year} · ${escapeHtml(p.contractNumber||'—')} · ${escapeHtml(p.contractProgress||'')}`,
       `<button class="btn" id="pdBack">← Payroll Workspace</button>${emp?`<button class="btn" id="pdEmp">Employee</button>`:''}${ct?`<button class="btn" id="pdCt">Contract</button>`:''}${txn?`<button class="btn" id="pdTxn">Transaction</button>`:''}`)
     + payrollDriftBannerHTML([p])
+    + payrollIntegrityNoticeHTML(p)                          // v2.7.1 mismatch notice (between/above the panels)
     + `<div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
-      <div class="card"><h3>Payroll <span class="tag">read-only</span></h3><div style="font-size:13px;line-height:1.75;">
+      <div class="card"><h3>Base Payroll Snapshot <span class="tag">${committedStage?'committed':'read-only'}</span> ${payrollIntegrityBadge(p)}</h3><div style="font-size:13px;line-height:1.75;">
         <div>Employee: <b>${escapeHtml(p.employeeName||'—')}</b></div>
         <div>Contract: <b>${escapeHtml(p.contractNumber||'—')}</b></div>
         <div>Current Contract Progress: <b>${escapeHtml(p.contractProgress||'—')}</b></div>
         <div class="divider" style="margin:8px 0;"></div>
-        <div>Base Salary: <b class="mono">${fmtIDR(payrollBaseSalary(p))}</b> <span class="faint">from contract</span></div>
-        <div>Approved Overtime: <b class="mono">${fmtIDR(p.overtimeAmount)}</b> <span class="faint">(${num(p.overtimeHours)} hrs · ${recs.length} record(s))</span>${(p.overtimeIds&&p.overtimeIds.length)?` · <button class="linklike" id="pdOt">breakdown</button>`:''}</div>
+        <div>Base Salary: <b class="mono">${fmtIDR(snap.baseSalary)}</b> <span class="faint">${committedStage?'committed at posting':'from contract'}</span></div>
+        <div>Approved Overtime: <b class="mono">${fmtIDR(snap.overtimeAmount)}</b> <span class="faint">(${payrollHoursDisplay(snap)}${snap.overtimeRecordCount!=null?` · ${snap.overtimeRecordCount} record(s)`:''})</span>${(p.overtimeIds&&p.overtimeIds.length)||(snap.overtimeSnapshot&&snap.overtimeSnapshot.length)?` · <button class="linklike" id="pdOt">breakdown</button>`:''}</div>
         <div class="divider" style="margin:8px 0;"></div>
-        <div style="font-size:15px;">Total Payroll: <b class="mono" style="color:var(--accent);">${fmtIDR(computePayrollPlanned(p))}</b> ${payrollIsNegative(p)?'<span class="pill pill-status-cancelled">negative</span>':''}</div>
-        <div>Stage: ${payrollStagePill(p)}</div>
-        <p class="hint" style="margin-top:8px;">Payroll = Base Salary + Approved Overtime. Edit salary via the Contract; edit overtime via Overtime. Generated finance transaction is shown at right.</p>
+        <div style="font-size:15px;">Total Payroll: <b class="mono" style="color:var(--accent);">${fmtIDR(snap.totalPayroll)}</b> ${snap.totalPayroll<0?'<span class="pill pill-status-cancelled">negative</span>':''}</div>
+        <div>Stage: ${payrollStagePill(p)} <span class="faint" style="font-size:11px;">source: ${escapeHtml(snap.sourceLabel)}</span></div>
+        <p class="hint" style="margin-top:8px;">Payroll = Base Salary + Approved Overtime. ${committedStage?'This is the committed historical record — it is not reconstructed from current contract or overtime data. Supplemental payments (if any) are shown separately below.':'Edit salary via the Contract; edit overtime via Overtime. Generated finance transaction is shown at right.'}</p>
       </div></div>
       <div class="card"><h3>Generated Finance Transaction</h3>${txn?`<div style="font-size:13px;line-height:1.75;">
         <div>Transaction Status: ${statusBadge(statusOf(txn))}</div>
@@ -410,7 +420,7 @@ function renderPayrollDetail(main){
   const gc=document.getElementById('pdCt'); if(gc) gc.addEventListener('click', ()=>hrNavTo('contractDetail',{detailContractId:ct.id}));
   const gt=document.getElementById('pdTxn'); if(gt) gt.addEventListener('click', ()=>openDetailModal(txn.id));
   const go=document.getElementById('pdOt'); if(go) go.addEventListener('click', ()=>openPayrollOvertimeBreakdown(p.id));
-  const ge2=document.getElementById('pdExec'); if(ge2) ge2.addEventListener('click', ()=>{ State.view='executioncenter'; State.execFilter='today'; render(); });
+  const ge2=document.getElementById('pdExec'); if(ge2) ge2.addEventListener('click', ()=>{ if(txn) focusTransactionInExecutionCenter(txn.id); else { State.view='executioncenter'; render(); } });
 }
 
 /* ---------- recurring payroll adjustments UI (retained; not featured in the simplified workspace) ---------- */

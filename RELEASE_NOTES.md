@@ -1,85 +1,66 @@
-# TAM Intelligence OS v2.7.0 — Supplemental Payroll Engine
+# TAM Intelligence OS v2.7.1 — Payroll Integrity & Reporting Foundation
 
-**Release Name:** Supplemental Payroll Engine
+**Release Name:** Payroll Integrity & Reporting Foundation
 
 ## Summary
-Introduces Supplemental Payments — a separate accounting document that settles overtime approved
-**after** the base payroll became immutable (Posted/Executed). The base payroll total, its finance
-transaction, and its execution history are never modified. Adds **one** additive storage key and does
-**not** change `SCHEMA_VERSION`. Source in v1 is overtime only.
+A controlled post-release integrity fix. Posted/Executed payroll (and supplemental) display now derive
+from a single **stage-aware historical source-of-truth** helper backed by **immutable snapshots frozen
+at posting** — historical figures are never reconstructed from current contract/overtime data, and a
+visible **integrity notice** appears when a legacy plan disagrees with its committed transaction. No
+historical payroll or finance amount is auto-repaired. Adds **no** storage key (still **15**) and does
+**not** change `SCHEMA_VERSION` (still **6**).
 
 ## Highlights
-- **Supplemental Payment** entity with a full lifecycle: Draft → Review → Approved → Posted → Executed.
-- The v2.6.8 overtime-drift warning is now **actionable** — generate/settle a supplemental in a click.
-- Reuses existing systems: the drift amount, the finance transaction model, and the Execution Center.
-- Rigorous **duplicate prevention** — an overtime record is never paid twice; frozen records are never mutated.
-- Housekeeping: feature-status registry (no more hardcoded "Preview" badge), masked employee CSV, count-neutral CI labels.
-
-## Added
-- **Supplemental Payments** module (`js/people/supplemental-engine.js`) + store
-  `tam_supplemental_payments_v1`. Model: `{ id, employeeId, payrollPlanId, payrollPeriod, sourceType,
-  sourceOvertimeIds, amount, status, companyAccountId + snapshots, financeTransactionId, executionId,
-  notes, timestamps, createdBy, auditVersion }`. Source type v1: `overtime_drift` only.
-- New **Supplemental Payments** page (list / search / filter by status·period·employee / detail /
-  lifecycle actions with skipped/disabled reasons). Payroll Detail and Employee Detail show related
-  supplementals separately from base payroll. Activity Log labels for all `supplemental.*` events.
-- Actionable overtime-drift banner (Generate / Open) in Payroll Workspace, Payroll Detail, Overtime.
-- **Feature lifecycle registry** replacing the hardcoded sidebar badge; masked general employee CSV export.
+- **Root-cause fix** for the reported Rp7,000,000-vs-Rp8,750,000 mismatch: every payroll consumer read
+  live plan values instead of the immutable committed transaction. A new `payrollHistoricalSnapshot`
+  helper centralizes stage-aware display: Draft/Review/Approved use working-plan values;
+  Posted/Executed use committed evidence (explicit snapshot → linked transaction → committed plan
+  fields), with a "Payroll snapshot mismatch" notice on disagreement. The posted transaction is never
+  altered.
+- **Immutable overtime snapshots** frozen at posting (on the transaction and the plan); Supplemental
+  freezes a source-overtime snapshot at Approved. Historical detail survives later edit/deletion of
+  the source overtime. Unknown legacy hours render **"— / unavailable"** (distinct from an explicit 0).
+- **Supplemental hardening:** Posted notes are immutable; a **global** duplicate guard prevents one
+  overtime ID being captured by more than one non-cancelled supplemental across *all* payroll plans;
+  coordinated posting persistence prevents orphaned transaction/supplemental linkage.
+- **Company settings onboarding:** completion now uses an explicit persisted marker
+  (`companySettingsConfiguredAt`) set only after a successful save, with a conservative legacy fallback.
+- **Execution Center deep-link:** "Open in Execution Center" now reveals and highlights the exact
+  linked transaction (regardless of date bucket), with a clear warning if it is missing.
+- **Empty company-account UX** when posting a supplemental; **12 new integrity checks** for
+  payroll/supplemental linkage and snapshot consistency (detect-only, never auto-repair).
 
 ## Changed
-- Overtime-drift committed banner: the disabled placeholder is replaced by real Generate/Open actions.
-- CI/Release "Verify build" step labels are count-neutral.
-- `APP_VERSION` → `2.7.0`, `APP_RELEASE_NAME` → "Supplemental Payroll Engine".
+- `APP_VERSION` → `2.7.1`, `APP_RELEASE_NAME` → "Payroll Integrity & Reporting Foundation".
+- Payroll Detail, worksheet rows, period totals/summary, and CSV export are stage-aware and consistent.
+- `persist()` and `saveSettings()` now return their success flag for coordinated persistence.
 
-## Fixed
-- Resolved the known employee-CSV limitation: bank-account numbers are now masked in the general export.
-
-## Security
-- Bank-account numbers are masked everywhere outside their own edit field, including the general CSV
-  export; no PIN/OTP/password/token stored; account snapshots are immutable after posting. No
-  supplemental data or account numbers are transmitted (client-only).
-
-## Compatibility
-- Runs in the browser (modular source or portable single file); no backend.
-- Existing local data: **fully compatible**. No base-payroll data is touched. Fresh installs start
-  with an empty supplemental store (no seed).
-- `SCHEMA_VERSION`: **unchanged (6)**.
-
-## Data Safety
-- SCHEMA_VERSION: **unchanged (6)**.
-- Storage keys: **14 → 15** (added additive `tam_supplemental_payments_v1`); none renamed or removed.
-- Backup format: extended additively with `supplementalPayments`; older backups restore cleanly.
-
-## Migration
-- **Additive store** `tam_supplemental_payments_v1` defaults to `[]`. **No migration and no seed** —
-  supplementals are created explicitly by the user from an overtime-drift warning.
+## Compatibility & Data Safety
+- Existing local data: **fully compatible**. No base-payroll/finance amount is auto-changed; legacy
+  records missing a snapshot fall back to the strongest available committed evidence and show a notice.
+- `SCHEMA_VERSION`: **unchanged (6)**. Storage keys: **unchanged (15)** — none added, renamed, or
+  removed. `companySettingsConfiguredAt` is a field inside the existing settings object, not a key.
+- Backup format: additive fields only (`committedSnapshot`, `overtimeSnapshot`, `sourceOvertimeSnapshot`,
+  `companySettingsConfiguredAt`); older backups restore cleanly. Demo Data does not mark company
+  settings complete (consistent with the existing onboarding policy).
 
 ## QA
-- Build: `dist/tam-intelligence-os-v2.7.0.html`. Verify: **129 checks** (adds supplemental key/count,
-  lifecycle constants, linkage, feature-registry, count-neutral workflow labels; SCHEMA_VERSION 6).
-- Browser (modular + dist), **zero console errors**: foundation (15 keys, reload, backup round-trip,
-  old-backup restore); generation (posted/executed base + late OT, no-eligible, repeated, refresh,
-  frozen records, new-record-after-freeze, no double-count); lifecycle (all valid/invalid
-  transitions, idempotent); finance (one Planned txn, both-way links, snapshot vs rename, base
-  byte-stable); execution (execute once, repeat blocked, actual/history linked, base untouched);
-  UI (list/detail, payroll & employee integration, actionable banner, Activity Log labels, no
-  account-number leaks); feature badges (SOON/none) and masked CSV.
-
-## Regression
-- Payroll generic selection, overtime drift, execution, Smart Import/dedup, company accounts, and
-  existing transactions — all unaffected. Base payroll transactions verified byte-stable.
+- Build: `dist/tam-intelligence-os-v2.7.1.html`. Verify: **166 checks** (adds v2.7.1 source-of-truth,
+  snapshot, supplemental global-dedup, Posted-notes immutability, deep-link, integrity-check, settings
+  marker, and released-v2.7.0-artifact-untouched checks; SCHEMA_VERSION 6, 15 keys).
+- Browser (modular + portable dist), **zero console errors** on boot.
 
 ## Known Limitations
-- Source is **overtime only**; bonuses/reimbursements/arbitrary adjustments are out of scope (the
-  engine is designed to extend later).
+- Reporting expansion is deliberately deferred until the historical source-of-truth model is validated
+  in production; v2.7.1 establishes the foundation and integrity diagnostics only.
+- Supplemental source remains **overtime only**; other adjustment types are out of scope.
 - Projects / Vendors / Financial Calendar remain non-functional placeholders (labeled **SOON**).
-- No dedicated full-account "payment file" export exists; the general employee CSV is masked.
 - The tracked company workbook remains a documented, accepted exception (untouched).
 
 ## Git Information
-- Commit: 9d8f8bee6c6a4059da53ed2c2bc46a6b05657fde
-- Tag: v2.7.0
+- Commit: _pending approval — not committed_
+- Tag: _pending approval — not tagged_
 - Branch: main
 
 ## Release Asset
-- dist/tam-intelligence-os-v2.7.0.html
+- dist/tam-intelligence-os-v2.7.1.html

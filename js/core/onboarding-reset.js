@@ -23,7 +23,9 @@ function bindActionEmptyState(main){
    non-default Product Name OR an Opening Cash Balance that has been set. Unchanged shipped
    defaults do NOT count (a fresh install is "not configured"), and a theme-only save does not
    count (Appearance is not a company-identity field). Optional blank fields never block it. */
-function companySettingsConfigured(s){
+// v2.7.1 — legacy inference retained ONLY as a conservative one-time fallback for
+// settings/backups saved before the explicit marker existed (see companySettingsConfigured).
+function legacyMeaningfulCompanyProfile(s){
   s = s || (typeof State!=='undefined' && State.settings) || {};
   const name = (s.companyName||'').trim();
   const product = (s.productName||'').trim();
@@ -31,6 +33,14 @@ function companySettingsConfigured(s){
   const productSet = !!product && product !== APP_NAME;         // intentional, non-default product name
   const cashSet = s.openingCashBalance != null;                 // opening cash balance supplied
   return nameSet || productSet || cashSet;
+}
+// v2.7.1 — completion is driven by an explicit persisted marker set only after a successful
+// Settings save (companySettingsConfiguredAt); the legacy inference is a fallback for older
+// data so pre-marker backups with a meaningful identity stay checked. A fresh install has
+// neither, so it is correctly "not configured".
+function companySettingsConfigured(s){
+  s = s || (typeof State!=='undefined' && State.settings) || {};
+  return Boolean(s.companySettingsConfiguredAt || legacyMeaningfulCompanyProfile(s));
 }
 function onboardingSteps(){
   return [

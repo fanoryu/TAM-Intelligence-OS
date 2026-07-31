@@ -1,5 +1,39 @@
 # Changelog
 
+## 2.7.1 — Payroll Integrity & Reporting Foundation
+
+**Type:** Post-release integrity fix. **No** new storage key (still 15) and **no** `SCHEMA_VERSION`
+change (still 6). No historical payroll or finance amount is auto-repaired.
+
+### Fixed
+- Posted/Executed payroll could display a plan total (e.g. Rp7,000,000, 0 overtime) that disagreed
+  with its immutable committed transaction (e.g. Rp8,750,000). Every payroll consumer read live
+  plan values instead of the committed transaction snapshot.
+
+### Added
+- `payrollHistoricalSnapshot(pp)` — one centralized stage-aware source-of-truth view model.
+  Draft/Review/Approved show working-plan values; Posted/Executed derive from committed evidence in
+  priority order (explicit committed snapshot → immutable linked transaction → committed plan fields →
+  legacy fallback), returning `{baseSalary, overtimeAmount, overtimeHours, overtimeRecordCount,
+  totalPayroll, source, integrityStatus, differences}`. Unknown legacy hours are `null` → rendered
+  "— / unavailable".
+- Immutable overtime snapshots frozen at posting: `overtimeSnapshot` on the payroll/supplemental
+  transaction and `committedSnapshot` on the plan; supplemental `sourceOvertimeSnapshot` frozen at
+  Approved. Snapshot-preferring breakdown/source tables survive later edit/deletion of source overtime.
+- Explicit onboarding completion marker `companySettingsConfiguredAt` (settings field, not a storage
+  key) set only after a successful Settings save, with `legacyMeaningfulCompanyProfile` fallback.
+- Execution Center deep-link `focusTransactionInExecutionCenter` — reveals/highlights the exact linked
+  transaction regardless of date bucket; clear warning if missing.
+- Global supplemental duplicate guard `overtimeCapturedByOtherSupplemental` used by both generation and
+  refresh; empty/inactive company-account posting UX; 12 new integrity checks (payroll↔transaction
+  linkage, snapshot consistency, supplemental orphan/double-capture/missing-snapshot).
+
+### Changed
+- Payroll Detail ("Base Payroll Snapshot" + mismatch notice), worksheet rows, period totals/summary,
+  and CSV export are stage-aware. Posted supplemental notes are immutable. `persist()` and
+  `saveSettings()` return their success flag; supplemental posting persistence is coordinated with
+  rollback to avoid orphaned linkage. Verifier: 129 → **166** checks.
+
 ## 2.7.0 — Supplemental Payroll Engine
 
 **Type:** New payroll capability + housekeeping. Adds **one** additive storage key

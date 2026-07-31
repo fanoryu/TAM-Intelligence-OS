@@ -54,6 +54,7 @@ function ensureMonthlyPlan(monthKey){
 // links (never description text alone) so it round-trips to employee/contract.
 function buildPayrollTxn(pp, mo, uraian){
   const ts = new Date().toISOString();
+  const otSnapshot = buildPayrollOvertimeSnapshot(pp.overtimeIds||[]);
   return {
     id: uid('pay'), monthKey:pp.monthKey, month:mo.month, year:mo.year, monthNum:mo.monthNum,
     category: State.settings.defaultPayrollCategory||'Gaji', categoryCode:'A', no:null,
@@ -64,6 +65,7 @@ function buildPayrollTxn(pp, mo, uraian){
     executionId:null, executionTimestamp:null, execution:null, status:'planned',
     employeeId:pp.employeeId, contractId:pp.contractId, payrollPlanId:pp.id, monthlyPlanId:pp.monthlyPlanId||null,
     overtimeIds: Array.isArray(pp.overtimeIds)?pp.overtimeIds.slice():[], overtimeAmount: num(pp.overtime),
+    overtimeSnapshot: otSnapshot, overtimeSnapshotMeta: overtimeSnapshotMeta(otSnapshot), // v2.7.1 immutable breakdown + audit metadata
     payrollMeta:{employeeName:pp.employeeName, contractNumber:pp.contractNumber, contractProgress:pp.contractProgress},
     history:[{event:'created', ts, note:'Generated from Payroll Planning'}],
   };
@@ -87,6 +89,7 @@ async function commitPayroll(monthKey, rows){
       overtimeIds: otIds,
       plannedAmount:amount, notes:r.notes||'', status:'committed', monthlyPlanId:plan.id, updatedAt:now,
     });
+    if(!pp.committedSnapshot && typeof buildPayrollCommittedSnapshot==='function') pp.committedSnapshot = buildPayrollCommittedSnapshot(pp); // v2.7.1 freeze historical evidence
     const uraian = `${r.employeeName} · ${r.contractNumber} · ${r.contractProgress}`;
     let txn = pp.committedTxnId ? findTxn(pp.committedTxnId) : null;
     if(!txn){

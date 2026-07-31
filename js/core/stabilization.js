@@ -320,6 +320,58 @@ function runIntegrityCheck(){
   (State.importBatches||[]).forEach(b=>{ if(b.undone || !b.candidateMap) return; const created=(b.created&&b.created.employees)||[]; if(created.length > new Set(Object.values(b.candidateMap)).size) batchMultiCand++; });
   if(batchMultiCand) add('warning','import-multiple-employees-per-candidate',`${batchMultiCand} Smart Import batch(es) created more than one employee for a single candidate`);
 
+  // ----- Payroll historical source-of-truth & Supplemental integrity (v2.7.1) -----
+  // NEVER auto-repairs; only detects and classifies. Uses the immutable transaction as truth.
+  let pPostedNoTxn=0, pTxnNoPlanId=0, pPlanTxnTotalDiff=0, pPlanTxnOtDiff=0, pMissingOtIds=0, pNewNoSnapshot=0, pSnapTxnDiff=0;
+  State.payrollPlans.forEach(p=>{
+    if(p.status==='Cancelled') return;
+    const stage = (typeof payrollStage==='function') ? payrollStage(p) : (p.status==='Committed'?'Posted':'Draft');
+    if(stage!=='Posted' && stage!=='Executed') return;
+    const t = payrollTxnOf(p);
+    if(!t){ pPostedNoTxn++; return; }
+    if(!t.payrollPlanId) pTxnNoPlanId++;
+    const planTotal = num(p.plannedAmount!=null?p.plannedAmount:computePayrollPlanned(p));
+    const planOt = num(p.overtimeAmount!=null?p.overtimeAmount:p.overtime);
+    if(Math.abs(planTotal-num(t.planned))>1) pPlanTxnTotalDiff++;
+    if(Math.abs(planOt-num(t.overtimeAmount))>1) pPlanTxnOtDiff++;
+    if(num(t.overtimeAmount)>0 && !((p.overtimeIds||[]).length) && !((t.overtimeIds||[]).length)) pMissingOtIds++;
+    // v2.7.1-committed rows must carry a frozen snapshot; legacy rows are exempt (warning only if new)
+    if(p.committedSnapshot){ if(Math.abs(num(p.committedSnapshot.totalPayroll)-num(t.planned))>1) pSnapTxnDiff++; }
+    else if(p.committedAt && new Date(p.committedAt).getTime() >= Date.parse('2026-07-31')) pNewNoSnapshot++;
+  });
+  if(pPostedNoTxn) add('critical','payroll-posted-no-transaction',`${pPostedNoTxn} Posted/Executed payroll(s) with no linked finance transaction`);
+  if(pTxnNoPlanId) add('warning','payroll-txn-missing-planid',`${pTxnNoPlanId} linked payroll transaction(s) missing payrollPlanId`);
+  if(pPlanTxnTotalDiff) add('warning','payroll-plan-txn-total-diff',`${pPlanTxnTotalDiff} payroll plan total(s) differ from the linked transaction planned amount`);
+  if(pPlanTxnOtDiff) add('warning','payroll-plan-txn-overtime-diff',`${pPlanTxnOtDiff} payroll plan overtime amount(s) differ from the committed transaction overtime`);
+  if(pMissingOtIds) add('warning','payroll-missing-overtime-ids',`${pMissingOtIds} committed payroll transaction(s) carry overtime but no linked overtime IDs`);
+  if(pNewNoSnapshot) add('warning','payroll-missing-committed-snapshot',`${pNewNoSnapshot} newly posted payroll(s) are missing the immutable overtime snapshot`);
+  if(pSnapTxnDiff) add('warning','payroll-snapshot-txn-diff',`${pSnapTxnDiff} committed payroll snapshot total(s) differ from the linked transaction`);
+
+  const supps = State.supplementalPayments||[];
+  let sMissingTxn=0, sOrphanTxn=0, sDupOtId=0, sPostedNoSnap=0, sMutable=0;
+  supps.forEach(s=>{
+    if(s.financeTransactionId && !txIds.has(s.financeTransactionId)) sMissingTxn++;
+    if(['Posted','Executed'].includes(s.status) && !(Array.isArray(s.sourceOvertimeSnapshot) && s.sourceOvertimeSnapshot.length)) sPostedNoSnap++;
+    if(['Posted','Executed'].includes(s.status)){
+      // amount must equal the frozen source snapshot / source IDs basis (mutation detection)
+      const basis = (Array.isArray(s.sourceOvertimeSnapshot)&&s.sourceOvertimeSnapshot.length)
+        ? s.sourceOvertimeSnapshot.reduce((n,o)=>n+num(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount),0)
+        : null;
+      if(basis!=null && Math.abs(basis-num(s.amount))>1) sMutable++;
+    }
+  });
+  // finance transaction linked to a missing supplemental
+  State.txns.forEach(t=>{ if(t.supplementalId && !supps.some(s=>s.id===t.supplementalId)) sOrphanTxn++; });
+  // an overtime ID captured by more than one non-cancelled supplemental anywhere
+  const suppOtCount={};
+  supps.filter(s=>s.status!=='Cancelled').forEach(s=>{ (s.sourceOvertimeIds||[]).forEach(id=>{ suppOtCount[id]=(suppOtCount[id]||0)+1; }); });
+  sDupOtId = Object.values(suppOtCount).filter(n=>n>1).length;
+  if(sMissingTxn) add('critical','supplemental-missing-transaction',`${sMissingTxn} supplemental(s) linked to a missing finance transaction`);
+  if(sOrphanTxn) add('critical','supplemental-orphan-transaction',`${sOrphanTxn} finance transaction(s) linked to a missing supplemental`);
+  if(sDupOtId) add('critical','supplemental-overtime-double-capture',`${sDupOtId} overtime record(s) captured by more than one non-cancelled supplemental`);
+  if(sPostedNoSnap) add('warning','supplemental-missing-source-snapshot',`${sPostedNoSnap} Posted/Executed supplemental(s) missing a frozen source snapshot`);
+  if(sMutable) add('warning','supplemental-amount-drift',`${sMutable} Posted/Executed supplemental(s) whose amount differs from their frozen source snapshot`);
+
   // run schema validators across every entity, roll warnings/errors up
   let vErr=0, vWarn=0;
   const runV = (arr, fn)=>arr.forEach(x=>{ const r=fn(x); vErr+=r.errors.length; vWarn+=r.warnings.length; });

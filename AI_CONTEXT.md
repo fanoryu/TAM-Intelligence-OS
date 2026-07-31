@@ -6,8 +6,14 @@ AI assistants get productive quickly. It is descriptive (what *is*), whereas
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
 there rather than duplicating it.
 
-**As of the current release:** v2.7.0 — "Supplemental Payroll Engine"; `SCHEMA_VERSION` 6.
+**As of the current release:** v2.7.1 — "Payroll Integrity & Reporting Foundation"; `SCHEMA_VERSION` 6.
 When these change, update this document (not `CLAUDE.md`).
+
+**v2.7.1 note.** Posted/Executed payroll and supplemental display now derive from a single stage-aware
+historical source-of-truth helper (`payrollHistoricalSnapshot`) backed by immutable snapshots frozen
+at posting — historical figures are never reconstructed from current master data, and a visible notice
+appears when a legacy plan disagrees with its committed transaction. No storage key was added (still
+15) and `SCHEMA_VERSION` is unchanged (6).
 
 ---
 
@@ -165,9 +171,10 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 Directions (no committed release numbers unless already approved):
 
-- **Released:** Supplemental Payroll Engine (v2.7.0) — overtime-drift settlement.
-- **Planned:** Payroll Reporting suite (v2.7.1); supplemental sources beyond overtime; ongoing
-  repository maintenance.
+- **Released:** Supplemental Payroll Engine (v2.7.0) — overtime-drift settlement; Payroll Integrity &
+  Reporting Foundation (v2.7.1) — historical source-of-truth model, immutable snapshots, integrity checks.
+- **Planned:** Payroll Reporting suite expansion (after the v2.7.1 source-of-truth model is validated);
+  supplemental sources beyond overtime; ongoing repository maintenance.
 - **Under consideration:** authentication and role-based access control; attachment/evidence
   handling; expanded approval workflows.
 

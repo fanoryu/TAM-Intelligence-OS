@@ -107,9 +107,11 @@ async function saveSettings(){
   // StorageAdapter.set reports failures (toast + status) itself — no silent failures.
   const ok = await StorageAdapter.set('tam_settings_v1', JSON.stringify(State.settings));
   if(!ok) console.error('saveSettings: settings were not persisted');
+  return ok;
 }
 
 async function persist(){
   const ok = await StorageAdapter.set('tam_txns_v1', JSON.stringify(State.txns));
   if(!ok) console.error('persist: transactions were not persisted');
+  return ok;
 }

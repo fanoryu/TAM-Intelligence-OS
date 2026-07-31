@@ -30,9 +30,30 @@ function execBuckets(){
   const pendingCount = partial.length + unscheduled.length + todaysPlanned.length + upcoming.length + overdue.length;
   return {todaysPlanned, upcoming, overdue, partial, unscheduled, completedToday, recent, planned:pending, pendingCount};
 }
-function renderExecutionCenter(main){
-  if(!State.txns.length){ main.innerHTML = emptyState('No data yet','Add or upload monthly data first.'); return; }
+// v2.7.1 (Section 13) — deep-link focus. Which tab bucket currently holds a transaction?
+function execBucketKeyForTxn(txnId){
   const b = execBuckets();
+  const map = {todaysPlanned:'today', upcoming:'upcoming', overdue:'overdue', unscheduled:'unscheduled', partial:'partial', completedToday:'completedToday', recent:'recent'};
+  for(const bk in map){ if((b[bk]||[]).some(t=>t.id===txnId)) return map[bk]; }
+  return null;
+}
+// Navigate to the Execution Center and reveal a specific linked transaction, regardless of
+// its date bucket. If it sits in a tab, that tab is opened; otherwise a focus card shows it.
+// Missing transactions produce a clear warning instead of a silent generic view.
+function focusTransactionInExecutionCenter(txnId){
+  State.view = 'executioncenter';
+  const t = txnId ? findTxn(txnId) : null;
+  if(!t){ State.execFocusTxnId = null; render(); showWarning('The linked transaction could not be found — it may have been removed.'); return; }
+  const bk = execBucketKeyForTxn(txnId);
+  if(bk) State.execFilter = bk;
+  State.execFocusTxnId = txnId;
+  render();
+}
+function renderExecutionCenter(main){
+  if(!State.txns.length){ main.innerHTML = emptyState('No data yet','Add or upload monthly data first.'); State.execFocusTxnId=null; return; }
+  const b = execBuckets();
+  const focusId = State.execFocusTxnId;
+  const focusTxn = focusId ? findTxn(focusId) : null;
   const views = [
     ['today', "Today's Planned", b.todaysPlanned.length],
     ['upcoming', 'Upcoming', b.upcoming.length],
@@ -48,9 +69,22 @@ function renderExecutionCenter(main){
   const bucketOf = {today:'todaysPlanned', upcoming:'upcoming', overdue:'overdue', unscheduled:'unscheduled', partial:'partial', completedToday:'completedToday', recent:'recent'};
   const activeRows = b[bucketOf[State.execFilter]] || [];
   const emptyMsg = State.execFilter==='unscheduled' ? 'No unscheduled transactions.' : 'Nothing in this view.';
+  // v2.7.1 — focus card: shown when a deep-linked transaction exists but is not in the active
+  // tab (e.g. executed on a prior day, in no pending bucket), so it is always reachable.
+  const focusInActive = focusTxn && activeRows.some(t=>t.id===focusId);
+  const focusCard = (focusTxn && !focusInActive) ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+      <h3>Linked transaction</h3>
+      <div style="font-size:13px;line-height:1.8;">
+        <div><button class="linklike" data-open-detail="${focusTxn.id}"><b>${escapeHtml(focusTxn.uraian)}</b></button> · ${statusBadge(statusOf(focusTxn))}</div>
+        <div>${escapeHtml(focusTxn.month)} ${focusTxn.year} · Planned <b class="mono">${fmtIDR(focusTxn.planned)}</b> · Actual <b class="mono">${focusTxn.actual!=null?fmtIDR(focusTxn.actual):'—'}</b></div>
+      </div>
+      <div class="small-btn-row" style="margin-top:8px;"><button class="btn btn-sm" data-open-detail="${focusTxn.id}">Open Detail</button><button class="btn btn-sm" id="execClearFocus">Clear</button></div>
+    </div>` : '';
+  const focusMissing = (focusId && !focusTxn) ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--brick);"><h3 style="color:var(--brick);">Linked transaction not found</h3><p class="hint">It may have been removed. Showing the normal Execution Center.</p></div>` : '';
 
   main.innerHTML = `
     <div class="page-head"><div><h1>Execution Center</h1><p class="desc">Process planned transactions and record real payments.</p></div></div>
+    ${focusMissing}${focusCard}
     <div class="grid grid-3" style="margin-bottom:14px;">
       <div class="card stat-card"><div class="stat-label">Pending Execution</div><div class="stat-value">${b.pendingCount}</div><div class="stat-sub dim">unscheduled · today · upcoming · overdue · partial</div></div>
       <div class="card stat-card"><div class="stat-label">Overdue</div><div class="stat-value" style="color:${b.overdue.length?'var(--brick)':'inherit'}">${b.overdue.length}</div><div class="stat-sub dim">past planned date, not executed</div></div>
@@ -67,8 +101,9 @@ function renderExecutionCenter(main){
             const d = execScheduleDate(t);
             const dateCell = d ? `<span class="dim">${escapeHtml(d)}</span>` : `<span class="pill pill-status-cancelled" title="No valid scheduled or transaction date">Missing schedule date</span>`;
             const canSchedule = statusOf(t)!=='partial'; // partial rows keep only the standard actions
-            return `<tr>
-            <td><button class="linklike" data-open-detail="${t.id}">${escapeHtml(t.uraian)}</button></td>
+            const isFocus = t.id===focusId;
+            return `<tr${isFocus?' style="outline:2px solid var(--accent);outline-offset:-2px;"':''}>
+            <td>${isFocus?'<span class="pill pill-status-partial" title="Linked transaction">linked</span> ':''}<button class="linklike" data-open-detail="${t.id}">${escapeHtml(t.uraian)}</button></td>
             <td>${categoryPill(t.category)}</td>
             <td class="dim">${escapeHtml(t.month)} ${t.year}</td>
             <td>${dateCell}</td>
@@ -84,7 +119,8 @@ function renderExecutionCenter(main){
   // renderExecutionCenter binds its own menus below — the tab handler must NOT
   // call bindActionMenus again (double-binding made menus toggle open+closed
   // instantly and fire every action twice on all non-initial tabs).
-  main.querySelectorAll('[data-execview]').forEach(btn=>btn.addEventListener('click', ()=>{ State.execFilter=btn.dataset.execview; renderExecutionCenter(main); }));
+  main.querySelectorAll('[data-execview]').forEach(btn=>btn.addEventListener('click', ()=>{ State.execFilter=btn.dataset.execview; State.execFocusTxnId=null; renderExecutionCenter(main); }));
+  const clrFocus=document.getElementById('execClearFocus'); if(clrFocus) clrFocus.addEventListener('click', ()=>{ State.execFocusTxnId=null; renderExecutionCenter(main); });
   main.querySelectorAll('[data-schedule-txn]').forEach(btn=>btn.addEventListener('click', async e=>{
     e.stopPropagation();
     const id = btn.dataset.scheduleTxn, t = findTxn(id); if(!t) return;
