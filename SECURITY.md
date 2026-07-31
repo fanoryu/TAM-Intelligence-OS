@@ -96,10 +96,10 @@ TAM Intelligence OS is client-only. Understanding its data posture helps scope r
 ## Security Decision Records (SDR)
 
 Engineering justifications for standing security decisions — such as the disposition of static-analysis
-(CodeQL) findings — are recorded as versioned Security Decision Records under
-[`docs/security/`](docs/security/):
+(CodeQL) findings — are recorded as versioned Security Decision Records. See the
+[SDR register](docs/security/README.md) for the full list, status, and review dates:
 
-- [`SDR-0001 — CodeQL Baseline Disposition`](docs/security/SDR-0001-codeql-baseline-disposition.md)
+- [`SDR-0001 — CodeQL Baseline Disposition`](docs/security/SDR-0001-codeql-baseline-disposition.md) (Accepted)
 
 An SDR documents *why* a finding is accepted or classified as a false positive and what future change
 would require it to be re-examined. An SDR does not, by itself, dismiss any alert.

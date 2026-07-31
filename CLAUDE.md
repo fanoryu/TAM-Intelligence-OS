@@ -244,10 +244,14 @@ The step-by-step procedure is [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.m
 | `RELEASE_NOTES.md` | Summary of the current release |
 | `CONTRIBUTING.md` | Contribution workflow and contract |
 | `SECURITY.md` | Security and vulnerability-reporting policy |
-| `docs/` | QA checklist, release process, data-safety detail |
+| `docs/` | QA checklist, release process, data-safety detail, deployment; indexed by `docs/README.md` |
+| `docs/adr/` | Architecture Decision Records (ADR-NNNN); see `docs/adr/README.md` |
+| `docs/security/` | Security Decision Records (SDR-NNNN); see `docs/security/README.md` |
+| `audit/` | Immutable, dated point-in-time records (audits, incidents) |
 
 Keep these boundaries. If information could live in two places, put it in one and link from the
-other.
+other. Decision records (ADR/SDR) are immutable once Accepted and are **superseded** by a new record,
+never rewritten. The governance model is recorded in `docs/adr/ADR-0001`.
 
 ## 19. Definition of Done
 
@@ -262,6 +266,9 @@ A change is **done** only when **all** of the following hold:
 - [ ] Invariants preserved: schema version, storage keys, migration flags, empty seed, CSS golden
       master (or an intentional, documented migration).
 - [ ] Affected documentation is updated; version references are consistent.
+- [ ] Documentation indexes and cross-references are current (root `README.md` table, `docs/README.md`,
+      and the `SECURITY.md` SDR list); any new/changed decision record has a valid status and is listed
+      in its register (per `docs/adr/ADR-0001`).
 - [ ] No secrets or real company data introduced anywhere.
 - [ ] Relevant regressions re-tested and passing.
 
