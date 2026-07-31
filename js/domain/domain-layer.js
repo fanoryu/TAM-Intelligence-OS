@@ -6,16 +6,19 @@
    RESOLVING — not invoking — the existing handler for a registered
    command/query name.
 
-   TRUTHFUL SCOPE (PR-5A — Enterprise Domain Registry):
+   TRUTHFUL SCOPE (PR-5B — First Operational Domain Slice):
      - The registries are DESCRIPTIVE METADATA about the existing system.
-     - This layer does NOT enforce any invariant, execute any command,
-       isolate any query, or guarantee any event. Those remain enforced by
-       the existing handlers exactly as before.
-     - The application's UI still calls the existing functions DIRECTLY and
-       bypasses this facade entirely.
-     - There is deliberately no dispatch/execute here. The facade becomes
-       an operational seam only in a later phase (PR-5B onward), under a
-       separate, approved change.
+     - `query(name, ...args)` is the FIRST operational routing: it resolves
+       and calls the existing READ-ONLY handler for a registered query and
+       returns its typed result unchanged. It performs no mutation, no
+       persistence, no audit — it is a pass-through over a read-only handler.
+       As of PR-5B exactly ONE query (`employee.filtered`) travels this path.
+     - COMMANDS remain NON-OPERATIONAL: there is deliberately no dispatch/
+       execute surface for commands. `commandHandler` only RESOLVES (returns)
+       a handler; it never invokes it. No mutation, event, or aggregate
+       command is routed through this facade.
+     - Every other read still calls the existing functions directly; only
+       the one migrated query is routed here.
 
    `commandHandler(name)` / `queryHandler(name)` RETURN the existing global
    function (or null) so callers — and the verifier — can confirm every
@@ -48,6 +51,18 @@ const Domain = (function () {
     queryHandler: function (name) {
       var q = DOMAIN_QUERIES[name];
       return q ? resolve(q.handler) : null;
+    },
+
+    // Operational query routing (PR-5B). Resolves and calls the registered
+    // READ-ONLY handler and returns its typed result unchanged. Throws
+    // clearly on an unknown query or missing handler — never a silent
+    // no-op. There is intentionally NO equivalent for commands.
+    query: function (name) {
+      var q = DOMAIN_QUERIES[name];
+      if (!q) throw new Error('Unknown domain query: ' + name);
+      var fn = resolve(q.handler);
+      if (!fn) throw new Error('Domain query handler not found: ' + q.handler);
+      return fn.apply(null, Array.prototype.slice.call(arguments, 1));
     }
   });
 })();

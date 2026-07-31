@@ -309,9 +309,20 @@ check(/const DOMAIN_QUERIES = Object\.freeze\(/.test(qrySrc), 'DOMAIN_QUERIES is
 check(/const DOMAIN_AGGREGATES = Object\.freeze\(/.test(aggSrc), 'DOMAIN_AGGREGATES is Object.freeze()');
 check(/const DOMAIN_EVENTS = Object\.freeze\(/.test(evtSrc), 'DOMAIN_EVENTS is Object.freeze()');
 check(/const Domain = \(function/.test(facSrc) && /Object\.freeze\(\{/.test(facSrc), 'Domain facade is a frozen object');
-// The facade is read-only: it must NOT execute handlers (no dispatch/ask/apply/call
-// of a resolved handler) in this phase.
-check(!/\bdispatch\s*:/.test(facSrc) && !/\bask\s*:/.test(facSrc), 'Domain facade has no execute/dispatch surface (read-only in PR-5A)');
+// COMMANDS remain non-operational: the facade must expose no command execution
+// surface (no dispatch/ask). PR-5B adds read-only query routing only.
+check(!/\bdispatch\s*:/.test(facSrc) && !/\bask\s*:/.test(facSrc), 'Domain facade has no command execute/dispatch surface');
+// PR-5B — operational read-only query routing exists on the facade.
+check(/\bquery:\s*function/.test(facSrc), 'Domain facade exposes read-only query() routing (PR-5B)');
+// Exactly ONE query is migrated: only a single distinct query id is routed
+// through Domain.query(...) anywhere in the source, and it is the approved
+// employee read. (Counts distinct ids, so documentation mentions of the same
+// literal do not inflate the count.)
+const migratedQueryIds = Array.from(new Set((srcJs.match(/Domain\.query\('([^']+)'\)/g)||[]).map(s=>s.match(/'([^']+)'/)[1])));
+check(migratedQueryIds.length === 1 && migratedQueryIds[0] === 'employee.filtered', 'exactly one query id routed through Domain.query(): '+JSON.stringify(migratedQueryIds));
+check(!/Domain\.(dispatch|ask)\(/.test(srcJs) && !/Domain\.command\(/.test(srcJs), 'no command is routed through the Domain facade (queries only)');
+check(dist.includes("Domain.query('employee.filtered')"), 'migrated query call present in dist');
+check(/'employee\.filtered':\s*Object\.freeze\(\{[^}]*handler:\s*'employeesFiltered'/.test(qrySrc), 'employee.filtered query registered to handler employeesFiltered');
 // Extract command/query identifiers and their handler names.
 function idKeys(src){ return (src.match(/^\s*'([a-z][a-zA-Z]*\.[a-zA-Z]+)':/gm)||[]).map(s=>s.match(/'([^']+)'/)[1]); }
 function handlerNames(src){ return (src.match(/handler:\s*'([A-Za-z0-9_]+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1]); }

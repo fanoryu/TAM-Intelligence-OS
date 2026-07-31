@@ -16,7 +16,10 @@ function employeesFiltered(){
   return rows;
 }
 function employeeRowsHTML(){
-  return employeesFiltered().map(e=>{
+  // PR-5B — first production read routed through the Domain layer. Behavior is
+  // identical: Domain.query('employee.filtered') is a read-only pass-through to
+  // employeesFiltered() and returns the same Employee[] result.
+  return Domain.query('employee.filtered').map(e=>{
     const ct = activeContractToday(e.id);
     const calc = ct ? contractCalc(ct, todayKey()) : null;
     return `<tr>
