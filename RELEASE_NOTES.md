@@ -72,9 +72,9 @@ historical record is rewritten. Adds **no** storage key (still **15**) and does 
 - The tracked company workbook remains a documented, accepted exception (untouched).
 
 ## Git Information
-- Commit: _pending approval — not committed_
-- Tag: _pending approval — not tagged_
+- Release commit (tagged): 63b44672ab63f8a9e772cf58a9a1812ca7a05d79
+- Tag: v2.7.2 (annotated)
 - Branch: main
 
 ## Release Asset
-- dist/tam-intelligence-os-v2.7.2.html
+- dist/tam-intelligence-os-v2.7.2.html (771,583 bytes)
