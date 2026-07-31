@@ -1,17 +1,20 @@
 /* ============================================================
-   DOMAIN LAYER — AGGREGATES & INVARIANTS (Enterprise Foundation, PR-5)
+   DOMAIN LAYER — AGGREGATES & INVARIANTS (Enterprise Foundation, PR-5A)
    ------------------------------------------------------------
-   Additive, behavior-neutral single source of truth for the business
-   domain. This module DECLARES the aggregate boundaries and invariants
-   that the existing functions already enforce; it does not change any
-   behavior and nothing here is invoked at load time (Bridge Phase 1:
-   introduce the domain layer with local handlers, no functional change —
-   call-site migration is a separate, later phase).
+   DESCRIPTIVE METADATA ONLY. This module DOCUMENTS the aggregate
+   boundaries and invariants that the EXISTING functions already enforce.
+   It does not enforce anything itself, changes no behavior, and nothing
+   here is invoked at load time.
 
-   Boundaries and invariants are the ones approved in the Blueprint
-   (PR-5.1) and Contract (PR-5.3) decision packages. Lifecycle values
-   reference the existing *_STATUSES constants (core/constants.js) — the
-   real, enforced source of truth — rather than restating them.
+   The invariant catalogue below is a human/tooling-readable description
+   of rules enforced elsewhere (CLAUDE.md §7–§9 and the existing handlers)
+   — NOT a new enforcement point. Enforcement is unchanged by this layer.
+   Lifecycle values reference the existing *_STATUSES constants
+   (core/constants.js), the real source of truth, rather than restating
+   them.
+
+   Scope note: this is Phase 0 of the approved plan (a registry). It is
+   not the operational domain layer; the UI still bypasses it entirely.
    ============================================================ */
 
 // Aggregate roots: each owns exactly one set of invariants. References to

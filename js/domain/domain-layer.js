@@ -1,23 +1,30 @@
 /* ============================================================
-   DOMAIN LAYER — FACADE (Enterprise Foundation, PR-5)
+   DOMAIN LAYER — READ-ONLY REGISTRY FACADE (Enterprise Foundation, PR-5A)
    ------------------------------------------------------------
-   A thin, read-only facade over the domain registries. This is the
-   Bridge decision's Phase-1 seam: a single, discoverable entry point
-   for the business vocabulary that delegates to the EXISTING handlers.
+   A thin, frozen, READ-ONLY view over the domain registries. Its only
+   capabilities are (a) exposing the descriptive registries and (b)
+   RESOLVING — not invoking — the existing handler for a registered
+   command/query name.
 
-   IMPORTANT — behavior is unchanged: the application's UI still calls the
-   existing functions directly. `dispatch`/`ask` are provided so that a
-   later, separately-approved phase can migrate call sites through this
-   seam (and, further out, delegate to a server authority). Nothing in the
-   app invokes this facade yet, so runtime behavior is byte-identical.
+   TRUTHFUL SCOPE (PR-5A — Enterprise Domain Registry):
+     - The registries are DESCRIPTIVE METADATA about the existing system.
+     - This layer does NOT enforce any invariant, execute any command,
+       isolate any query, or guarantee any event. Those remain enforced by
+       the existing handlers exactly as before.
+     - The application's UI still calls the existing functions DIRECTLY and
+       bypasses this facade entirely.
+     - There is deliberately no dispatch/execute here. The facade becomes
+       an operational seam only in a later phase (PR-5B onward), under a
+       separate, approved change.
 
-   No server, no authentication, no persistence changes here — purely an
-   organizing seam over the current in-process handlers.
+   `commandHandler(name)` / `queryHandler(name)` RETURN the existing global
+   function (or null) so callers — and the verifier — can confirm every
+   registered handler name resolves to a real function. They never call it.
    ============================================================ */
 
 const Domain = (function () {
-  // Resolve a handler by name from the shared global scope at call time,
-  // so the facade has no load-order dependency on the handlers.
+  // Resolve a handler by name from the shared global scope. Returns the
+  // function itself (never invokes it) or null if it is not a function.
   function resolve(name) {
     var g = (typeof window !== 'undefined') ? window : this;
     var fn = g ? g[name] : undefined;
@@ -25,13 +32,15 @@ const Domain = (function () {
   }
 
   return Object.freeze({
+    // Descriptive registries (single source of truth for the domain map).
     aggregates: DOMAIN_AGGREGATES,
     invariants: DOMAIN_INVARIANTS,
     commands: DOMAIN_COMMANDS,
     queries: DOMAIN_QUERIES,
     events: DOMAIN_EVENTS,
 
-    // Look up the (existing) handler for a command/query without calling it.
+    // Read-only handler resolution: returns the existing handler function
+    // for a registered command/query name, or null. Does NOT execute it.
     commandHandler: function (name) {
       var c = DOMAIN_COMMANDS[name];
       return c ? resolve(c.handler) : null;
@@ -39,20 +48,6 @@ const Domain = (function () {
     queryHandler: function (name) {
       var q = DOMAIN_QUERIES[name];
       return q ? resolve(q.handler) : null;
-    },
-
-    // Phase-1 pass-through dispatch (delegates verbatim to the existing
-    // handler). Unused by the current UI; provided for the future call-site
-    // migration. Throws clearly if a name is unknown — never silently no-ops.
-    dispatch: function (name) {
-      var fn = this.commandHandler(name);
-      if (!fn) throw new Error('Unknown domain command: ' + name);
-      return fn.apply(null, Array.prototype.slice.call(arguments, 1));
-    },
-    ask: function (name) {
-      var fn = this.queryHandler(name);
-      if (!fn) throw new Error('Unknown domain query: ' + name);
-      return fn.apply(null, Array.prototype.slice.call(arguments, 1));
     }
   });
 })();

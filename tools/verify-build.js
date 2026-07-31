@@ -284,6 +284,49 @@ check(dist.includes('const tc=payrollTotalCompensation(p)') && dist.includes('>T
 check(dist.includes('Pending ${fmtIDR(tc.pendingSupplemental)}'), 'pending supplemental shown subtly, not added to Total Compensation');
 check(dist.includes("'supplemental-missing-source-snapshot'") && dist.includes("'supplemental-missing-source-snapshot-legacy'"), 'integrity distinguishes legacy vs modern missing source snapshot');
 
+// PR-5A — Enterprise Domain Registry: descriptive, read-only metadata layer.
+// These checks guard the registry's integrity WITHOUT asserting it enforces
+// anything (it does not). Handler names must resolve to real functions in dist;
+// registry identifiers must be unique, frozen, and non-colliding.
+console.log('== ENTERPRISE DOMAIN REGISTRY (PR-5A — descriptive, read-only) ==');
+const domainFiles = ['aggregates.js','commands.js','queries.js','events.js','domain-layer.js'];
+domainFiles.forEach((f)=>check(fs.existsSync(path.join(root,'js','domain',f)), 'domain module present: js/domain/'+f));
+// module-order and index.html stay aligned for every domain module (belt-and-suspenders
+// alongside the global idxTagBlock check above).
+domainFiles.forEach((f)=>{
+  const p = 'domain/'+f;
+  check(jsFiles.indexOf(p) !== -1, 'module-order.js includes '+p);
+  check(indexHtml.includes('<script src="js/'+p+'"></script>'), 'index.html includes '+p);
+});
+const cmdSrc = read(path.join(root,'js','domain','commands.js'));
+const qrySrc = read(path.join(root,'js','domain','queries.js'));
+const aggSrc = read(path.join(root,'js','domain','aggregates.js'));
+const evtSrc = read(path.join(root,'js','domain','events.js'));
+const facSrc = read(path.join(root,'js','domain','domain-layer.js'));
+// Registries are frozen (Object.freeze) at their source of truth.
+check(/const DOMAIN_COMMANDS = Object\.freeze\(/.test(cmdSrc), 'DOMAIN_COMMANDS is Object.freeze()');
+check(/const DOMAIN_QUERIES = Object\.freeze\(/.test(qrySrc), 'DOMAIN_QUERIES is Object.freeze()');
+check(/const DOMAIN_AGGREGATES = Object\.freeze\(/.test(aggSrc), 'DOMAIN_AGGREGATES is Object.freeze()');
+check(/const DOMAIN_EVENTS = Object\.freeze\(/.test(evtSrc), 'DOMAIN_EVENTS is Object.freeze()');
+check(/const Domain = \(function/.test(facSrc) && /Object\.freeze\(\{/.test(facSrc), 'Domain facade is a frozen object');
+// The facade is read-only: it must NOT execute handlers (no dispatch/ask/apply/call
+// of a resolved handler) in this phase.
+check(!/\bdispatch\s*:/.test(facSrc) && !/\bask\s*:/.test(facSrc), 'Domain facade has no execute/dispatch surface (read-only in PR-5A)');
+// Extract command/query identifiers and their handler names.
+function idKeys(src){ return (src.match(/^\s*'([a-z][a-zA-Z]*\.[a-zA-Z]+)':/gm)||[]).map(s=>s.match(/'([^']+)'/)[1]); }
+function handlerNames(src){ return (src.match(/handler:\s*'([A-Za-z0-9_]+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1]); }
+const cmdIds = idKeys(cmdSrc), qryIds = idKeys(qrySrc);
+const cmdHandlers = handlerNames(cmdSrc), qryHandlers = handlerNames(qrySrc);
+check(cmdIds.length > 0 && qryIds.length > 0, 'command and query registries are non-empty ('+cmdIds.length+' commands / '+qryIds.length+' queries)');
+// Identifiers unique within each registry.
+check(new Set(cmdIds).size === cmdIds.length, 'command identifiers are unique');
+check(new Set(qryIds).size === qryIds.length, 'query identifiers are unique');
+// No identifier collides between commands and queries.
+check(cmdIds.filter(id=>qryIds.indexOf(id)!==-1).length === 0, 'no command/query identifier collision');
+// Every registered handler name resolves to a real function present in dist.
+cmdHandlers.forEach((h)=>check(dist.includes('function '+h+'('), 'command handler resolves to a real function: '+h+'()'));
+qryHandlers.forEach((h)=>check(dist.includes('function '+h+'('), 'query handler resolves to a real function: '+h+'()'));
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');

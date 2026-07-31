@@ -10651,19 +10651,22 @@ function supplementalEmployeeSectionHTML(empId){
 }
 
 /* ============================================================
-   DOMAIN LAYER — AGGREGATES & INVARIANTS (Enterprise Foundation, PR-5)
+   DOMAIN LAYER — AGGREGATES & INVARIANTS (Enterprise Foundation, PR-5A)
    ------------------------------------------------------------
-   Additive, behavior-neutral single source of truth for the business
-   domain. This module DECLARES the aggregate boundaries and invariants
-   that the existing functions already enforce; it does not change any
-   behavior and nothing here is invoked at load time (Bridge Phase 1:
-   introduce the domain layer with local handlers, no functional change —
-   call-site migration is a separate, later phase).
+   DESCRIPTIVE METADATA ONLY. This module DOCUMENTS the aggregate
+   boundaries and invariants that the EXISTING functions already enforce.
+   It does not enforce anything itself, changes no behavior, and nothing
+   here is invoked at load time.
 
-   Boundaries and invariants are the ones approved in the Blueprint
-   (PR-5.1) and Contract (PR-5.3) decision packages. Lifecycle values
-   reference the existing *_STATUSES constants (core/constants.js) — the
-   real, enforced source of truth — rather than restating them.
+   The invariant catalogue below is a human/tooling-readable description
+   of rules enforced elsewhere (CLAUDE.md §7–§9 and the existing handlers)
+   — NOT a new enforcement point. Enforcement is unchanged by this layer.
+   Lifecycle values reference the existing *_STATUSES constants
+   (core/constants.js), the real source of truth, rather than restating
+   them.
+
+   Scope note: this is Phase 0 of the approved plan (a registry). It is
+   not the operational domain layer; the UI still bypasses it entirely.
    ============================================================ */
 
 // Aggregate roots: each owns exactly one set of invariants. References to
@@ -10701,15 +10704,16 @@ const DOMAIN_INVARIANTS = Object.freeze([
 /* ============================================================
    DOMAIN LAYER — BUSINESS COMMANDS (Enterprise Foundation, PR-5)
    ------------------------------------------------------------
-   Additive, behavior-neutral catalogue of state-changing business
-   commands (Contract PR-5.3 §1). Each command names the EXISTING global
-   handler that already performs it, the aggregate it targets, and the
-   lifecycle transition it causes. Nothing here changes control flow; the
-   UI continues to call the existing functions directly (call-site
-   migration is a later, separate phase per the Bridge decision).
+   DESCRIPTIVE catalogue of state-changing business commands (Contract
+   PR-5.3 §1). Each entry names the EXISTING global handler that already
+   performs the command, the aggregate it targets, and the lifecycle
+   transition it causes. This is metadata, not an execution path: the UI
+   continues to call the existing functions directly, and this layer does
+   NOT execute commands (call-site migration is a later, separate phase).
 
-   `handler` is a function NAME resolved lazily at dispatch time, so this
-   module carries no load-order dependency on the handlers.
+   `handler` is a function NAME resolved on demand (read-only) by the
+   Domain facade, so this module carries no load-order dependency on the
+   handlers and never invokes them.
    ============================================================ */
 
 const DOMAIN_COMMANDS = Object.freeze({
@@ -10771,25 +10775,32 @@ const DOMAIN_EVENTS = Object.freeze({
 });
 
 /* ============================================================
-   DOMAIN LAYER — FACADE (Enterprise Foundation, PR-5)
+   DOMAIN LAYER — READ-ONLY REGISTRY FACADE (Enterprise Foundation, PR-5A)
    ------------------------------------------------------------
-   A thin, read-only facade over the domain registries. This is the
-   Bridge decision's Phase-1 seam: a single, discoverable entry point
-   for the business vocabulary that delegates to the EXISTING handlers.
+   A thin, frozen, READ-ONLY view over the domain registries. Its only
+   capabilities are (a) exposing the descriptive registries and (b)
+   RESOLVING — not invoking — the existing handler for a registered
+   command/query name.
 
-   IMPORTANT — behavior is unchanged: the application's UI still calls the
-   existing functions directly. `dispatch`/`ask` are provided so that a
-   later, separately-approved phase can migrate call sites through this
-   seam (and, further out, delegate to a server authority). Nothing in the
-   app invokes this facade yet, so runtime behavior is byte-identical.
+   TRUTHFUL SCOPE (PR-5A — Enterprise Domain Registry):
+     - The registries are DESCRIPTIVE METADATA about the existing system.
+     - This layer does NOT enforce any invariant, execute any command,
+       isolate any query, or guarantee any event. Those remain enforced by
+       the existing handlers exactly as before.
+     - The application's UI still calls the existing functions DIRECTLY and
+       bypasses this facade entirely.
+     - There is deliberately no dispatch/execute here. The facade becomes
+       an operational seam only in a later phase (PR-5B onward), under a
+       separate, approved change.
 
-   No server, no authentication, no persistence changes here — purely an
-   organizing seam over the current in-process handlers.
+   `commandHandler(name)` / `queryHandler(name)` RETURN the existing global
+   function (or null) so callers — and the verifier — can confirm every
+   registered handler name resolves to a real function. They never call it.
    ============================================================ */
 
 const Domain = (function () {
-  // Resolve a handler by name from the shared global scope at call time,
-  // so the facade has no load-order dependency on the handlers.
+  // Resolve a handler by name from the shared global scope. Returns the
+  // function itself (never invokes it) or null if it is not a function.
   function resolve(name) {
     var g = (typeof window !== 'undefined') ? window : this;
     var fn = g ? g[name] : undefined;
@@ -10797,13 +10808,15 @@ const Domain = (function () {
   }
 
   return Object.freeze({
+    // Descriptive registries (single source of truth for the domain map).
     aggregates: DOMAIN_AGGREGATES,
     invariants: DOMAIN_INVARIANTS,
     commands: DOMAIN_COMMANDS,
     queries: DOMAIN_QUERIES,
     events: DOMAIN_EVENTS,
 
-    // Look up the (existing) handler for a command/query without calling it.
+    // Read-only handler resolution: returns the existing handler function
+    // for a registered command/query name, or null. Does NOT execute it.
     commandHandler: function (name) {
       var c = DOMAIN_COMMANDS[name];
       return c ? resolve(c.handler) : null;
@@ -10811,20 +10824,6 @@ const Domain = (function () {
     queryHandler: function (name) {
       var q = DOMAIN_QUERIES[name];
       return q ? resolve(q.handler) : null;
-    },
-
-    // Phase-1 pass-through dispatch (delegates verbatim to the existing
-    // handler). Unused by the current UI; provided for the future call-site
-    // migration. Throws clearly if a name is unknown — never silently no-ops.
-    dispatch: function (name) {
-      var fn = this.commandHandler(name);
-      if (!fn) throw new Error('Unknown domain command: ' + name);
-      return fn.apply(null, Array.prototype.slice.call(arguments, 1));
-    },
-    ask: function (name) {
-      var fn = this.queryHandler(name);
-      if (!fn) throw new Error('Unknown domain query: ' + name);
-      return fn.apply(null, Array.prototype.slice.call(arguments, 1));
     }
   });
 })();
