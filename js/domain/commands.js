@@ -17,6 +17,9 @@ const DOMAIN_COMMANDS = Object.freeze({
   // PR-5C.1 — first OPERATIONAL command routed through Domain.command().
   // Narrow, non-financial, non-lifecycle: contact fields only.
   'employee.contact.update': Object.freeze({ aggregate: 'Employee', boundary: 'EmployeeContactAggregate', handler: 'updateEmployeeContact', transition: 'update contact fields (phone/email/notes) — OPERATIONAL via Domain.command(); business authority = EmployeeContactAggregate (PR-5D)' }),
+  // PR-5E — second OPERATIONAL command routed through Domain.command().
+  // Narrow, non-financial, non-lifecycle: employment fields only.
+  'employee.employment.update': Object.freeze({ aggregate: 'Employee', boundary: 'EmployeeEmploymentAggregate', handler: 'updateEmployeeEmployment', transition: 'controlled update of Employee employment fields (jobTitle/department/employmentStatus/joinDate/contractType) — OPERATIONAL via Domain.command(); business authority = EmployeeEmploymentAggregate (PR-5E)' }),
   // Payroll
   'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
   // Finance

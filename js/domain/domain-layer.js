@@ -66,7 +66,7 @@ const Domain = (function () {
       return fn.apply(null, Array.prototype.slice.call(arguments, 1));
     },
 
-    // Operational command routing (PR-5C.1 + PR-5D). Resolves the registered
+    // Operational command routing (PR-5C.1 + PR-5D + PR-5E). Resolves the registered
     // handler and calls it EXACTLY ONCE, returning its typed outcome unchanged.
     // PR-5D: if the command declares a `boundary` aggregate, that aggregate is
     // the BUSINESS AUTHORITY — it runs first and either returns a typed business

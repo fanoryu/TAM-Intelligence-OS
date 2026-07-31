@@ -246,6 +246,87 @@ function openEmployeeContactModal(id){
     }});
 }
 
+/* ============================================================
+   PR-5E — narrow Employee EMPLOYMENT-UPDATE command.
+   Mutates ONLY the approved employment fields (jobTitle/department/
+   employmentStatus/joinDate/contractType). It never touches salary, active
+   state, contact/bank data, schedule, contracts, payroll, or finance.
+   Reuses empById + persistEmployees + the existing `history` audit style,
+   and returns a typed command outcome. Atomic: on a failed persist it
+   reverts the fields, updatedAt, and the audit entry. The business authority
+   is EmployeeEmploymentAggregate (PR-5E); this handler keeps its own guards
+   (defense in depth) and remains the implementation authority.
+   ============================================================ */
+const EMPLOYEE_EMPLOYMENT_FIELDS = ['jobTitle','department','employmentStatus','joinDate','contractType'];
+async function updateEmployeeEmployment(id, patch){
+  const e = empById(id);
+  if(!e) return { success:false, error:'EmployeeNotFound' };
+  patch = patch || {};
+  const before = {}, applied = {};
+  // Allowlist: only approved employment fields are considered; all else is ignored.
+  EMPLOYEE_EMPLOYMENT_FIELDS.forEach(k=>{
+    if(Object.prototype.hasOwnProperty.call(patch, k)){
+      let v = (patch[k]==null ? '' : String(patch[k])).trim();
+      if(k==='joinDate' && v==='') v = null;   // normalize empty date to null
+      before[k] = e[k];
+      applied[k] = v;
+    }
+  });
+  if(Object.keys(applied).length===0) return { success:false, error:'NoEmploymentFieldsProvided' };
+  // Defense-in-depth validation (the aggregate validates first).
+  if(Object.prototype.hasOwnProperty.call(applied,'employmentStatus') && EMPLOYMENT_STATUSES.indexOf(applied.employmentStatus)===-1) return { success:false, error:'InvalidEmploymentStatus' };
+  if(Object.prototype.hasOwnProperty.call(applied,'contractType') && CONTRACT_TYPES.indexOf(applied.contractType)===-1) return { success:false, error:'InvalidContractType' };
+  const prevUpdatedAt = e.updatedAt;
+  Object.keys(applied).forEach(k=> e[k] = applied[k]);
+  e.updatedAt = new Date().toISOString();
+  (e.history = e.history || []).push({ event:'employment-edited', ts:e.updatedAt, note:'Employment details updated ('+Object.keys(applied).join(', ')+')' });
+  const ok = await persistEmployees();
+  if(ok !== true){
+    // Atomic rollback — no partial field update, no audit-success entry retained.
+    Object.keys(before).forEach(k=> e[k] = before[k]);
+    e.history.pop();
+    e.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
+  }
+  return { success:true, data:e };
+}
+
+// Narrow employment-only editor. Routes through the Domain command seam and
+// never calls updateEmployeeEmployment directly.
+function openEmployeeEmploymentModal(id){
+  const e = empById(id); if(!e) return;
+  const statusOpts = EMPLOYMENT_STATUSES.map(s=>`<option value="${escapeHtml(s)}"${e.employmentStatus===s?' selected':''}>${escapeHtml(s)}</option>`).join('');
+  const typeOpts = ['<option value="">—</option>'].concat(CONTRACT_TYPES.map(t=>`<option value="${escapeHtml(t)}"${e.contractType===t?' selected':''}>${escapeHtml(t)}</option>`)).join('');
+  openModalHTML(`
+    <h3>Edit Employment</h3>
+    <form id="empEmploymentForm">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="field"><label>Job Title</label><input class="input" name="jobTitle" value="${escapeHtml(e.jobTitle||'')}"></div>
+        <div class="field"><label>Department</label><input class="input" name="department" value="${escapeHtml(e.department||'')}"></div>
+        <div class="field"><label>Employment Status</label><select class="input" name="employmentStatus">${statusOpts}</select></div>
+        <div class="field"><label>Join Date</label><input class="input" type="date" name="joinDate" value="${escapeHtml(e.joinDate||'')}"></div>
+        <div class="field"><label>Contract Type</label><select class="input" name="contractType">${typeOpts}</select></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="empEmploymentCancel">Cancel</button>
+        <button type="submit" class="btn btn-accent">Save Employment</button>
+      </div>
+    </form>`, {width:560, onMount:(root)=>{
+      root.querySelector('#empEmploymentCancel').addEventListener('click', closeModal);
+      root.querySelector('#empEmploymentForm').addEventListener('submit', async ev=>{
+        ev.preventDefault();
+        const fd = new FormData(ev.target);
+        const outcome = await Domain.command('employee.employment.update', id, {
+          jobTitle: fd.get('jobTitle'), department: fd.get('department'),
+          employmentStatus: fd.get('employmentStatus'), joinDate: fd.get('joinDate'),
+          contractType: fd.get('contractType')
+        });
+        if(outcome && outcome.success){ closeModal(); toast('Employment updated.'); render(); }
+        else { toast('Could not update employment'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
+      });
+    }});
+}
+
 function renderEmployeeDetail(main){
   const e = empById(State.detailEmpId);
   if(!e){ main.innerHTML = emptyState('Employee not found','It may have been deleted.'); return; }
@@ -267,6 +348,7 @@ function renderEmployeeDetail(main){
       <div class="head-controls">
         <button class="btn" id="backEmp">← Employees</button>
         <button class="btn" id="editContactD">Edit Contact</button>
+        <button class="btn" id="editEmploymentD">Edit Employment</button>
         <button class="btn" id="editEmpD">Edit</button>
         <button class="btn btn-accent" id="newCtForEmp">+ New Contract</button>
       </div>
@@ -357,6 +439,7 @@ function renderEmployeeDetail(main){
     </div>`;
   document.getElementById('backEmp').addEventListener('click', ()=>hrNavTo('employees'));
   document.getElementById('editContactD').addEventListener('click', ()=>openEmployeeContactModal(e.id));
+  document.getElementById('editEmploymentD').addEventListener('click', ()=>openEmployeeEmploymentModal(e.id));
   document.getElementById('editEmpD').addEventListener('click', ()=>openEmployeeModal(e.id));
   document.getElementById('newCtForEmp').addEventListener('click', ()=>openContractModal(null, e.id));
   main.querySelectorAll('[data-ct-detail]').forEach(b=>b.addEventListener('click', ()=>hrNavTo('contractDetail', {detailContractId:b.dataset.ctDetail})));
