@@ -237,8 +237,18 @@ async function postSupplemental(id){
   (supp.history=supp.history||[]).push({event:'post', ts:now, note:`Posted to finance — Planned ${fmtIDR(supp.amount)} (${acct.label})`});
   const suppOk = await persistSupplementalPayments();
   if(!suppOk){
+    // Roll back the finance transaction so no orphan remains, and VERIFY the rollback persisted.
     supp.financeTransactionId = null; supp.status = 'Approved'; supp.postedAt = null; (supp.history||[]).pop();
-    State.txns = State.txns.filter(t=>t.id!==txn.id); await persist();
+    State.txns = State.txns.filter(t=>t.id!==txn.id);
+    const rolledBack = await persist();
+    if(!rolledBack){
+      // Storage is failing both ways. In memory nothing is posted; storage still holds the
+      // transaction (persisted a moment ago) but NOT the supplemental link — so on reload it is a
+      // detectable orphan transaction (Integrity Check → supplemental-orphan-transaction), never an
+      // orphan supplemental (the supplemental write failed, so it stays Approved in storage).
+      return {ok:false, unrecoverable:true, orphanTxnId:txn.id,
+        reason:'Posting failed and the automatic rollback could not be saved (storage error). The supplemental is NOT posted. A stray finance transaction may remain until you reload — run Integrity Check to detect and remove it. Do not retry until storage is healthy.'};
+    }
     return {ok:false, reason:'Posting failed — the supplemental could not be saved. The transaction was rolled back; nothing was changed.'};
   }
   logActivity({type:'supplemental.post', module:'Supplemental Payroll', entity:supp.employeeName, entityId:supp.id,
@@ -252,19 +262,63 @@ async function postSupplemental(id){
    supplemental becomes Executed. Idempotent: an already-Executed supplemental is never
    re-closed, so repeated execution cannot double-pay. Base payroll is untouched. */
 async function linkSupplementalExecution(t){
-  if(!t || !t.supplementalId) return;
-  const supp = supplementalById(t.supplementalId); if(!supp) return;
-  if(supp.status==='Executed') return; // idempotent guard
-  if(!['completed','archived'].includes(statusOf(t))) return; // only when fully paid
+  if(!t || !t.supplementalId) return {ok:true, changed:false};
+  const supp = supplementalById(t.supplementalId); if(!supp) return {ok:true, changed:false};
+  if(supp.status==='Executed') return {ok:true, changed:false}; // idempotent guard
+  if(!['completed','archived'].includes(statusOf(t))) return {ok:true, changed:false}; // only when fully paid
+  // v2.7.2 — snapshot the pre-execution supplemental so a failed persist can be reverted in
+  // memory (memory matches storage), instead of misrepresenting it as Executed.
+  const prev = {status:supp.status, executionId:supp.executionId, executedAt:supp.executedAt, updatedAt:supp.updatedAt, historyLen:(supp.history||[]).length};
   const now = new Date().toISOString();
   supp.status = 'Executed';
   supp.executionId = (t.execution && t.execution.executionId) || t.executionId || null;
   supp.executedAt = now; supp.updatedAt = now;
   (supp.history=supp.history||[]).push({event:'execute', ts:now, note:`Executed via Execution Center — ${fmtIDR(num(t.actual))}`});
-  await persistSupplementalPayments();
+  const ok = await persistSupplementalPayments();
+  if(!ok){
+    // The committed transaction stays executed (never rewritten). Revert the supplemental in
+    // memory to match storage (still Posted) and report a clear, detectable remediation state.
+    supp.status = prev.status; supp.executionId = prev.executionId; supp.executedAt = prev.executedAt; supp.updatedAt = prev.updatedAt;
+    if((supp.history||[]).length > prev.historyLen) supp.history.length = prev.historyLen;
+    return {ok:false, reason:'The payment was recorded, but the linked supplemental could not be updated to Executed (storage error). It remains Posted and will reconcile the next time you open/execute it — run Integrity Check if it persists.'};
+  }
   logActivity({type:'supplemental.execute', module:'Supplemental Payroll', entity:supp.employeeName, entityId:supp.id,
     desc:`Supplemental executed — ${fmtIDR(num(t.actual))} (${supp.periodLabel})`,
     refs:{employeeId:supp.employeeId, supplementalId:supp.id, transactionId:t.id, executionId:supp.executionId}});
+  return {ok:true, changed:true};
+}
+
+/* ---------- startup recovery: pre-2.7.2 failed-post orphan supplementals ----------
+   The v2.7.1 persistHR bug made postSupplemental ALWAYS take the failure path even when the
+   supplemental write actually succeeded: it left the supplemental persisted as Posted with a
+   financeTransactionId while rolling the transaction OUT of storage → an orphaned Posted
+   supplemental pointing at a transaction that no longer exists. This detects ONLY that exact,
+   known-safe pattern and restores the record to a re-postable Approved state, with an audit
+   entry. It never fabricates or alters any financial amount, never touches Executed records, and
+   never touches a supplemental whose transaction still exists. Anything ambiguous is left intact
+   for Integrity Check to surface. Idempotent and self-limiting: once restored the pattern no
+   longer matches, so it is safe to run on every boot. */
+async function recoverSupplementalOrphans(){
+  try{
+    const supps = State.supplementalPayments||[];
+    let recovered = 0; const now = new Date().toISOString();
+    supps.forEach(s=>{
+      const isFailedPostOrphan = s && s.status==='Posted' && s.financeTransactionId
+        && !findTxn(s.financeTransactionId) && !s.executionId && !s.executedAt;
+      if(isFailedPostOrphan){
+        const lostTxnId = s.financeTransactionId;
+        s.financeTransactionId = null; s.status = 'Approved'; s.postedAt = null; s.updatedAt = now;
+        (s.history=s.history||[]).push({event:'recover', ts:now,
+          note:`Auto-recovered from a failed post (linked transaction ${lostTxnId} was never saved). Restored to Approved so it can be re-posted. No financial amount was changed.`});
+        recovered++;
+        if(typeof logActivity==='function') logActivity({type:'supplemental.recover', module:'Supplemental Payroll', entity:s.employeeName, entityId:s.id,
+          desc:'Recovered orphaned supplemental (missing transaction) → Approved, re-postable',
+          refs:{employeeId:s.employeeId, payrollPlanId:s.payrollPlanId, supplementalId:s.id}});
+      }
+    });
+    if(recovered) await persistSupplementalPayments();
+    return recovered;
+  }catch(e){ console.error('recoverSupplementalOrphans skipped', e); return 0; }
 }
 
 /* ---------- per-plan supplemental state (for workspace/detail summaries) ---------- */

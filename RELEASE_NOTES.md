@@ -1,69 +1,80 @@
-# TAM Intelligence OS v2.7.1 — Payroll Integrity & Reporting Foundation
+# TAM Intelligence OS v2.7.2 — Persistence & Transactional Integrity
 
-**Release Name:** Payroll Integrity & Reporting Foundation
+**Release Name:** Persistence & Transactional Integrity
 
 ## Summary
-A controlled post-release integrity fix. Posted/Executed payroll (and supplemental) display now derive
-from a single **stage-aware historical source-of-truth** helper backed by **immutable snapshots frozen
-at posting** — historical figures are never reconstructed from current contract/overtime data, and a
-visible **integrity notice** appears when a legacy plan disagrees with its committed transaction. No
-historical payroll or finance amount is auto-repaired. Adds **no** storage key (still **15**) and does
-**not** change `SCHEMA_VERSION` (still **6**).
+A focused patch that fixes persistence/transactional-integrity defects in which a storage-write result
+was ignored or dropped, so an operation could report success in the UI while the data did not actually
+persist — or, worse, roll back the wrong record. All persistence helpers now return a strict
+`true`/`false`, and the three affected flows (supplemental posting, Complete Backup restore, transaction
+execution) are made atomic as far as the storage model permits. No committed payroll/finance amount or
+historical record is rewritten. Adds **no** storage key (still **15**) and does **not** change
+`SCHEMA_VERSION` (still **6**); no new migration.
 
-## Highlights
-- **Root-cause fix** for the reported Rp7,000,000-vs-Rp8,750,000 mismatch: every payroll consumer read
-  live plan values instead of the immutable committed transaction. A new `payrollHistoricalSnapshot`
-  helper centralizes stage-aware display: Draft/Review/Approved use working-plan values;
-  Posted/Executed use committed evidence (explicit snapshot → linked transaction → committed plan
-  fields), with a "Payroll snapshot mismatch" notice on disagreement. The posted transaction is never
-  altered.
-- **Immutable overtime snapshots** frozen at posting (on the transaction and the plan); Supplemental
-  freezes a source-overtime snapshot at Approved. Historical detail survives later edit/deletion of
-  the source overtime. Unknown legacy hours render **"— / unavailable"** (distinct from an explicit 0).
-- **Supplemental hardening:** Posted notes are immutable; a **global** duplicate guard prevents one
-  overtime ID being captured by more than one non-cancelled supplemental across *all* payroll plans;
-  coordinated posting persistence prevents orphaned transaction/supplemental linkage.
-- **Company settings onboarding:** completion now uses an explicit persisted marker
-  (`companySettingsConfiguredAt`) set only after a successful save, with a conservative legacy fallback.
-- **Execution Center deep-link:** "Open in Execution Center" now reveals and highlights the exact
-  linked transaction (regardless of date bucket), with a clear warning if it is missing.
-- **Empty company-account UX** when posting a supplemental; **12 new integrity checks** for
-  payroll/supplemental linkage and snapshot consistency (detect-only, never auto-repair).
+## Fixed
+- **Critical — Supplemental posting always took the failure path.** `persistHR(stateKey)` awaited
+  `StorageAdapter.set(...)` but did not return its boolean, so `persistSupplementalPayments()` resolved
+  to `undefined` and `postSupplementalToFinance()` treated every post as failed. It rolled the finance
+  transaction out of storage while the already-persisted supplemental stayed **Posted** with a
+  `financeTransactionId` pointing at a now-deleted transaction — an orphaned, stuck supplemental after
+  reload. `persistHR` now returns a strict boolean (`false` for an unknown key, otherwise the real
+  `set()` result) and every wrapper preserves it.
+- **High — Complete Backup restore was not transaction-safe.** `restoreCompleteBackup()` ignored the
+  results of `persist`, `saveSettings`, `saveBackups`, and `persistHR`, so a quota/storage failure could
+  leave a partial restore while the UI reported success.
+- **Medium — Transaction execution ignored persistence failure.** `executeTransaction()` mutated the
+  transaction, wrote history/audit, and updated a linked supplemental without checking that the write
+  succeeded, so it could report an execution that would vanish on reload.
 
 ## Changed
-- `APP_VERSION` → `2.7.1`, `APP_RELEASE_NAME` → "Payroll Integrity & Reporting Foundation".
-- Payroll Detail, worksheet rows, period totals/summary, and CSV export are stage-aware and consistent.
-- `persist()` and `saveSettings()` now return their success flag for coordinated persistence.
+- **Atomic supplemental posting.** On success exactly one Planned transaction exists and the supplemental
+  is Posted with valid two-way links; on failure before either write nothing changes; on failure after
+  the transaction persists but before the supplemental persists, the transaction is rolled back **and the
+  rollback is verified** — if the rollback itself cannot be saved, a clear user-facing error is shown and
+  the residue is a detectable orphan transaction (never an orphan supplemental).
+- **Transaction-safe restore.** The file is validated before any State change; a full deep-cloned
+  pre-restore snapshot is kept; every dataset write is checked; on any failure the in-memory state is
+  restored **and** the original values are re-persisted to every key already written; the function returns
+  `{ ok: true }` only after all writes succeed, otherwise `{ ok: false, reason }`. The UI shows success
+  and re-renders only when `result.ok === true`.
+- **Checked execution.** Execution now takes a deep snapshot first, persists, and checks the result. On
+  failure it restores the exact original transaction, writes no audit event, and does not mark a linked
+  supplemental Executed. Only after a successful write is the audit recorded and the linked supplemental
+  closed; if the supplemental write then fails, the committed transaction is never rewritten and the
+  supplemental remains a detectable, reconcilable state with a clear message.
+- **Startup recovery.** A supplemental left orphaned by the old bug (Posted, linked transaction missing,
+  never executed) is conservatively restored to a re-postable **Approved** state with an audit entry; no
+  financial amount is fabricated or altered, and anything ambiguous is retained for Integrity Check.
+- `persist()`, `saveSettings()`, and `saveBackups()` now return strict booleans; `APP_VERSION` → `2.7.2`,
+  `APP_RELEASE_NAME` → "Persistence & Transactional Integrity".
 
 ## Compatibility & Data Safety
-- Existing local data: **fully compatible**. No base-payroll/finance amount is auto-changed; legacy
-  records missing a snapshot fall back to the strongest available committed evidence and show a notice.
-- `SCHEMA_VERSION`: **unchanged (6)**. Storage keys: **unchanged (15)** — none added, renamed, or
-  removed. `companySettingsConfiguredAt` is a field inside the existing settings object, not a key.
-- Backup format: additive fields only (`committedSnapshot`, `overtimeSnapshot`, `sourceOvertimeSnapshot`,
-  `companySettingsConfiguredAt`); older backups restore cleanly. Demo Data does not mark company
-  settings complete (consistent with the existing onboarding policy).
+- Existing local data: **fully compatible**. No committed payroll/finance amount or historical record is
+  auto-changed; the only automatic repair is restoring the specific known failed-post orphan supplemental
+  to Approved (re-postable), which touches no monetary value.
+- `SCHEMA_VERSION`: **unchanged (6)**. Storage keys: **unchanged (15)** — none added, renamed, or removed.
+  No new migration flag.
+- Integrity Check still detects both orphan directions (supplemental → missing transaction; transaction →
+  missing supplemental) and never auto-repairs financial history.
 
 ## QA
-- Build: `dist/tam-intelligence-os-v2.7.1.html`. Verify: **166 checks** (adds v2.7.1 source-of-truth,
-  snapshot, supplemental global-dedup, Posted-notes immutability, deep-link, integrity-check, settings
-  marker, and released-v2.7.0-artifact-untouched checks; SCHEMA_VERSION 6, 15 keys).
-- Browser (modular + portable dist), **zero console errors** on boot.
+- Build: `dist/tam-intelligence-os-v2.7.2.html`. Verify: **181 checks** (adds v2.7.2 persistence,
+  rollback, restore-safety, execution-rollback, and orphan-recovery checks; SCHEMA_VERSION 6, 15 keys).
+- Browser (portable dist): all views render with **zero console errors** on a clean boot; simulated
+  storage-failure tests confirm rollback for posting, execution, and restore, and recovery of a legacy
+  orphan supplemental.
 
 ## Known Limitations
-- Reporting expansion is deliberately deferred until the historical source-of-truth model is validated
-  in production; v2.7.1 establishes the foundation and integrity diagnostics only.
-- Supplemental source remains **overtime only**; other adjustment types are out of scope.
+- Storage remains single-key atomic (localStorage/Artifact); cross-key operations are made safe by
+  validate → snapshot → checked-write → rollback, not by a true multi-key transaction.
+- Supplemental source remains **overtime only**.
 - Projects / Vendors / Financial Calendar remain non-functional placeholders (labeled **SOON**).
 - The tracked company workbook remains a documented, accepted exception (untouched).
 
 ## Git Information
-- Release commit (tagged): 488145ff6cc6cc69fc22942915347e55253050e6
-- Release content commit: b9bd3628f9b8d44185325e5c7910ab53c17f4ec5 ("Release v2.7.1"); the tag was
-  advanced by one CI-only verifier fix (`fix(verify): accept release dist-swap state`) so the
-  published build passes 166/166. No runtime/source behavior differs between the two commits.
-- Tag: v2.7.1 (annotated)
+- Commit: _pending approval — not committed_
+- Tag: _pending approval — not tagged_
 - Branch: main
 
 ## Release Asset
-- dist/tam-intelligence-os-v2.7.1.html (762,060 bytes)
+- dist/tam-intelligence-os-v2.7.2.html

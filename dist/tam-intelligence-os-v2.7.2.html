@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TAM Intelligence OS v2.7.1</title>
+<title>TAM Intelligence OS v2.7.2</title>
 <meta name="theme-color" content="#0E1420">
 <meta name="color-scheme" content="dark light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -358,8 +358,8 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.7.1';
-const APP_RELEASE_NAME = 'Payroll Integrity & Reporting Foundation';
+const APP_VERSION = '2.7.2';
+const APP_RELEASE_NAME = 'Persistence & Transactional Integrity';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
@@ -1178,6 +1178,9 @@ async function loadState(){
   await migrateToPayrollOpsSchema();
   await migrateToDedupSchema();
   await migrateSeedCompanyAccounts();
+  // v2.7.2 — repair any pre-2.7.2 failed-post orphan supplementals (Posted but linked
+  // transaction never persisted). Conservative, idempotent, non-destructive; see the engine.
+  if(typeof recoverSupplementalOrphans==='function') await recoverSupplementalOrphans();
   // v2.5.2 — treat the app as carrying data ONLY when a meaningful business
   // dataset has real records. Empty arrays, settings, migration flags, schema
   // version, empty backups/audits and UI prefs never count (fresh-install fix).
@@ -1254,13 +1257,13 @@ async function saveSettings(){
   // StorageAdapter.set reports failures (toast + status) itself — no silent failures.
   const ok = await StorageAdapter.set('tam_settings_v1', JSON.stringify(State.settings));
   if(!ok) console.error('saveSettings: settings were not persisted');
-  return ok;
+  return ok === true;
 }
 
 async function persist(){
   const ok = await StorageAdapter.set('tam_txns_v1', JSON.stringify(State.txns));
   if(!ok) console.error('persist: transactions were not persisted');
-  return ok;
+  return ok === true;
 }
 
 /* ---------- Company Bank Accounts + Bank Master helpers (v2.6.9) ----------
@@ -2467,7 +2470,9 @@ function pushHistory(t, event, note, extra){
   t.history.push(Object.assign({event, ts:new Date().toISOString(), note:note||null}, extra||{}));
 }
 async function executeTransaction(id, data){
-  const t = findTxn(id); if(!t) return;
+  const t = findTxn(id); if(!t) return {ok:false, reason:'Transaction not found.'};
+  // v2.7.2 — deep snapshot BEFORE mutation so a failed persist rolls back exactly.
+  const before = JSON.parse(JSON.stringify(t));
   t.actual = data.actualAmount;
   t.execution = {
     executionDate: data.executionDate||null,
@@ -2489,13 +2494,26 @@ async function executeTransaction(id, data){
   if(newStatus==='completed' && State.settings.autoArchiveCompleted) newStatus='archived';
   t.status = newStatus;
   pushHistory(t, 'executed', `Executed ${fmtIDR(data.actualAmount)}${data.method?' via '+data.method:''}`, {amount:data.actualAmount});
-  await persist();
+  // v2.7.2 — persist FIRST and check the result. If the write fails, restore the exact
+  // original transaction in memory and write NO audit event and touch NO supplemental.
+  const saved = await persist();
+  if(!saved){
+    Object.keys(t).forEach(k=>{ if(!(k in before)) delete t[k]; });
+    Object.assign(t, before);
+    return {ok:false, reason:'Execution was not saved (storage error) — nothing was changed. Try again; if it persists, export a Complete Backup and free up storage.'};
+  }
+  // Only after the execution is durably saved: write the audit event.
   logActivity({type:'finance.execute', module:'Finance', entity:t.uraian||t.category||'Transaction', entityId:t.id,
     desc:`Executed ${fmtIDR(data.actualAmount)}${data.method?' via '+data.method:''} — status ${newStatus}`,
     refs:{transactionId:t.id, employeeId:t.employeeId||null, payrollPlanId:t.payrollPlanId||null, monthKey:t.monthKey||null}});
-  // v2.7.0 — if this transaction settles a supplemental payment, close the supplemental
-  // (Executed). Idempotent; base payroll transactions have no supplementalId so are unaffected.
-  if(typeof linkSupplementalExecution==='function') await linkSupplementalExecution(t);
+  // v2.7.0/2.7.2 — if this transaction settles a supplemental, close it (Executed). The committed
+  // transaction is never rewritten; if the supplemental write fails it stays a detectable state.
+  let suppWarning = null;
+  if(typeof linkSupplementalExecution==='function'){
+    const lr = await linkSupplementalExecution(t);
+    if(lr && lr.ok===false) suppWarning = lr.reason;
+  }
+  return {ok:true, suppWarning};
 }
 async function scheduleTransaction(id, date){
   const t = findTxn(id); if(!t) return;
@@ -2580,7 +2598,7 @@ function renderExecuteModal(){
     const fd = new FormData(e.target);
     const amt = Number(fd.get('actualAmount'));
     if(isNaN(amt)){ toast('Enter a valid actual amount.'); return; }
-    await executeTransaction(t.id, {
+    const res = await executeTransaction(t.id, {
       executionDate: fd.get('executionDate'),
       actualAmount: amt,
       method: fd.get('method'),
@@ -2588,8 +2606,9 @@ function renderExecuteModal(){
       reference: (fd.get('reference')||'').trim(),
       notes: (fd.get('notes')||'').trim(),
     });
+    if(res && res.ok===false){ toast(res.reason || 'Transaction was not executed.', 7000); return; }
     closeModal();
-    toast('Transaction executed.');
+    if(res && res.suppWarning) toast(res.suppWarning, 8000); else toast('Transaction executed.');
     render();
   });
 }
@@ -3145,6 +3164,7 @@ async function loadBackups(){
 async function saveBackups(){
   const ok = await StorageAdapter.set('tam_backups_v1', JSON.stringify(State.backups.slice(0,25)));
   if(!ok) console.error('saveBackups: backups were not persisted');
+  return ok === true;
 }
 
 /* ============================================================
@@ -3177,9 +3197,10 @@ async function loadHRData(){
 }
 async function persistHR(stateKey){
   const storeKey = HR_KEYS[stateKey];
-  if(!storeKey){ console.error('persistHR: unknown key '+stateKey); return; }
+  if(!storeKey){ console.error('persistHR: unknown key '+stateKey); return false; }
   const ok = await StorageAdapter.set(storeKey, JSON.stringify(State[stateKey]));
   if(!ok) console.error('persistHR: '+stateKey+' was not persisted');
+  return ok === true;
 }
 async function persistEmployees(){ return persistHR('employees'); }
 async function persistContracts(){ return persistHR('contracts'); }
@@ -3387,15 +3408,31 @@ function validateCompleteBackup(data){
   };
   return {ok: errors.length===0, errors, info};
 }
+// HR datasets carried by a Complete Backup (employeeMerges is audit-only and not exported/restored).
+const RESTORE_HR_KEYS = ['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts','supplementalPayments'];
+// v2.7.2 — transaction-safe Complete Backup restore. Validates first, keeps a full deep-cloned
+// pre-restore snapshot, checks every write, and on ANY failure rolls the in-memory state back AND
+// re-persists the original values to every key it had already overwritten. Returns {ok, reason}.
 async function restoreCompleteBackup(data){
+  // 1) Validate the whole file BEFORE mutating any State.
+  const v = (typeof validateCompleteBackup==='function') ? validateCompleteBackup(data) : {ok:Array.isArray(data&&data.txns), errors:['Invalid backup.']};
+  if(!v.ok) return {ok:false, reason:'Backup file failed validation: '+((v.errors&&v.errors[0])||'invalid file.')};
+
+  // 2) Full deep-cloned snapshot of the pre-restore in-memory State (for rollback).
+  const clone = x=>JSON.parse(JSON.stringify(x===undefined?null:x));
+  const snap = {txns:clone(State.txns), settings:clone(State.settings), backups:clone(State.backups)};
+  RESTORE_HR_KEYS.forEach(k=>{ snap[k]=clone(State[k]||[]); });
+
   // Automatic safety backup of the CURRENT data before anything is replaced.
   const safety = {
     id: uid('backup'), monthKey:'__all__',
     monthLabel:'Pre-restore safety backup (all months)',
     timestamp: new Date().toISOString(),
-    txns: JSON.parse(JSON.stringify(State.txns)),
+    txns: clone(State.txns),
     safety: true,
   };
+
+  // 3) Apply the restore to State (in memory only).
   State.txns = data.txns.map(raw=>{
     const t = {...raw};
     if(!t.status) t.status = computeStatus(t);
@@ -3403,22 +3440,39 @@ async function restoreCompleteBackup(data){
     return t;
   });
   if(data.settings) State.settings = {...DEFAULT_SETTINGS, ...data.settings, schemaVersion: SCHEMA_VERSION};
-  // People & Contracts + Overtime datasets (present in v2.2+/v2.3+ backups; absent → keep current).
-  ['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts','supplementalPayments'].forEach(k=>{
-    if(Array.isArray(data[k])) State[k] = JSON.parse(JSON.stringify(data[k]));
-  });
-  // Safety backup goes first so it survives the 25-backup cap.
-  State.backups = [safety, ...(Array.isArray(data.backups)?data.backups:[])].slice(0,25);
-  await persist();
-  await saveSettings();
-  await saveBackups();
-  await Promise.all(['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts','supplementalPayments'].map(persistHR));
-  // Restored data already carries lifecycle fields (or got them above) — don't re-run migration.
+  RESTORE_HR_KEYS.forEach(k=>{ if(Array.isArray(data[k])) State[k] = clone(data[k]); });
+  State.backups = [safety, ...(Array.isArray(data.backups)?data.backups:[])].slice(0,25); // safety first survives the cap
+
+  // 4) Persist every dataset with explicit result checks.
+  const writes = [];
+  writes.push(['transactions', await persist()]);
+  writes.push(['settings', await saveSettings()]);
+  writes.push(['backups', await saveBackups()]);
+  for(const k of RESTORE_HR_KEYS){ writes.push([k, await persistHR(k)]); }
+  const failed = writes.filter(w=>!w[1]).map(w=>w[0]);
+
+  if(failed.length){
+    // 5) Roll back: restore in-memory state AND re-write the original values to every key.
+    State.txns = snap.txns; State.settings = snap.settings; State.backups = snap.backups;
+    RESTORE_HR_KEYS.forEach(k=>{ State[k] = snap[k]; });
+    const rbFail = [];
+    if(!(await persist())) rbFail.push('transactions');
+    if(!(await saveSettings())) rbFail.push('settings');
+    if(!(await saveBackups())) rbFail.push('backups');
+    for(const k of RESTORE_HR_KEYS){ if(!(await persistHR(k))) rbFail.push(k); }
+    if(rbFail.length){
+      return {ok:false, reason:`Restore failed writing [${failed.join(', ')}], and the automatic rollback could not fully complete [${rbFail.join(', ')}]. Data may be partially changed — do NOT continue: reload the app, then restore from your original backup file. Storage is likely full or unavailable.`};
+    }
+    return {ok:false, reason:`Restore failed while writing [${failed.join(', ')}] (storage error). Your previous data was rolled back and is intact. Free up storage and try again.`};
+  }
+
+  // 6) Success — restored data already carries lifecycle fields; don't re-run those migrations.
   await StorageAdapter.set('tam_migrated_exec_v21', 'done');
   await StorageAdapter.set('tam_migrated_hr_v22', 'done');
   await StorageAdapter.set('tam_migrated_overtime_v23', 'done');
   const months = getMonths();
   State.selectedMonth = months.length ? months[months.length-1].key : null;
+  return {ok:true};
 }
 
 function monthSortVal(b){ return b.year*12 + b.monthNum; }
@@ -4795,7 +4849,9 @@ function renderSettings(main){
     document.getElementById('cancelRestore').addEventListener('click', ()=>{ box.innerHTML=''; });
     document.getElementById('confirmRestore').addEventListener('click', async ()=>{
       if(!confirm(`Replace ALL current data with the contents of ${file.name}?\n\n${i.txnCount} transactions will be restored. A safety backup of your current data will be created first.`)) return;
-      await restoreCompleteBackup(data);
+      const result = await restoreCompleteBackup(data);
+      if(!result || result.ok!==true){ toast((result&&result.reason) || 'Restore failed — no changes were applied.', 9000); return; }
+      box.innerHTML='';
       toast('Complete backup restored. A pre-restore safety backup was saved.', 6000);
       render();
     });
@@ -5014,6 +5070,7 @@ function renderAbout(main){
 }
 function renderReleaseNotes(main){
   const notes = [
+    {v:'2.7.2 — Persistence & Transactional Integrity', items:['Fixed a critical Supplemental Payment posting bug: the shared HR persistence helper did not return its success flag, so posting always took the failure path — it rolled the finance transaction out of storage while the supplemental stayed Posted, leaving an orphaned supplemental linked to a deleted transaction after reload. Persistence helpers now return a strict true/false and posting is coordinated: on success exactly one Planned transaction exists with valid two-way links; on failure nothing is left orphaned, and an unrecoverable rollback surfaces a clear message','Startup recovery: a supplemental left Posted by the old bug (its linked transaction missing, never executed) is safely restored to a re-postable Approved state with an audit entry — no financial amount is fabricated or altered; anything ambiguous is left for Integrity Check','Complete Backup restore is now transaction-safe: the file is validated first, a full pre-restore snapshot is kept, every dataset write is checked, and any failure rolls back in memory and re-persists the original values; the UI only reports success when the restore fully succeeds','Transaction execution now checks that the write succeeded: on a storage failure the transaction is restored exactly, no execution audit is written, and no linked supplemental is marked Executed; a clear failure message is shown','No storage key added or renamed (15); SCHEMA_VERSION unchanged (6); no committed payroll/finance amount or historical record is rewritten']},
     {v:'2.7.1 — Payroll Integrity & Reporting Foundation', items:['Fixed a historical payroll rendering defect: a Posted/Executed payroll could show a plan total (e.g. Rp7,000,000, 0 overtime) that disagreed with its committed finance transaction (e.g. Rp8,750,000). Posted/Executed payroll now renders immutable committed values, never reconstructed from current contract or overtime data','New centralized stage-aware source-of-truth helper (payrollHistoricalSnapshot): Draft/Review/Approved show working-plan values; Posted/Executed derive from the strongest committed evidence in priority order — an explicit committed snapshot, then the immutable linked transaction, then committed plan fields — with a visible "Payroll snapshot mismatch" notice when sources disagree. The posted transaction is never altered','Immutable overtime snapshots: new payroll postings freeze an overtime breakdown (overtimeSnapshot) on the transaction and a committed snapshot on the plan, so historical detail survives later edits or deletion of the source overtime. Unknown legacy hours display "— / unavailable" (distinct from an explicit 0 hrs)','Payroll Detail, worksheet rows, period totals/summary and CSV export are now stage-aware and consistent; Base Payroll Snapshot is shown separately from supplementals','Company settings onboarding: "Configure company settings" now completes via an explicit persisted marker (companySettingsConfiguredAt) set only after a successful Settings save, with a conservative legacy fallback for older settings; opening Settings without saving, or a failed save, does not complete it','Supplemental hardening: Posted supplemental notes are now immutable; an overtime ID cannot be captured by more than one non-cancelled supplemental anywhere in the store (global duplicate guard); Execution Center deep-link focuses the exact linked transaction; empty company-account posting state is clearer; new integrity checks for payroll/supplemental linkage','No storage key added or renamed (15); SCHEMA_VERSION unchanged (6); no historical payroll or finance amount is auto-repaired']},
     {v:'2.7.0 — Supplemental Payroll Engine', items:['Supplemental Payments: a new module that settles overtime approved AFTER the base payroll became immutable (Posted/Executed). It is a separate accounting document — the base payroll total, its finance transaction, and its execution history are never modified','The authoritative amount reuses the existing overtime-drift calculation (no second formula). Duplicate prevention: an overtime record is never paid twice across supplementals, at most one open Draft/Review exists per employee/period, and later overtime after a frozen supplemental forms a new record','Lifecycle: Draft → Review → Approved → Post to Finance → Execute. Amount and source overtime freeze at Approved. Posting creates exactly one Planned finance transaction (linked both ways, with an immutable company-account snapshot); execution runs through the existing Execution Center and records the actual payment','The v2.6.8 overtime-drift warning is now actionable — Generate a supplemental directly from the Payroll Workspace, Payroll Detail, or Overtime page. A Supplemental Payments page lists, filters and manages records; Payroll Detail and Employee Detail show related supplementals separately from base payroll','One new additive storage key (tam_supplemental_payments_v1); SCHEMA_VERSION unchanged (6); backup/restore include supplementals and older backups restore cleanly','Housekeeping: a centralized feature-status registry replaces the hardcoded sidebar badge (Projects / Vendors / Financial Calendar show SOON; Recurring Expenses is stable with no badge); general employee CSV export now masks bank-account numbers (import still accepts full numbers); count-neutral CI/Release verify labels','Source in v2.7.0 is overtime only; other adjustment types (bonuses, reimbursements) are intentionally out of scope']},
     {v:'2.6.9 — Enterprise Banking Foundation', items:['Indonesian Bank Master: a single, reusable reference list of Indonesian banks grouped by type (State, Private, Digital, Islamic, Regional, International) plus “Other Bank”, alphabetically sorted within each group. It is a constant (one source of truth, no duplicated arrays, no storage key) used by both employee banking and company accounts','Company Bank Accounts: a new Settings → Bank Accounts page to create, edit, deactivate, archive, search and filter company accounts. Each account has a Label, Bank (from the Bank Master), Account Holder, Account Number, Purpose (Operational / Payroll / Tax / Savings / Petty Cash / Other) and Status (Active / Inactive / Archived). Account numbers are stored masked in lists (only the last 4 shown) and never a PIN, OTP, password or token. Only Active accounts appear in transaction dropdowns, displayed as “Label — Bank”','Employee banking: the employee Bank is now chosen from the Bank Master, with a new Account Holder field. Existing values map correctly (e.g. Mandiri → Bank Mandiri, BSI → Bank Syariah Indonesia) and any other existing free-text bank is preserved as a “(current)” option — no bulk data migration. Employee account numbers are masked in the profile view','Transaction & execution integration: the Bank Account dropdowns in Add/Execute transactions, the transactions filter, recurring expenses and the default-bank setting now list only Active company accounts. Transactions that stored a legacy bank string keep resolving','Backward compatibility: on installs that already have data, the five legacy bank strings seed structured company accounts once (guarded, non-destructive) so existing references resolve; a fresh install starts empty. Complete Backup / Restore now include company accounts, and older backups without them restore cleanly','Data safety: one new additive storage key (tam_company_accounts_v1); SCHEMA_VERSION is unchanged (6); no storage key was renamed or removed; committed payroll/finance remain untouched','Supplemental Payment remains planned for a future release (v2.7.0). The existing overtime-drift warning and its disabled placeholder are unchanged in this release']},
@@ -10207,8 +10264,18 @@ async function postSupplemental(id){
   (supp.history=supp.history||[]).push({event:'post', ts:now, note:`Posted to finance — Planned ${fmtIDR(supp.amount)} (${acct.label})`});
   const suppOk = await persistSupplementalPayments();
   if(!suppOk){
+    // Roll back the finance transaction so no orphan remains, and VERIFY the rollback persisted.
     supp.financeTransactionId = null; supp.status = 'Approved'; supp.postedAt = null; (supp.history||[]).pop();
-    State.txns = State.txns.filter(t=>t.id!==txn.id); await persist();
+    State.txns = State.txns.filter(t=>t.id!==txn.id);
+    const rolledBack = await persist();
+    if(!rolledBack){
+      // Storage is failing both ways. In memory nothing is posted; storage still holds the
+      // transaction (persisted a moment ago) but NOT the supplemental link — so on reload it is a
+      // detectable orphan transaction (Integrity Check → supplemental-orphan-transaction), never an
+      // orphan supplemental (the supplemental write failed, so it stays Approved in storage).
+      return {ok:false, unrecoverable:true, orphanTxnId:txn.id,
+        reason:'Posting failed and the automatic rollback could not be saved (storage error). The supplemental is NOT posted. A stray finance transaction may remain until you reload — run Integrity Check to detect and remove it. Do not retry until storage is healthy.'};
+    }
     return {ok:false, reason:'Posting failed — the supplemental could not be saved. The transaction was rolled back; nothing was changed.'};
   }
   logActivity({type:'supplemental.post', module:'Supplemental Payroll', entity:supp.employeeName, entityId:supp.id,
@@ -10222,19 +10289,63 @@ async function postSupplemental(id){
    supplemental becomes Executed. Idempotent: an already-Executed supplemental is never
    re-closed, so repeated execution cannot double-pay. Base payroll is untouched. */
 async function linkSupplementalExecution(t){
-  if(!t || !t.supplementalId) return;
-  const supp = supplementalById(t.supplementalId); if(!supp) return;
-  if(supp.status==='Executed') return; // idempotent guard
-  if(!['completed','archived'].includes(statusOf(t))) return; // only when fully paid
+  if(!t || !t.supplementalId) return {ok:true, changed:false};
+  const supp = supplementalById(t.supplementalId); if(!supp) return {ok:true, changed:false};
+  if(supp.status==='Executed') return {ok:true, changed:false}; // idempotent guard
+  if(!['completed','archived'].includes(statusOf(t))) return {ok:true, changed:false}; // only when fully paid
+  // v2.7.2 — snapshot the pre-execution supplemental so a failed persist can be reverted in
+  // memory (memory matches storage), instead of misrepresenting it as Executed.
+  const prev = {status:supp.status, executionId:supp.executionId, executedAt:supp.executedAt, updatedAt:supp.updatedAt, historyLen:(supp.history||[]).length};
   const now = new Date().toISOString();
   supp.status = 'Executed';
   supp.executionId = (t.execution && t.execution.executionId) || t.executionId || null;
   supp.executedAt = now; supp.updatedAt = now;
   (supp.history=supp.history||[]).push({event:'execute', ts:now, note:`Executed via Execution Center — ${fmtIDR(num(t.actual))}`});
-  await persistSupplementalPayments();
+  const ok = await persistSupplementalPayments();
+  if(!ok){
+    // The committed transaction stays executed (never rewritten). Revert the supplemental in
+    // memory to match storage (still Posted) and report a clear, detectable remediation state.
+    supp.status = prev.status; supp.executionId = prev.executionId; supp.executedAt = prev.executedAt; supp.updatedAt = prev.updatedAt;
+    if((supp.history||[]).length > prev.historyLen) supp.history.length = prev.historyLen;
+    return {ok:false, reason:'The payment was recorded, but the linked supplemental could not be updated to Executed (storage error). It remains Posted and will reconcile the next time you open/execute it — run Integrity Check if it persists.'};
+  }
   logActivity({type:'supplemental.execute', module:'Supplemental Payroll', entity:supp.employeeName, entityId:supp.id,
     desc:`Supplemental executed — ${fmtIDR(num(t.actual))} (${supp.periodLabel})`,
     refs:{employeeId:supp.employeeId, supplementalId:supp.id, transactionId:t.id, executionId:supp.executionId}});
+  return {ok:true, changed:true};
+}
+
+/* ---------- startup recovery: pre-2.7.2 failed-post orphan supplementals ----------
+   The v2.7.1 persistHR bug made postSupplemental ALWAYS take the failure path even when the
+   supplemental write actually succeeded: it left the supplemental persisted as Posted with a
+   financeTransactionId while rolling the transaction OUT of storage → an orphaned Posted
+   supplemental pointing at a transaction that no longer exists. This detects ONLY that exact,
+   known-safe pattern and restores the record to a re-postable Approved state, with an audit
+   entry. It never fabricates or alters any financial amount, never touches Executed records, and
+   never touches a supplemental whose transaction still exists. Anything ambiguous is left intact
+   for Integrity Check to surface. Idempotent and self-limiting: once restored the pattern no
+   longer matches, so it is safe to run on every boot. */
+async function recoverSupplementalOrphans(){
+  try{
+    const supps = State.supplementalPayments||[];
+    let recovered = 0; const now = new Date().toISOString();
+    supps.forEach(s=>{
+      const isFailedPostOrphan = s && s.status==='Posted' && s.financeTransactionId
+        && !findTxn(s.financeTransactionId) && !s.executionId && !s.executedAt;
+      if(isFailedPostOrphan){
+        const lostTxnId = s.financeTransactionId;
+        s.financeTransactionId = null; s.status = 'Approved'; s.postedAt = null; s.updatedAt = now;
+        (s.history=s.history||[]).push({event:'recover', ts:now,
+          note:`Auto-recovered from a failed post (linked transaction ${lostTxnId} was never saved). Restored to Approved so it can be re-posted. No financial amount was changed.`});
+        recovered++;
+        if(typeof logActivity==='function') logActivity({type:'supplemental.recover', module:'Supplemental Payroll', entity:s.employeeName, entityId:s.id,
+          desc:'Recovered orphaned supplemental (missing transaction) → Approved, re-postable',
+          refs:{employeeId:s.employeeId, payrollPlanId:s.payrollPlanId, supplementalId:s.id}});
+      }
+    });
+    if(recovered) await persistSupplementalPayments();
+    return recovered;
+  }catch(e){ console.error('recoverSupplementalOrphans skipped', e); return 0; }
 }
 
 /* ---------- per-plan supplemental state (for workspace/detail summaries) ---------- */

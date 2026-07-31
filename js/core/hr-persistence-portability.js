@@ -28,9 +28,10 @@ async function loadHRData(){
 }
 async function persistHR(stateKey){
   const storeKey = HR_KEYS[stateKey];
-  if(!storeKey){ console.error('persistHR: unknown key '+stateKey); return; }
+  if(!storeKey){ console.error('persistHR: unknown key '+stateKey); return false; }
   const ok = await StorageAdapter.set(storeKey, JSON.stringify(State[stateKey]));
   if(!ok) console.error('persistHR: '+stateKey+' was not persisted');
+  return ok === true;
 }
 async function persistEmployees(){ return persistHR('employees'); }
 async function persistContracts(){ return persistHR('contracts'); }
@@ -238,15 +239,31 @@ function validateCompleteBackup(data){
   };
   return {ok: errors.length===0, errors, info};
 }
+// HR datasets carried by a Complete Backup (employeeMerges is audit-only and not exported/restored).
+const RESTORE_HR_KEYS = ['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts','supplementalPayments'];
+// v2.7.2 — transaction-safe Complete Backup restore. Validates first, keeps a full deep-cloned
+// pre-restore snapshot, checks every write, and on ANY failure rolls the in-memory state back AND
+// re-persists the original values to every key it had already overwritten. Returns {ok, reason}.
 async function restoreCompleteBackup(data){
+  // 1) Validate the whole file BEFORE mutating any State.
+  const v = (typeof validateCompleteBackup==='function') ? validateCompleteBackup(data) : {ok:Array.isArray(data&&data.txns), errors:['Invalid backup.']};
+  if(!v.ok) return {ok:false, reason:'Backup file failed validation: '+((v.errors&&v.errors[0])||'invalid file.')};
+
+  // 2) Full deep-cloned snapshot of the pre-restore in-memory State (for rollback).
+  const clone = x=>JSON.parse(JSON.stringify(x===undefined?null:x));
+  const snap = {txns:clone(State.txns), settings:clone(State.settings), backups:clone(State.backups)};
+  RESTORE_HR_KEYS.forEach(k=>{ snap[k]=clone(State[k]||[]); });
+
   // Automatic safety backup of the CURRENT data before anything is replaced.
   const safety = {
     id: uid('backup'), monthKey:'__all__',
     monthLabel:'Pre-restore safety backup (all months)',
     timestamp: new Date().toISOString(),
-    txns: JSON.parse(JSON.stringify(State.txns)),
+    txns: clone(State.txns),
     safety: true,
   };
+
+  // 3) Apply the restore to State (in memory only).
   State.txns = data.txns.map(raw=>{
     const t = {...raw};
     if(!t.status) t.status = computeStatus(t);
@@ -254,20 +271,37 @@ async function restoreCompleteBackup(data){
     return t;
   });
   if(data.settings) State.settings = {...DEFAULT_SETTINGS, ...data.settings, schemaVersion: SCHEMA_VERSION};
-  // People & Contracts + Overtime datasets (present in v2.2+/v2.3+ backups; absent → keep current).
-  ['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts','supplementalPayments'].forEach(k=>{
-    if(Array.isArray(data[k])) State[k] = JSON.parse(JSON.stringify(data[k]));
-  });
-  // Safety backup goes first so it survives the 25-backup cap.
-  State.backups = [safety, ...(Array.isArray(data.backups)?data.backups:[])].slice(0,25);
-  await persist();
-  await saveSettings();
-  await saveBackups();
-  await Promise.all(['employees','contracts','payrollPlans','recurringExpenses','monthlyPlans','overtimeRecords','importBatches','payrollAdjustments','companyAccounts','supplementalPayments'].map(persistHR));
-  // Restored data already carries lifecycle fields (or got them above) — don't re-run migration.
+  RESTORE_HR_KEYS.forEach(k=>{ if(Array.isArray(data[k])) State[k] = clone(data[k]); });
+  State.backups = [safety, ...(Array.isArray(data.backups)?data.backups:[])].slice(0,25); // safety first survives the cap
+
+  // 4) Persist every dataset with explicit result checks.
+  const writes = [];
+  writes.push(['transactions', await persist()]);
+  writes.push(['settings', await saveSettings()]);
+  writes.push(['backups', await saveBackups()]);
+  for(const k of RESTORE_HR_KEYS){ writes.push([k, await persistHR(k)]); }
+  const failed = writes.filter(w=>!w[1]).map(w=>w[0]);
+
+  if(failed.length){
+    // 5) Roll back: restore in-memory state AND re-write the original values to every key.
+    State.txns = snap.txns; State.settings = snap.settings; State.backups = snap.backups;
+    RESTORE_HR_KEYS.forEach(k=>{ State[k] = snap[k]; });
+    const rbFail = [];
+    if(!(await persist())) rbFail.push('transactions');
+    if(!(await saveSettings())) rbFail.push('settings');
+    if(!(await saveBackups())) rbFail.push('backups');
+    for(const k of RESTORE_HR_KEYS){ if(!(await persistHR(k))) rbFail.push(k); }
+    if(rbFail.length){
+      return {ok:false, reason:`Restore failed writing [${failed.join(', ')}], and the automatic rollback could not fully complete [${rbFail.join(', ')}]. Data may be partially changed — do NOT continue: reload the app, then restore from your original backup file. Storage is likely full or unavailable.`};
+    }
+    return {ok:false, reason:`Restore failed while writing [${failed.join(', ')}] (storage error). Your previous data was rolled back and is intact. Free up storage and try again.`};
+  }
+
+  // 6) Success — restored data already carries lifecycle fields; don't re-run those migrations.
   await StorageAdapter.set('tam_migrated_exec_v21', 'done');
   await StorageAdapter.set('tam_migrated_hr_v22', 'done');
   await StorageAdapter.set('tam_migrated_overtime_v23', 'done');
   const months = getMonths();
   State.selectedMonth = months.length ? months[months.length-1].key : null;
+  return {ok:true};
 }

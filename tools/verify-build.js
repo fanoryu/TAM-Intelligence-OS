@@ -236,7 +236,7 @@ if (fs.existsSync(prevDist)) {
 // dist/ holds exactly one release artifact — the current version (release dist-swap invariant).
 const distArtifacts = fs.readdirSync(path.join(root, 'dist')).filter((f)=>/^tam-intelligence-os-v[\d.]+\.html$/.test(f));
 check(distArtifacts.length === 1 && distArtifacts[0] === 'tam-intelligence-os-v' + meta.version + '.html', 'dist/ holds exactly one release artifact — the current v' + meta.version);
-check(meta.version === '2.7.1', 'APP_VERSION is 2.7.1 (this development release)');
+check(meta.version === '2.7.2', 'APP_VERSION is 2.7.2 (this development release)');
 // v2.7.1 polishing pass — snapshot metadata, single historical API, compact integrity badge.
 check(dist.includes('function overtimeSnapshotMeta('), 'overtime snapshot audit metadata helper present');
 check((dist.match(/overtimeSnapshotMeta:\s*overtimeSnapshotMeta\(/g)||[]).length >= 2, 'both commit pipelines store overtimeSnapshotMeta {recordCount,totalHours}');
@@ -248,6 +248,31 @@ check(dist.includes('empPlans.map(p=>{ const snap=payrollHistoricalSnapshot(p)')
 check((dist.match(/const s=payrollHistoricalSnapshot\(p\); return \[p\.employeeName/g)||[]).length >= 1, 'payroll register/components reports use payrollHistoricalSnapshot');
 check(!/<td class="num">\$\{fmtIDR\(payrollBaseSalary\(p\)\)\}<\/td>/.test(dist), 'no Employee Detail row renders payrollBaseSalary(p) directly');
 check(!/fmtIDR\(p\.overtimeAmount\),fmtIDR\(num\(p\.allowance\)/.test(dist), 'payroll register no longer renders p.overtimeAmount directly');
+
+// v2.7.2 — persistence / transactional-integrity fixes.
+console.log('== PERSISTENCE & TRANSACTIONAL INTEGRITY (v2.7.2) ==');
+// persistHR returns a strict boolean (false for unknown key, the actual set() result otherwise).
+check(/function persistHR\(stateKey\)\{[\s\S]*?return false;[\s\S]*?return ok === true;\s*\}/.test(dist), 'persistHR returns a strict boolean (false on unknown key, set() result otherwise)');
+check(dist.includes('async function saveBackups(){') && /saveBackups\(\)\{[\s\S]*?return ok === true;/.test(dist), 'saveBackups returns a strict boolean');
+check(/async function persist\(\)\{[\s\S]*?return ok === true;/.test(dist) && /async function saveSettings\(\)\{[\s\S]*?return ok === true;/.test(dist), 'persist() and saveSettings() return strict booleans');
+// postSupplemental verifies the rollback persisted and never leaves an orphan.
+check(dist.includes('const rolledBack = await persist();') && dist.includes('unrecoverable:true') && dist.includes('orphanTxnId:txn.id'), 'supplemental posting verifies rollback persistence (no silent orphan)');
+// executeTransaction snapshots, checks the write, rolls back in memory, and orders audit/supplemental.
+check(dist.includes('const before = JSON.parse(JSON.stringify(t));') && dist.includes('const saved = await persist();') && dist.includes('Object.assign(t, before);'), 'executeTransaction snapshots + rolls back on failed persist');
+check(/const saved = await persist\(\);\s*if\(!saved\)\{[\s\S]*?return \{ok:false/.test(dist), 'executeTransaction returns failure (no audit/supplemental) when persist fails');
+check(dist.includes('let suppWarning = null;') && dist.includes('linkSupplementalExecution(t)'), 'linked supplemental executed only after transaction persists');
+// linkSupplementalExecution reverts in memory and reports when its own persist fails.
+check(/async function linkSupplementalExecution\(t\)\{[\s\S]*?const ok = await persistSupplementalPayments\(\);[\s\S]*?if\(!ok\)\{[\s\S]*?return \{ok:false/.test(dist), 'linkSupplementalExecution reverts + reports on failed persist (no misrepresented Executed)');
+// restoreCompleteBackup is transaction-safe: validate, snapshot, checked writes, rollback.
+check(dist.includes('const RESTORE_HR_KEYS') , 'restore uses a single RESTORE_HR_KEYS dataset list');
+check(/async function restoreCompleteBackup\(data\)\{[\s\S]*?validateCompleteBackup\(data\)[\s\S]*?return \{ok:false/.test(dist), 'restoreCompleteBackup validates before mutating State');
+check(dist.includes('const failed = writes.filter') && dist.includes('rbFail') && dist.includes('return {ok:true}'), 'restoreCompleteBackup checks every write, rolls back, returns {ok}');
+check(dist.includes('if(!result || result.ok!==true)'), 'restore UI only reports success when result.ok === true');
+// startup recovery for pre-2.7.2 failed-post orphan supplementals.
+check(dist.includes('async function recoverSupplementalOrphans(') && dist.includes("s.status==='Posted'") && dist.includes('!s.executionId'), 'recoverSupplementalOrphans present (conservative failed-post repair)');
+check(dist.includes('if(typeof recoverSupplementalOrphans===') && dist.includes('await recoverSupplementalOrphans()'), 'orphan recovery wired into startup load');
+// existing bidirectional orphan integrity checks remain.
+check(dist.includes("'supplemental-missing-transaction'") && dist.includes("'supplemental-orphan-transaction'"), 'integrity checks detect both orphan directions');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

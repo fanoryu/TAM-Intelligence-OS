@@ -43,7 +43,7 @@ function renderExecuteModal(){
     const fd = new FormData(e.target);
     const amt = Number(fd.get('actualAmount'));
     if(isNaN(amt)){ toast('Enter a valid actual amount.'); return; }
-    await executeTransaction(t.id, {
+    const res = await executeTransaction(t.id, {
       executionDate: fd.get('executionDate'),
       actualAmount: amt,
       method: fd.get('method'),
@@ -51,8 +51,9 @@ function renderExecuteModal(){
       reference: (fd.get('reference')||'').trim(),
       notes: (fd.get('notes')||'').trim(),
     });
+    if(res && res.ok===false){ toast(res.reason || 'Transaction was not executed.', 7000); return; }
     closeModal();
-    toast('Transaction executed.');
+    if(res && res.suppWarning) toast(res.suppWarning, 8000); else toast('Transaction executed.');
     render();
   });
 }

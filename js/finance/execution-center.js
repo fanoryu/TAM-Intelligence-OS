@@ -184,7 +184,9 @@ function pushHistory(t, event, note, extra){
   t.history.push(Object.assign({event, ts:new Date().toISOString(), note:note||null}, extra||{}));
 }
 async function executeTransaction(id, data){
-  const t = findTxn(id); if(!t) return;
+  const t = findTxn(id); if(!t) return {ok:false, reason:'Transaction not found.'};
+  // v2.7.2 — deep snapshot BEFORE mutation so a failed persist rolls back exactly.
+  const before = JSON.parse(JSON.stringify(t));
   t.actual = data.actualAmount;
   t.execution = {
     executionDate: data.executionDate||null,
@@ -206,13 +208,26 @@ async function executeTransaction(id, data){
   if(newStatus==='completed' && State.settings.autoArchiveCompleted) newStatus='archived';
   t.status = newStatus;
   pushHistory(t, 'executed', `Executed ${fmtIDR(data.actualAmount)}${data.method?' via '+data.method:''}`, {amount:data.actualAmount});
-  await persist();
+  // v2.7.2 — persist FIRST and check the result. If the write fails, restore the exact
+  // original transaction in memory and write NO audit event and touch NO supplemental.
+  const saved = await persist();
+  if(!saved){
+    Object.keys(t).forEach(k=>{ if(!(k in before)) delete t[k]; });
+    Object.assign(t, before);
+    return {ok:false, reason:'Execution was not saved (storage error) — nothing was changed. Try again; if it persists, export a Complete Backup and free up storage.'};
+  }
+  // Only after the execution is durably saved: write the audit event.
   logActivity({type:'finance.execute', module:'Finance', entity:t.uraian||t.category||'Transaction', entityId:t.id,
     desc:`Executed ${fmtIDR(data.actualAmount)}${data.method?' via '+data.method:''} — status ${newStatus}`,
     refs:{transactionId:t.id, employeeId:t.employeeId||null, payrollPlanId:t.payrollPlanId||null, monthKey:t.monthKey||null}});
-  // v2.7.0 — if this transaction settles a supplemental payment, close the supplemental
-  // (Executed). Idempotent; base payroll transactions have no supplementalId so are unaffected.
-  if(typeof linkSupplementalExecution==='function') await linkSupplementalExecution(t);
+  // v2.7.0/2.7.2 — if this transaction settles a supplemental, close it (Executed). The committed
+  // transaction is never rewritten; if the supplemental write fails it stays a detectable state.
+  let suppWarning = null;
+  if(typeof linkSupplementalExecution==='function'){
+    const lr = await linkSupplementalExecution(t);
+    if(lr && lr.ok===false) suppWarning = lr.reason;
+  }
+  return {ok:true, suppWarning};
 }
 async function scheduleTransaction(id, date){
   const t = findTxn(id); if(!t) return;

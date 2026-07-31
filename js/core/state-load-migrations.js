@@ -31,6 +31,9 @@ async function loadState(){
   await migrateToPayrollOpsSchema();
   await migrateToDedupSchema();
   await migrateSeedCompanyAccounts();
+  // v2.7.2 — repair any pre-2.7.2 failed-post orphan supplementals (Posted but linked
+  // transaction never persisted). Conservative, idempotent, non-destructive; see the engine.
+  if(typeof recoverSupplementalOrphans==='function') await recoverSupplementalOrphans();
   // v2.5.2 — treat the app as carrying data ONLY when a meaningful business
   // dataset has real records. Empty arrays, settings, migration flags, schema
   // version, empty backups/audits and UI prefs never count (fresh-install fix).
@@ -107,11 +110,11 @@ async function saveSettings(){
   // StorageAdapter.set reports failures (toast + status) itself — no silent failures.
   const ok = await StorageAdapter.set('tam_settings_v1', JSON.stringify(State.settings));
   if(!ok) console.error('saveSettings: settings were not persisted');
-  return ok;
+  return ok === true;
 }
 
 async function persist(){
   const ok = await StorageAdapter.set('tam_txns_v1', JSON.stringify(State.txns));
   if(!ok) console.error('persist: transactions were not persisted');
-  return ok;
+  return ok === true;
 }

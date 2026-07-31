@@ -182,4 +182,5 @@ async function loadBackups(){
 async function saveBackups(){
   const ok = await StorageAdapter.set('tam_backups_v1', JSON.stringify(State.backups.slice(0,25)));
   if(!ok) console.error('saveBackups: backups were not persisted');
+  return ok === true;
 }
