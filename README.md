@@ -366,13 +366,25 @@ Each document owns one responsibility; they cross-reference rather than repeat o
 | [`CHANGELOG.md`](CHANGELOG.md) | Historical changes | The full version-by-version history |
 | [`RELEASE_NOTES.md`](RELEASE_NOTES.md) | Release summaries | The summary for the current release |
 
+### `docs/` folder
+
+The [`docs/`](docs/README.md) folder ([index](docs/README.md)) holds supporting documentation and
+decision records; its governance model is [ADR-0001](docs/adr/ADR-0001-documentation-governance-model.md).
+
+| Document | Role | Read it for |
+|---|---|---|
+| [`docs/QA-CHECKLIST.md`](docs/QA-CHECKLIST.md) | Process | The QA checklist run before a change is done |
+| [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) | Process | The step-by-step release procedure |
+| [`docs/DATA-SAFETY.md`](docs/DATA-SAFETY.md) | Reference | Data-safety guidance for storage, migrations, backups |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Runbook | How the build is deployed; public/private layering |
+| [`docs/adr/`](docs/adr/README.md) | Decision records | Architecture Decision Records (ADR-NNNN) |
+| [`docs/security/`](docs/security/README.md) | Decision records | Security Decision Records (SDR-NNNN) |
+
 Supporting documents: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) (collaborator conduct),
-[`LICENSE`](LICENSE) / [`PROPRIETARY-LICENSE-NOTICE.md`](PROPRIETARY-LICENSE-NOTICE.md) (proprietary terms), and
-[`docs/`](docs/) — [`QA-CHECKLIST.md`](docs/QA-CHECKLIST.md),
-[`RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md), [`DATA-SAFETY.md`](docs/DATA-SAFETY.md).
+[`LICENSE`](LICENSE) / [`PROPRIETARY-LICENSE-NOTICE.md`](PROPRIETARY-LICENSE-NOTICE.md) (proprietary terms).
 
 New to the repository? Start with **AI_CONTEXT.md** for context, then **CLAUDE.md** before making
-changes.
+changes. Browsing `docs/`? Start at the [`docs/` index](docs/README.md).
 
 ---
 

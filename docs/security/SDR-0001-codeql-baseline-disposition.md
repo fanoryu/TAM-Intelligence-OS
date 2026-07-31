@@ -4,12 +4,15 @@
 |---|---|
 | **Record** | SDR-0001 |
 | **Title** | CodeQL Baseline Disposition |
-| **Status** | Proposed (awaiting Atlas CTO review) |
+| **Status** | Accepted |
 | **Codename** | The Ledger |
 | **Season / Sprint / PR** | Season 2 · Sprint 2 · PR-2.3 |
 | **Author** | Forge (engineering) |
+| **Accountable approver** | Atlas — Chief Technology Officer |
 | **Date created** | 2026-08-01 |
+| **Next review** | 2027-08-01 |
 | **Supersedes** | — |
+| **Superseded by** | — |
 | **Related** | PR-2 (CodeQL setup), PR-2.1 (baseline triage), PR-2.2 "The Seal" (SheetJS SRI) |
 
 > **Purpose.** This is the first Security Decision Record (SDR) for TAM Intelligence OS. It is the
