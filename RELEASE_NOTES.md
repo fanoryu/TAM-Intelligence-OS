@@ -58,9 +58,12 @@ historical payroll or finance amount is auto-repaired. Adds **no** storage key (
 - The tracked company workbook remains a documented, accepted exception (untouched).
 
 ## Git Information
-- Commit: _pending approval — not committed_
-- Tag: _pending approval — not tagged_
+- Release commit (tagged): 488145ff6cc6cc69fc22942915347e55253050e6
+- Release content commit: b9bd3628f9b8d44185325e5c7910ab53c17f4ec5 ("Release v2.7.1"); the tag was
+  advanced by one CI-only verifier fix (`fix(verify): accept release dist-swap state`) so the
+  published build passes 166/166. No runtime/source behavior differs between the two commits.
+- Tag: v2.7.1 (annotated)
 - Branch: main
 
 ## Release Asset
-- dist/tam-intelligence-os-v2.7.1.html
+- dist/tam-intelligence-os-v2.7.1.html (762,060 bytes)
