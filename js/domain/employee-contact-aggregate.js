@@ -23,25 +23,17 @@
    ============================================================ */
 const EmployeeContactAggregate = Object.freeze({
   prepare: function (id, patch) {
-    // 1. Employee existence (read-only; never mutates State).
-    var e = (typeof empById === 'function') ? empById(id) : null;
+    // 1. Employee existence (read-only; never mutates State). PR-5F: shared helper.
+    var e = employeeExists(id);
     if (!e) return { ok: false, error: 'EmployeeNotFound' };
 
     // 2. Contact allowlist + 3. normalization (trim). Every other property
-    //    is discarded before the patch reaches the handler.
-    patch = patch || {};
+    //    is discarded before the patch reaches the handler. PR-5F: shared helper.
     var allow = (typeof EMPLOYEE_CONTACT_FIELDS !== 'undefined') ? EMPLOYEE_CONTACT_FIELDS : ['phone', 'email', 'notes'];
-    var clean = {};
-    for (var i = 0; i < allow.length; i++) {
-      var k = allow[i];
-      if (Object.prototype.hasOwnProperty.call(patch, k)) {
-        clean[k] = (patch[k] == null ? '' : String(patch[k])).trim();
-      }
-    }
+    var clean = normalizeAllowedFields(patch, allow);
 
     // 5. Business error: no allowed field supplied.
-    var keys = Object.keys(clean);
-    if (keys.length === 0) return { ok: false, error: 'NoContactFieldsProvided' };
+    if (Object.keys(clean).length === 0) return { ok: false, error: 'NoContactFieldsProvided' };
 
     // 4. Return the sanitized command input only. No mutation performed.
     return { ok: true, patch: clean };

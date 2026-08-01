@@ -24,41 +24,33 @@
    ============================================================ */
 const EmployeeEmploymentAggregate = Object.freeze({
   prepare: function (id, patch) {
-    // 1. Employee existence (read-only; never mutates State).
-    var e = (typeof empById === 'function') ? empById(id) : null;
+    // 1. Employee existence (read-only; never mutates State). PR-5F: shared helper.
+    var e = employeeExists(id);
     if (!e) return { ok: false, error: 'EmployeeNotFound' };
 
     // 2. Employment allowlist + 3. normalization (trim). Every other property
-    //    is discarded before the patch reaches the handler.
-    patch = patch || {};
+    //    is discarded before the patch reaches the handler. PR-5F: shared helper.
     var allow = (typeof EMPLOYEE_EMPLOYMENT_FIELDS !== 'undefined') ? EMPLOYEE_EMPLOYMENT_FIELDS : ['jobTitle', 'department', 'employmentStatus', 'joinDate', 'contractType'];
-    var clean = {};
-    for (var i = 0; i < allow.length; i++) {
-      var k = allow[i];
-      if (Object.prototype.hasOwnProperty.call(patch, k)) {
-        clean[k] = (patch[k] == null ? '' : String(patch[k])).trim();
-      }
-    }
+    var clean = normalizeAllowedFields(patch, allow);
 
     // 4. Business error: no allowed field supplied.
-    var keys = Object.keys(clean);
-    if (keys.length === 0) return { ok: false, error: 'NoEmploymentFieldsProvided' };
+    if (Object.keys(clean).length === 0) return { ok: false, error: 'NoEmploymentFieldsProvided' };
 
     // 5. Normalize empty joinDate to null.
     if (Object.prototype.hasOwnProperty.call(clean, 'joinDate') && clean.joinDate === '') {
       clean.joinDate = null;
     }
 
-    // 6. Validate employmentStatus against the canonical enum.
-    if (Object.prototype.hasOwnProperty.call(clean, 'employmentStatus')) {
-      var statuses = (typeof EMPLOYMENT_STATUSES !== 'undefined') ? EMPLOYMENT_STATUSES : [];
-      if (statuses.indexOf(clean.employmentStatus) === -1) return { ok: false, error: 'InvalidEmploymentStatus' };
+    // 6. Validate employmentStatus against the canonical enum. PR-5F: shared helper.
+    if (Object.prototype.hasOwnProperty.call(clean, 'employmentStatus') &&
+        !validateEnum(clean.employmentStatus, (typeof EMPLOYMENT_STATUSES !== 'undefined') ? EMPLOYMENT_STATUSES : [])) {
+      return { ok: false, error: 'InvalidEmploymentStatus' };
     }
 
-    // 7. Validate contractType against the canonical enum.
-    if (Object.prototype.hasOwnProperty.call(clean, 'contractType')) {
-      var types = (typeof CONTRACT_TYPES !== 'undefined') ? CONTRACT_TYPES : [];
-      if (types.indexOf(clean.contractType) === -1) return { ok: false, error: 'InvalidContractType' };
+    // 7. Validate contractType against the canonical enum. PR-5F: shared helper.
+    if (Object.prototype.hasOwnProperty.call(clean, 'contractType') &&
+        !validateEnum(clean.contractType, (typeof CONTRACT_TYPES !== 'undefined') ? CONTRACT_TYPES : [])) {
+      return { ok: false, error: 'InvalidContractType' };
     }
 
     // 8. Return the sanitized command input only. No mutation performed.
