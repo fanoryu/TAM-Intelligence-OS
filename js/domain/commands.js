@@ -26,6 +26,10 @@ const DOMAIN_COMMANDS = Object.freeze({
   // PR-5H — fourth OPERATIONAL command routed through Domain.command().
   // Narrow: monthly base salary only. Uses the DEFAULT prepare/patch contract.
   'employee.compensation.update': Object.freeze({ aggregate: 'Employee', boundary: 'EmployeeCompensationAggregate', handler: 'updateEmployeeCompensation', transition: 'controlled update of Employee monthly base compensation — OPERATIONAL via Domain.command(); business authority = EmployeeCompensationAggregate (PR-5H)' }),
+  // PR-5I — fifth OPERATIONAL command, first Contract boundary. Narrow: stored
+  // Contract date facts (startDate + durationMonths) only; endDate stays derived.
+  // Uses the DEFAULT prepare/patch contract.
+  'contract.dates.update': Object.freeze({ aggregate: 'Contract', boundary: 'ContractDateAggregate', handler: 'updateContractDates', transition: 'controlled update of Contract start date and duration (endDate remains derived) — OPERATIONAL via Domain.command(); business authority = ContractDateAggregate (PR-5I)' }),
   // Payroll
   'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
   // Finance

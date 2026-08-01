@@ -223,6 +223,94 @@ function openRenewModal(id){
     }});
 }
 
+/* ============================================================
+   PR-5I — narrow Contract DATE-EXTENT update command.
+   Mutates ONLY the stored date facts startDate + durationMonths (endDate stays
+   DERIVED by contractCalc and is never stored). It never touches salary, number,
+   type, status, notes, schedule, the employee, sibling contracts, payroll, or
+   finance. Reuses contractById + persistContracts + the existing `history` audit
+   style, and returns a typed command outcome. Atomic: on a failed persist it
+   reverts the changed fields, updatedAt, and the audit entry. The business
+   authority is ContractDateAggregate (PR-5I); this handler keeps its own
+   defense-in-depth validation and remains the implementation authority.
+   ============================================================ */
+async function updateContractDates(id, patch){
+  const c = contractById(id);
+  if(!c) return { success:false, error:'ContractNotFound' };
+  patch = patch || {};
+  const hasStart = Object.prototype.hasOwnProperty.call(patch, 'startDate');
+  const hasDur = Object.prototype.hasOwnProperty.call(patch, 'durationMonths');
+  if(!hasStart && !hasDur) return { success:false, error:'NoContractDateFieldsProvided' };
+  // Defense-in-depth validation (the aggregate validates first), reusing the
+  // same canonical/extent rules so there is one source of truth for the math.
+  const applied = {}, before = {};
+  let effStart = c.startDate ? String(c.startDate).slice(0,10) : null;
+  let effDur = Number(c.durationMonths)||0;
+  if(hasStart){
+    const s = (patch.startDate==null?'':String(patch.startDate)).trim();
+    if(!isCanonicalContractDate(s)) return { success:false, error:'InvalidStartDate' };
+    applied.startDate = s; effStart = s;
+  }
+  if(hasDur){
+    const raw = (patch.durationMonths==null?'':String(patch.durationMonths)).trim();
+    const n = Number(raw);
+    if(raw==='' || !isFinite(n) || !Number.isInteger(n) || n <= 0) return { success:false, error:'InvalidDurationMonths' };
+    applied.durationMonths = n; effDur = n;
+  }
+  if(!contractExtentIsValid(effStart, effDur)) return { success:false, error:'InvalidContractDateRange' };
+  const changed = Object.keys(applied);
+  const prevUpdatedAt = c.updatedAt;
+  changed.forEach(k=>{ before[k] = c[k]; c[k] = applied[k]; });
+  c.updatedAt = new Date().toISOString();
+  (c.history=c.history||[]).push({ event:'contract-dates-edited', ts:c.updatedAt, note:'Contract dates updated ('+changed.join(', ')+')' });
+  const ok = await persistContracts();
+  if(ok !== true){
+    // Atomic rollback — restore the changed fields, timestamp, and drop the entry.
+    changed.forEach(k=> c[k] = before[k]);
+    c.history.pop();
+    c.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
+  }
+  return { success:true, data:c };
+}
+
+// Narrow date-extent editor. Routes through the Domain command seam and never
+// calls updateContractDates directly. Start Date + Duration only; the End Date
+// is a READ-ONLY derived preview using the existing contractCalc semantics.
+function openContractDatesModal(id){
+  const c = contractById(id); if(!c) return;
+  openModalHTML(`
+    <h3>Edit Contract Dates</h3>
+    <form id="ctDatesForm">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="field"><label>Start Date</label><input class="input" type="date" name="startDate" value="${escapeHtml(c.startDate?String(c.startDate).slice(0,10):'')}"></div>
+        <div class="field"><label>Duration (Months)</label><input class="input" type="number" min="1" step="1" name="durationMonths" value="${escapeHtml(c.durationMonths!=null?String(c.durationMonths):'')}"></div>
+        <div class="field" style="grid-column:span 2;"><label>End Date (derived)</label><input class="input" id="ctDatesEndPreview" value="" disabled></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="ctDatesCancel">Cancel</button>
+        <button type="submit" class="btn btn-accent">Save Dates</button>
+      </div>
+    </form>`, {width:520, onMount:(root)=>{
+      const form = root.querySelector('#ctDatesForm');
+      const upd = ()=>{
+        const preview = contractCalc({startDate: form.startDate.value, durationMonths: Number(form.durationMonths.value)||0});
+        root.querySelector('#ctDatesEndPreview').value = preview.valid ? fmtDateID(preview.endDate) : '—';
+      };
+      form.startDate.addEventListener('input', upd); form.durationMonths.addEventListener('input', upd); upd();
+      root.querySelector('#ctDatesCancel').addEventListener('click', closeModal);
+      form.addEventListener('submit', async ev=>{
+        ev.preventDefault();
+        const fd = new FormData(ev.target);
+        const outcome = await Domain.command('contract.dates.update', id, {
+          startDate: fd.get('startDate'), durationMonths: fd.get('durationMonths')
+        });
+        if(outcome && outcome.success){ closeModal(); toast('Contract dates updated.'); render(); }
+        else { toast('Could not update contract dates'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
+      });
+    }});
+}
+
 function renderContractDetail(main){
   const c = contractById(State.detailContractId);
   if(!c){ main.innerHTML = emptyState('Contract not found','It may have been deleted.'); return; }
@@ -243,6 +331,7 @@ function renderContractDetail(main){
       <div class="head-controls">
         <button class="btn" id="backCt">← Contracts</button>
         <button class="btn" id="editCtD">Edit</button>
+        <button class="btn" id="editDatesCtD">Dates</button>
         <button class="btn btn-accent" id="renewCtD">Renew Contract</button>
       </div>
     </div>
@@ -288,6 +377,7 @@ function renderContractDetail(main){
     </div>`;
   document.getElementById('backCt').addEventListener('click', ()=>hrNavTo('contracts'));
   document.getElementById('editCtD').addEventListener('click', ()=>openContractModal(c.id));
+  document.getElementById('editDatesCtD').addEventListener('click', ()=>openContractDatesModal(c.id));
   document.getElementById('renewCtD').addEventListener('click', ()=>openRenewModal(c.id));
   const el = document.getElementById('ctEmpLink'); if(el && emp) el.addEventListener('click', ()=>hrNavTo('employeeDetail', {detailEmpId:emp.id}));
   main.querySelectorAll('[data-open-detail]').forEach(b=>b.addEventListener('click', ()=>openDetailModal(b.dataset.openDetail)));
