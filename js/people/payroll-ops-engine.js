@@ -326,30 +326,55 @@ function payrollCommitBlockers(pp){
 function payrollAuditType(status){
   return status==='Reviewed'?'payroll.review':status==='Ready'?'payroll.approve':status==='Draft'?'payroll.return':status==='Cancelled'?'payroll.cancel':'payroll.edit';
 }
-async function setPayrollStatus(id, status){
-  const pp = payrollPlanById(id); if(!pp) return;
-  if(isPayrollLocked(pp.monthKey)){ showWarning('This payroll period is locked — unlock it to change status.'); return; }
-  if(pp.status==='Committed' && status!=='Committed'){ showWarning('Committed payroll cannot change status here — use the adjustment workflow.'); return; }
-  // v2.6.3a — Approve is a sign-off and is NOT gated by commit-blockers; validation
-  // happens at Post (commitReadyPayroll re-checks and skips blocked rows). This keeps
-  // the Review → Approved → Posted lifecycle moving.
-  pp.status = status; pp.updatedAt = new Date().toISOString();
-  (pp.history=pp.history||[]).push({event:status==='Reviewed'?'reviewed':status==='Ready'?'marked-ready':status==='Cancelled'?'cancelled':'edited', ts:pp.updatedAt, note:'Status → '+status});
-  await persistPayrollPlans();
-  logActivity({type:payrollAuditType(status), module:'Payroll', entity:pp.employeeName, entityId:pp.id,
-    desc:`${pp.employeeName} → ${payrollStage(pp)} (status ${status})`,
-    refs:{employeeId:pp.employeeId, payrollPlanId:pp.id, contractId:pp.contractId, monthKey:pp.monthKey}});
-}
-async function bulkPayrollStatus(monthKey, ids, status){
-  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — unlock it to make changes.'); return 0; }
-  // v2.6.3a — bulk Approve/Review is a sign-off; it is NOT gated by commit-blockers.
-  // Only Committed rows are skipped. Post (commitReadyPayroll) validates before creating
-  // finance transactions, so blocked rows can be Approved but will not post.
-  let done=0;
-  for(const id of ids){ const pp=payrollPlanById(id); if(!pp||pp.status==='Committed') continue; pp.status=status; pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:status.toLowerCase(), ts:pp.updatedAt, note:'Bulk → '+status}); done++; }
-  await persistPayrollPlans();
-  if(done){ const mo=keyToMonthObj(monthKey); logActivity({type:payrollAuditType(status), module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey, desc:`${done} row(s) → ${status} (bulk)`, refs:{monthKey}}); }
-  return done;
+/* ============================================================
+   PR-5J "The Accountant" — Payroll lifecycle transition HANDLER.
+   The IMPLEMENTATION AUTHORITY for the payroll.lifecycle.transition command.
+   The business authority is PayrollLifecycleAggregate (js/domain); this handler
+   keeps its own defense-in-depth guards and owns mutation, updatedAt, PayrollPlan
+   history, persistence, rollback, and best-effort audit. It receives the sanitized
+   { from, to } decision from the aggregate (via Domain.command), mutates ONLY
+   PayrollPlan.status, and NEVER touches calculations, transactions, overtime,
+   monthly plans, committedSnapshot, posting, generation, or salary override.
+   Atomic: on a failed persist it reverts the status, updatedAt, and history entry
+   and returns PersistFailed; no audit is written on failure. It replaces the former
+   setPayrollStatus / bulkPayrollStatus procedural mutators (now routed through the
+   Domain command — single-record per row, one independently-atomic command each).
+   The history event preserves the EXISTING status-specific convention consumed by
+   buildPayrollTimeline (Reviewed←'reviewed', Approved←'marked-ready') so the derived
+   Payroll Timeline is unchanged; the note records the previous → target status. */
+async function transitionPayrollLifecycle(id, transition){
+  const pp = payrollPlanById(id);
+  if(!pp) return { success:false, error:'PayrollPlanNotFound' };
+  transition = transition || {};
+  const to = transition.to;
+  const from = pp.status;
+  // Defense-in-depth (the aggregate validated first): lock, committed-immutability, transition graph.
+  if(isPayrollLocked(pp.monthKey)) return { success:false, error:'PayrollPeriodLocked' };
+  if(from==='Committed' && to!=='Committed') return { success:false, error:'PayrollCommittedImmutable' };
+  const allowed = (typeof PAYROLL_LIFECYCLE_TRANSITIONS !== 'undefined' && PAYROLL_LIFECYCLE_TRANSITIONS[from]) || [];
+  if(!to || allowed.indexOf(to)===-1) return { success:false, error:'IllegalPayrollLifecycleTransition' };
+  const prevStatus = pp.status, prevUpdatedAt = pp.updatedAt;
+  pp.status = to;
+  pp.updatedAt = new Date().toISOString();
+  // Preserve the established status-specific history event (buildPayrollTimeline reads these);
+  // the note additionally records the stored from → to status.
+  const evt = to==='Reviewed'?'reviewed':to==='Ready'?'marked-ready':to==='Cancelled'?'cancelled':'edited';
+  (pp.history = pp.history || []).push({ event:evt, ts:pp.updatedAt, from:from, to:to, note:'Lifecycle '+from+' → '+to });
+  const ok = await persistPayrollPlans();
+  if(ok !== true){
+    // Atomic rollback — restore status, timestamp, and drop the history entry.
+    pp.status = prevStatus;
+    pp.history.pop();
+    pp.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
+  }
+  // Best-effort audit — ONLY after persistence succeeds; its failure never alters the result.
+  try {
+    logActivity({type:payrollAuditType(to), module:'Payroll', entity:pp.employeeName, entityId:pp.id,
+      desc:`${pp.employeeName} → ${payrollStage(pp)} (status ${to})`,
+      refs:{employeeId:pp.employeeId, payrollPlanId:pp.id, contractId:pp.contractId, monthKey:pp.monthKey}});
+  } catch(e){ /* audit is best-effort; PayrollPlan persistence is the business commit */ }
+  return { success:true, data:pp };
 }
 
 /* ---------- salary override (Part 6) ---------- */

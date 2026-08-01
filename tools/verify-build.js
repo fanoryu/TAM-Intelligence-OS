@@ -322,8 +322,8 @@ check(dist.includes("Domain.query('employee.filtered')"), 'migrated query call p
 check(/'employee\.filtered':\s*Object\.freeze\(\{[^}]*handler:\s*'employeesFiltered'/.test(qrySrc), 'employee.filtered query registered to handler employeesFiltered');
 // Exactly ONE command migrated (distinct routed command ids), and it is the approved contact command.
 const migratedCmdIds = Array.from(new Set((srcJs.match(/Domain\.command\('([^']+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1])));
-const EXPECTED_OP_CMDS = ['employee.contact.update','employee.employment.update','employee.lifecycle.transition','employee.compensation.update','contract.dates.update'];
-check(migratedCmdIds.length === 5 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly five command ids routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
+const EXPECTED_OP_CMDS = ['employee.contact.update','employee.employment.update','employee.lifecycle.transition','employee.compensation.update','contract.dates.update','payroll.lifecycle.transition'];
+check(migratedCmdIds.length === 6 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly six command ids routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
 check(dist.includes("Domain.command('employee.contact.update'"), 'migrated command call present in dist');
 check(dist.includes("Domain.command('employee.employment.update'"), 'employment command call present in dist');
 check(dist.includes("Domain.command('employee.lifecycle.transition'"), 'lifecycle command call present in dist');
@@ -363,7 +363,7 @@ check(/const EmployeeContactAggregate = Object\.freeze\(/.test(aggSrc2), 'Employ
 check(/prepare:\s*function/.test(aggSrc2), 'aggregate exposes prepare()');
 // Exactly one operational aggregate: only one *Aggregate object with a prepare() exists in js/domain.
 const aggregateDefs = (srcJs.match(/const \w*Aggregate = Object\.freeze\(\{\s*[\s\S]*?(?:prepare|transition):\s*function/g)||[]).length;
-check(aggregateDefs === 5, 'exactly five operational aggregates defined (found '+aggregateDefs+')');
+check(aggregateDefs === 6, 'exactly six operational aggregates defined (found '+aggregateDefs+')');
 // The command registry binds the aggregate as the boundary for the one command.
 check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeContactAggregate'/.test(cmdSrc), 'employee.contact.update declares boundary EmployeeContactAggregate');
 // The facade routes a bounded command through the aggregate before the handler.
@@ -632,6 +632,95 @@ check((ctSrc.match(/updateContractDates\(/g)||[]).length === 1, 'UI never calls 
 // contractCalc() semantics are not modified by PR-5I (people-core.js untouched).
 check(!/function contractCalc/.test(ctAggSrc) && !/function contractCalc/.test(udBody), 'contract-date capability does not redefine contractCalc()');
 
+// PR-5J "The Accountant" — first Payroll aggregate boundary (PayrollLifecycleAggregate).
+console.log('== PAYROLL LIFECYCLE AGGREGATE (PR-5J — business authority) ==');
+const payAggPath = path.join(root,'js','domain','payroll-lifecycle-aggregate.js');
+check(fs.existsSync(payAggPath), 'aggregate module present: js/domain/payroll-lifecycle-aggregate.js');
+check(jsFiles.indexOf('domain/payroll-lifecycle-aggregate.js') !== -1, 'module-order.js includes domain/payroll-lifecycle-aggregate.js');
+check(indexHtml.includes('<script src="js/domain/payroll-lifecycle-aggregate.js"></script>'), 'index.html includes domain/payroll-lifecycle-aggregate.js');
+// Load order: after helpers + the payroll read/lock helpers, before the facade.
+check(jsFiles.indexOf('domain/aggregate-helpers.js') < jsFiles.indexOf('domain/payroll-lifecycle-aggregate.js') &&
+      jsFiles.indexOf('people/payroll-ops-engine.js') < jsFiles.indexOf('domain/payroll-lifecycle-aggregate.js') &&
+      jsFiles.indexOf('domain/payroll-lifecycle-aggregate.js') < jsFiles.indexOf('domain/domain-layer.js'), 'payroll lifecycle aggregate loads after payroll helpers and before domain-layer.js');
+const payAggSrc = read(payAggPath);
+check(/const PayrollLifecycleAggregate = Object\.freeze\(/.test(payAggSrc), 'PayrollLifecycleAggregate is a frozen object');
+check(/transition:\s*function/.test(payAggSrc), 'payroll lifecycle aggregate exposes transition()');
+// Command registration: boundary + lifecycle transition/transition contract + handler + aggregate id.
+check(/'payroll\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*boundary:\s*'PayrollLifecycleAggregate'/.test(cmdSrc), 'payroll.lifecycle.transition declares boundary PayrollLifecycleAggregate');
+check(/'payroll\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*boundaryMethod:\s*'transition'/.test(cmdSrc) && /'payroll\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*boundaryPayload:\s*'transition'/.test(cmdSrc), 'payroll.lifecycle.transition declares boundaryMethod/boundaryPayload = transition');
+check(/'payroll\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*handler:\s*'transitionPayrollLifecycle'/.test(cmdSrc), 'payroll.lifecycle.transition registered to handler transitionPayrollLifecycle');
+check(/'payroll\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*aggregate:\s*'PayrollPlan'/.test(cmdSrc), 'payroll.lifecycle.transition declares aggregate PayrollPlan');
+check(dist.includes("Domain.command('payroll.lifecycle.transition'"), 'payroll lifecycle command call present in dist');
+// Domain routing (domain-layer.js) is UNCHANGED by PR-5J (reuses the transition/transition contract).
+check(!/payroll\.lifecycle|PayrollLifecycle/.test(facSrc), 'domain-layer.js is not modified for the payroll lifecycle command');
+// The transition graph is derived from runtime behavior — exactly the discovered edges, no more.
+check(/'Draft':\s*\['Reviewed',\s*'Ready',\s*'Cancelled'\]/.test(payAggSrc) &&
+      /'Reviewed':\s*\['Ready',\s*'Draft',\s*'Cancelled'\]/.test(payAggSrc) &&
+      /'Ready':\s*\['Draft',\s*'Cancelled'\]/.test(payAggSrc) &&
+      /'Committed':\s*\[\]/.test(payAggSrc) && /'Cancelled':\s*\[\]/.test(payAggSrc), 'payroll lifecycle transition map is exactly the derived pre-posting graph (Committed/Cancelled terminal)');
+// Uses the existing stored statuses as the single source of truth (no invented states).
+check(/PAYROLL_STATUSES/.test(payAggSrc), 'payroll lifecycle aggregate validates against the existing PAYROLL_STATUSES (single source)');
+check(!/'Review'|'Approved'|'Posted'|'Executed'/.test(payAggSrc), 'aggregate never introduces UI/derived stages (Review/Approved/Posted/Executed) as stored statuses');
+// Aggregate PURITY — no side effects (comments stripped). Reads only via payrollPlanById + isPayrollLocked.
+const payAggCode = payAggSrc.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+[['State mutation', /State\s*[.[]/],
+ ['persistPayrollPlans', /persistPayrollPlans\s*\(/],
+ ['persist', /\bpersist(HR|Overtime|MonthlyPlans)?\s*\(/],
+ ['PayrollPlan mutation', /\bpp\.\w+\s*=[^=]/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(/],
+ ['toast/alert', /\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(|\balert\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/],
+ ['posting', /commitReadyPayroll\s*\(/],
+ ['generation', /generatePayrollForMonth\s*\(/]
+].forEach(([label,re])=>check(!re.test(payAggCode), 'payroll lifecycle aggregate never performs '+label));
+check(/payrollPlanById\(/.test(payAggSrc) && /isPayrollLocked\(/.test(payAggSrc), 'aggregate reads existence + period lock read-only (payrollPlanById / isPayrollLocked)');
+// Returns a sanitized transition on success and typed failures otherwise.
+check(/return \{ ok: true, transition:/.test(payAggSrc), 'payroll lifecycle aggregate returns only a sanitized transition on success');
+['PayrollPlanNotFound','InvalidPayrollLifecycleState','PayrollPeriodLocked','PayrollCommittedImmutable','IllegalPayrollLifecycleTransition'].forEach((err)=>
+  check(payAggSrc.includes("error: '"+err+"'"), 'payroll lifecycle aggregate returns typed business failure: '+err));
+// Handler owns mutation/updatedAt/history/persistence/rollback/audit (implementation authority).
+const poeSrc = read(path.join(root,'js','people','payroll-ops-engine.js'));
+const tpStart = poeSrc.indexOf('async function transitionPayrollLifecycle(');
+check(tpStart !== -1, 'transitionPayrollLifecycle handler present');
+const tpRest = tpStart!==-1 ? poeSrc.slice(tpStart+1) : '';
+const tpNext = tpRest.search(/\n(async function|function) /);
+const tpBody = tpNext>=0 ? tpRest.slice(0, tpNext) : tpRest;
+// Lifecycle changes ONLY status (+ updatedAt/history); calculation/committed fields are forbidden.
+['baseSalary','salaryOverride','overtimeAmount','overtimeHours','allowance','bonus','benefits','otherAddition','deduction','plannedAmount','committedSnapshot','committedTxnId','transactionId'].forEach((f)=>
+  check(!tpBody.includes(f), 'payroll lifecycle handler does not touch forbidden field: '+f));
+check((tpBody.match(/persistPayrollPlans\(/g)||[]).length === 1, 'handler persists exactly once (persistPayrollPlans)');
+check(!/persist\(\)|persistOvertime\(|persistMonthlyPlans\(|persistSupplementalPayments\(/.test(tpBody), 'handler uses only the PayrollPlan persistence path (no other store written)');
+check(/pp\.status = to/.test(tpBody), 'handler performs the status mutation (only PayrollPlan.status)');
+check(/pp\.updatedAt = new Date/.test(tpBody), 'handler updates updatedAt');
+check((tpBody.match(/\.push\(/g)||[]).length === 1, 'handler appends exactly one PayrollPlan history entry on success');
+check(/pp\.status = prevStatus/.test(tpBody) && /pp\.history\.pop\(\)/.test(tpBody) && /pp\.updatedAt = prevUpdatedAt/.test(tpBody), 'handler performs full rollback on persist failure (status + history + updatedAt)');
+check(/error:'PersistFailed'/.test(tpBody), 'handler returns PersistFailed on persistence failure');
+check(/error:'IllegalPayrollLifecycleTransition'/.test(tpBody) && /error:'PayrollPeriodLocked'/.test(tpBody) && /error:'PayrollCommittedImmutable'/.test(tpBody), 'handler performs defense-in-depth lock/immutable/transition validation');
+// Audit runs ONLY after a successful persist (never before, never on the failure path).
+check(/persistPayrollPlans\(\)[\s\S]*?ok !== true[\s\S]*?return \{ success:false, error:'PersistFailed' \}[\s\S]*?logActivity\(/.test(tpBody), 'handler audits only after persistence succeeds (after the PersistFailed return)');
+check(!/showWarning|showSuccess|\btoast\(|\brender\(/.test(tpBody), 'handler performs no UI (no toast/warning/render) — it is the implementation authority, not the UI');
+check(!/commitReadyPayroll\(|generatePayrollForMonth\(|payrollCommitTxn\(|buildPayrollCommittedSnapshot\(/.test(tpBody), 'handler never posts, generates, or freezes a committed snapshot');
+check(/success:\s*true/.test(tpBody) && /success:\s*false/.test(tpBody), 'handler returns a typed success/failure outcome');
+// The former procedural mutators are gone — no second lifecycle mutation authority remains.
+check(!/function setPayrollStatus\(/.test(poeSrc) && !/function bulkPayrollStatus\(/.test(poeSrc), 'setPayrollStatus / bulkPayrollStatus removed (single lifecycle authority via the Domain command)');
+check(!/setPayrollStatus\(|bulkPayrollStatus\(/.test(srcJs), 'no caller of setPayrollStatus / bulkPayrollStatus remains anywhere');
+// Single-record UI: routes through the one Domain-command seam (requestPayrollLifecycle); never the handler.
+const pwsSrc = read(path.join(root,'js','people','payroll-workspace.js'));
+check(/async function requestPayrollLifecycle\(/.test(pwsSrc) && /Domain\.command\('payroll\.lifecycle\.transition',\s*id,\s*targetStatus\)/.test(pwsSrc), 'requestPayrollLifecycle seam routes single-record transitions through Domain.command()');
+check(/'prow-review'\)\s*\{ await requestPayrollLifecycle\(id,'Reviewed'\)/.test(empSrc) && /'prow-cancel'\)/.test(empSrc) && /requestPayrollLifecycle\(id,'Cancelled'\)/.test(empSrc), 'employee worksheet menu (prow-*) routes single-record transitions through requestPayrollLifecycle');
+check(!/setPayrollStatus\(/.test(empSrc), 'the migrated single-record menu no longer calls setPayrollStatus directly');
+check(!/transitionPayrollLifecycle\(/.test(empSrc) && !/transitionPayrollLifecycle\(/.test(pwsSrc), 'no UI file calls the handler transitionPayrollLifecycle() directly');
+check((poeSrc.match(/transitionPayrollLifecycle\(/g)||[]).length === 1, 'transitionPayrollLifecycle appears only as its definition (never invoked outside the Domain command)');
+// Bulk UI: one Domain command PER eligible record (no bulk aggregate/command, no cross-record rollback claim).
+check(/for\(const pid of eligible\)\{[\s\S]*?Domain\.command\('payroll\.lifecycle\.transition', pid, targetStatus\)/.test(pwsSrc), 'bulk runner invokes one Domain.command per eligible PayrollPlan');
+check(/partitionPayrollSelection\(/.test(pwsSrc), 'bulk runner preserves the existing eligible/ineligible partition (partitionPayrollSelection)');
+check(!/BulkAggregate|bulkCommand|payroll\.lifecycle\.bulk/.test(srcJs), 'no second bulk aggregate/command introduced');
+// Existing aggregates remain operational and untouched by PR-5J.
+check(/const ContractDateAggregate = Object\.freeze\(/.test(ctAggSrc) && /const EmployeeLifecycleAggregate = Object\.freeze\(/.test(lifeAggSrc), 'existing Contract + Employee aggregates remain operational');
+
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
 const helpPath = path.join(root,'js','domain','aggregate-helpers.js');
@@ -661,8 +750,8 @@ check(/employeeExists\(/.test(aggSrc2) && /normalizeAllowedFields\(/.test(aggSrc
 check(/employeeExists\(/.test(empAggSrc) && /normalizeAllowedFields\(/.test(empAggSrc) && /validateEnum\(/.test(empAggSrc), 'employment aggregate uses the shared helpers');
 // Operational surface is UNCHANGED by this refactor: still 2 aggregates, 2 commands, 1 query
 // (asserted above via aggregateDefs===2, migratedCmdIds.length===2, migratedQueryIds.length===1).
-check(aggregateDefs === 5, 'operational aggregate count remains exactly five');
-check(migratedCmdIds.length === 5, 'operational command count remains exactly five');
+check(aggregateDefs === 6, 'operational aggregate count remains exactly six');
+check(migratedCmdIds.length === 6, 'operational command count remains exactly six');
 check(migratedQueryIds.length === 1, 'operational query count remains exactly one');
 
 // Extract command/query identifiers and their handler names.

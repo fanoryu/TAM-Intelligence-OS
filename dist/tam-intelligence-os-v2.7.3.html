@@ -6170,10 +6170,10 @@ function bindHRActions(main){
     else if(a==='cacc-deactivate') setCompanyAccountStatus(id, 'Inactive');
     else if(a==='cacc-archive') setCompanyAccountStatus(id, 'Archived');
     else if(a==='prow-detail') hrNavTo('payrollDetail',{detailPayrollId:id});
-    else if(a==='prow-review') { await setPayrollStatus(id,'Reviewed'); render(); }
-    else if(a==='prow-ready') { await setPayrollStatus(id,'Ready'); render(); }
-    else if(a==='prow-draft') { await setPayrollStatus(id,'Draft'); render(); }
-    else if(a==='prow-cancel') { if(confirmAction('Cancel this payroll row? It will not create a finance transaction.')){ await setPayrollStatus(id,'Cancelled'); render(); } }
+    else if(a==='prow-review') { await requestPayrollLifecycle(id,'Reviewed'); render(); }
+    else if(a==='prow-ready') { await requestPayrollLifecycle(id,'Ready'); render(); }
+    else if(a==='prow-draft') { await requestPayrollLifecycle(id,'Draft'); render(); }
+    else if(a==='prow-cancel') { if(confirmAction('Cancel this payroll row? It will not create a finance transaction.')){ await requestPayrollLifecycle(id,'Cancelled'); render(); } }
     else if(a==='prow-exec') { const pp=payrollPlanById(id); const t=pp&&payrollTxnOf(pp); if(t) focusTransactionInExecutionCenter(t.id); else { State.view='executioncenter'; render(); } }
     else if(a==='ot-view') openOvertimeBreakdown(id);
     else if(a==='ot-edit') openOvertimeModal(id);
@@ -9628,30 +9628,55 @@ function payrollCommitBlockers(pp){
 function payrollAuditType(status){
   return status==='Reviewed'?'payroll.review':status==='Ready'?'payroll.approve':status==='Draft'?'payroll.return':status==='Cancelled'?'payroll.cancel':'payroll.edit';
 }
-async function setPayrollStatus(id, status){
-  const pp = payrollPlanById(id); if(!pp) return;
-  if(isPayrollLocked(pp.monthKey)){ showWarning('This payroll period is locked — unlock it to change status.'); return; }
-  if(pp.status==='Committed' && status!=='Committed'){ showWarning('Committed payroll cannot change status here — use the adjustment workflow.'); return; }
-  // v2.6.3a — Approve is a sign-off and is NOT gated by commit-blockers; validation
-  // happens at Post (commitReadyPayroll re-checks and skips blocked rows). This keeps
-  // the Review → Approved → Posted lifecycle moving.
-  pp.status = status; pp.updatedAt = new Date().toISOString();
-  (pp.history=pp.history||[]).push({event:status==='Reviewed'?'reviewed':status==='Ready'?'marked-ready':status==='Cancelled'?'cancelled':'edited', ts:pp.updatedAt, note:'Status → '+status});
-  await persistPayrollPlans();
-  logActivity({type:payrollAuditType(status), module:'Payroll', entity:pp.employeeName, entityId:pp.id,
-    desc:`${pp.employeeName} → ${payrollStage(pp)} (status ${status})`,
-    refs:{employeeId:pp.employeeId, payrollPlanId:pp.id, contractId:pp.contractId, monthKey:pp.monthKey}});
-}
-async function bulkPayrollStatus(monthKey, ids, status){
-  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — unlock it to make changes.'); return 0; }
-  // v2.6.3a — bulk Approve/Review is a sign-off; it is NOT gated by commit-blockers.
-  // Only Committed rows are skipped. Post (commitReadyPayroll) validates before creating
-  // finance transactions, so blocked rows can be Approved but will not post.
-  let done=0;
-  for(const id of ids){ const pp=payrollPlanById(id); if(!pp||pp.status==='Committed') continue; pp.status=status; pp.updatedAt=new Date().toISOString(); (pp.history=pp.history||[]).push({event:status.toLowerCase(), ts:pp.updatedAt, note:'Bulk → '+status}); done++; }
-  await persistPayrollPlans();
-  if(done){ const mo=keyToMonthObj(monthKey); logActivity({type:payrollAuditType(status), module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey, desc:`${done} row(s) → ${status} (bulk)`, refs:{monthKey}}); }
-  return done;
+/* ============================================================
+   PR-5J "The Accountant" — Payroll lifecycle transition HANDLER.
+   The IMPLEMENTATION AUTHORITY for the payroll.lifecycle.transition command.
+   The business authority is PayrollLifecycleAggregate (js/domain); this handler
+   keeps its own defense-in-depth guards and owns mutation, updatedAt, PayrollPlan
+   history, persistence, rollback, and best-effort audit. It receives the sanitized
+   { from, to } decision from the aggregate (via Domain.command), mutates ONLY
+   PayrollPlan.status, and NEVER touches calculations, transactions, overtime,
+   monthly plans, committedSnapshot, posting, generation, or salary override.
+   Atomic: on a failed persist it reverts the status, updatedAt, and history entry
+   and returns PersistFailed; no audit is written on failure. It replaces the former
+   setPayrollStatus / bulkPayrollStatus procedural mutators (now routed through the
+   Domain command — single-record per row, one independently-atomic command each).
+   The history event preserves the EXISTING status-specific convention consumed by
+   buildPayrollTimeline (Reviewed←'reviewed', Approved←'marked-ready') so the derived
+   Payroll Timeline is unchanged; the note records the previous → target status. */
+async function transitionPayrollLifecycle(id, transition){
+  const pp = payrollPlanById(id);
+  if(!pp) return { success:false, error:'PayrollPlanNotFound' };
+  transition = transition || {};
+  const to = transition.to;
+  const from = pp.status;
+  // Defense-in-depth (the aggregate validated first): lock, committed-immutability, transition graph.
+  if(isPayrollLocked(pp.monthKey)) return { success:false, error:'PayrollPeriodLocked' };
+  if(from==='Committed' && to!=='Committed') return { success:false, error:'PayrollCommittedImmutable' };
+  const allowed = (typeof PAYROLL_LIFECYCLE_TRANSITIONS !== 'undefined' && PAYROLL_LIFECYCLE_TRANSITIONS[from]) || [];
+  if(!to || allowed.indexOf(to)===-1) return { success:false, error:'IllegalPayrollLifecycleTransition' };
+  const prevStatus = pp.status, prevUpdatedAt = pp.updatedAt;
+  pp.status = to;
+  pp.updatedAt = new Date().toISOString();
+  // Preserve the established status-specific history event (buildPayrollTimeline reads these);
+  // the note additionally records the stored from → to status.
+  const evt = to==='Reviewed'?'reviewed':to==='Ready'?'marked-ready':to==='Cancelled'?'cancelled':'edited';
+  (pp.history = pp.history || []).push({ event:evt, ts:pp.updatedAt, from:from, to:to, note:'Lifecycle '+from+' → '+to });
+  const ok = await persistPayrollPlans();
+  if(ok !== true){
+    // Atomic rollback — restore status, timestamp, and drop the history entry.
+    pp.status = prevStatus;
+    pp.history.pop();
+    pp.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
+  }
+  // Best-effort audit — ONLY after persistence succeeds; its failure never alters the result.
+  try {
+    logActivity({type:payrollAuditType(to), module:'Payroll', entity:pp.employeeName, entityId:pp.id,
+      desc:`${pp.employeeName} → ${payrollStage(pp)} (status ${to})`,
+      refs:{employeeId:pp.employeeId, payrollPlanId:pp.id, contractId:pp.contractId, monthKey:pp.monthKey}});
+  } catch(e){ /* audit is best-effort; PayrollPlan persistence is the business commit */ }
+  return { success:true, data:pp };
 }
 
 /* ---------- salary override (Part 6) ---------- */
@@ -9991,6 +10016,27 @@ function payrollDriftBannerHTML(plans){
    and summary helpers live in payroll-ops-engine.js.
    ============================================================ */
 function payrollSelSet(monthKey){ if(!State.payrollSel[monthKey]) State.payrollSel[monthKey]=new Set(); return State.payrollSel[monthKey]; }
+/* PR-5J "The Accountant" — the ONE official UI seam for a pre-posting PayrollPlan
+   lifecycle transition. Single-record and bulk callers both route through the
+   Domain command (payroll.lifecycle.transition); no UI ever calls the handler
+   (transitionPayrollLifecycle) directly. On a typed business failure it surfaces
+   the same user-facing messaging the former setPayrollStatus showed. Returns true
+   only on success. */
+async function requestPayrollLifecycle(id, targetStatus){
+  const outcome = await Domain.command('payroll.lifecycle.transition', id, targetStatus);
+  if(outcome && outcome.success) return true;
+  const err = outcome && outcome.error;
+  if(err==='PayrollPeriodLocked') showWarning('This payroll period is locked — unlock it to change status.');
+  else if(err==='PayrollCommittedImmutable') showWarning('Committed payroll cannot change status here — use the adjustment workflow.');
+  else if(err && err!=='PayrollPlanNotFound') showWarning('Could not change payroll status: '+err+'.');
+  return false;
+}
+// Compact "2 Locked; 1 Illegal…" summary of per-record lifecycle command failures for bulk reporting.
+function payrollBulkFailureSummary(failures){
+  const byErr={};
+  (failures||[]).forEach(f=>{ const e=f.error||'Unknown'; byErr[e]=(byErr[e]||0)+1; });
+  return Object.entries(byErr).map(([e,n])=>`${n} ${e}`).join('; ');
+}
 // Cycle-status pill (used by the dashboard payroll strip).
 function cycleStatusPill(cs){
   const map={'Not Generated':'pill-status-archived','Draft':'pill-status-planned','In Review':'pill-status-scheduled','Ready to Commit':'pill-status-partial','Committed':'pill-status-completed','Partially Executed':'pill-status-partial','Fully Executed':'pill-status-completed'};
@@ -10125,9 +10171,17 @@ function renderPayrollWorkspace(main){
     const spec=PAYROLL_BULK_ACTIONS[action];
     if(!eligible.length){ showWarning(`No selected rows are eligible for ${spec.label}.\n${spec.label} applies only to ${spec.eligibleLabel} payroll.${skipped.length?`\nSkipped: ${payrollSkipSummary(skipped)}.`:''}`); return; }
     if(!confirmAction(`${spec.label} ${eligible.length} eligible row(s)?${skipped.length?` (${skipped.length} selected row(s) will be skipped.)`:''}`)) return;
-    const n=await bulkPayrollStatus(monthKey, eligible, targetStatus);
+    // PR-5J — route EACH eligible row through the one official lifecycle Domain command.
+    // Each PayrollPlan transition is independently atomic; there is no cross-record rollback.
+    let n=0; const cmdFailures=[];
+    for(const pid of eligible){
+      const outcome=await Domain.command('payroll.lifecycle.transition', pid, targetStatus);
+      if(outcome && outcome.success) n++;
+      else cmdFailures.push({id:pid, error:(outcome && outcome.error)||'Unknown'});
+    }
     let msg=`${verbPast} ${n} payroll(s).`;
     if(skipped.length) msg+=`\n${skipped.length} skipped — ${payrollSkipSummary(skipped)}.`;
+    if(cmdFailures.length) msg+=`\n${cmdFailures.length} could not be updated — ${payrollBulkFailureSummary(cmdFailures)}.`;
     showSuccess(msg); renderPayrollWorkspace(main);
   };
   const ar=document.getElementById('actReview'); if(ar) ar.addEventListener('click', ()=>runBulkStatus('review','Reviewed','Reviewed'));
@@ -10182,10 +10236,10 @@ function bindPayrollRows(area, monthKey, main, sel){
   area.querySelectorAll('[data-pact]').forEach(b=>b.addEventListener('click', async ()=>{
     const id=b.dataset.pid, act=b.dataset.pact;
     if(act==='detail') hrNavTo('payrollDetail',{detailPayrollId:id});
-    else if(act==='review'){ await setPayrollStatus(id,'Reviewed'); render(); }
-    else if(act==='ready'){ await setPayrollStatus(id,'Ready'); render(); }
-    else if(act==='draft'){ await setPayrollStatus(id,'Draft'); render(); }
-    else if(act==='cancel'){ if(confirmAction('Cancel this payroll row? It will not be posted to finance.')){ await setPayrollStatus(id,'Cancelled'); render(); } }
+    else if(act==='review'){ await requestPayrollLifecycle(id,'Reviewed'); render(); }
+    else if(act==='ready'){ await requestPayrollLifecycle(id,'Ready'); render(); }
+    else if(act==='draft'){ await requestPayrollLifecycle(id,'Draft'); render(); }
+    else if(act==='cancel'){ if(confirmAction('Cancel this payroll row? It will not be posted to finance.')){ await requestPayrollLifecycle(id,'Cancelled'); render(); } }
     else if(act==='exec'){ const pp=payrollPlanById(id); const t=payrollTxnOf(pp); if(t){ focusTransactionInExecutionCenter(t.id); } else showWarning('Not posted to a transaction yet.'); }
   }));
   bindHRActions(area);
@@ -11117,6 +11171,11 @@ const DOMAIN_COMMANDS = Object.freeze({
   // Contract date facts (startDate + durationMonths) only; endDate stays derived.
   // Uses the DEFAULT prepare/patch contract.
   'contract.dates.update': Object.freeze({ aggregate: 'Contract', boundary: 'ContractDateAggregate', handler: 'updateContractDates', transition: 'controlled update of Contract start date and duration (endDate remains derived) — OPERATIONAL via Domain.command(); business authority = ContractDateAggregate (PR-5I)' }),
+  // PR-5J — sixth OPERATIONAL command, first Payroll boundary. Narrow, pre-posting
+  // PayrollPlan lifecycle transition (Draft/Reviewed/Ready/Cancelled) over the stored
+  // status only; posting to Finance (→ Committed) stays out of scope. Uses the shared
+  // lifecycle contract (boundaryMethod/boundaryPayload = transition).
+  'payroll.lifecycle.transition': Object.freeze({ aggregate: 'PayrollPlan', boundary: 'PayrollLifecycleAggregate', boundaryMethod: 'transition', boundaryPayload: 'transition', handler: 'transitionPayrollLifecycle', transition: 'controlled pre-posting PayrollPlan lifecycle transition (Draft↔Reviewed, Draft/Reviewed→Ready, →Cancelled) — OPERATIONAL via Domain.command(); business authority = PayrollLifecycleAggregate (PR-5J); posting to Finance is out of scope' }),
   // Payroll
   'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
   // Finance
@@ -11576,6 +11635,107 @@ const ContractDateAggregate = Object.freeze({
 // name (top-level `const` objects are not attached to `window`, unlike function
 // declarations). No eval; classic shared global scope.
 if (typeof window !== 'undefined') { window.ContractDateAggregate = ContractDateAggregate; }
+
+/* ============================================================
+   DOMAIN LAYER — PAYROLL LIFECYCLE AGGREGATE (PR-5J "The Accountant")
+   ------------------------------------------------------------
+   The SIXTH aggregate boundary and the FIRST Payroll boundary. It is the
+   BUSINESS AUTHORITY for the payroll.lifecycle.transition command: it decides
+   whether a requested PRE-POSTING PayrollPlan lifecycle transition is legal
+   from the plan's current stored status. It is pure and has NO side effects.
+
+   AUTHORITATIVE LIFECYCLE MODEL (COD-002 Payroll Domain Discovery + ATR-001):
+   The stored PayrollPlan statuses are Draft / Reviewed / Ready / Committed /
+   Cancelled (core: PAYROLL_STATUSES). The operational stages (Draft → Review →
+   Approved → Posted → Executed) are a DISPLAY mapping; Executed is derived from
+   the linked finance transaction. This aggregate controls only the STORED
+   status and only the PRE-POSTING transitions. Posting to Finance (→ Committed)
+   is an explicit, separate action and is intentionally OUT of scope here.
+
+   TRANSITION GRAPH — derived from existing runtime behavior, never invented:
+     - Worksheet single-record menu (payrollWorksheetRowHTML → prow-* →
+       setPayrollStatus): Review offered on Draft; Approve on Draft/Review;
+       Return-to-Draft on Review/Approved; Cancel on any non-posted row.
+     - Bulk actions (PAYROLL_BULK_ACTIONS): Review (Draft), Approve (Draft/Review).
+     - Guards (setPayrollStatus): a locked period blocks every change; a
+       Committed plan cannot leave Committed ("use the adjustment workflow").
+   In stored-status terms this yields exactly:
+     Draft     → Reviewed | Ready | Cancelled
+     Reviewed  → Ready | Draft | Cancelled
+     Ready     → Draft | Cancelled
+     Committed → (immutable — pre-posting lifecycle is terminal here)
+     Cancelled → (terminal)
+
+   Contract (enforced by the verifier):
+     - MUST NOT mutate State, mutate a PayrollPlan/Transaction/Overtime/
+       MonthlyPlan, call persistPayrollPlans()/persist*(), append history,
+       update updatedAt, render UI, toast, access localStorage, audit, or
+       invoke posting/generation/override/import/supplemental handlers.
+     - MAY only READ (existence via payrollPlanById, the period lock via
+       isPayrollLocked) and RETURN a typed decision.
+
+   transition(id, transition) returns:
+     { ok: true,  transition: { from, to } }   // sanitized, legal transition
+     { ok: false, error: 'PayrollPlanNotFound' | 'InvalidPayrollLifecycleState'
+                       | 'PayrollPeriodLocked' | 'PayrollCommittedImmutable'
+                       | 'IllegalPayrollLifecycleTransition' }
+   ============================================================ */
+
+// The legal PRE-POSTING transitions between stored PayrollPlan statuses.
+// Single source of truth for the rule; the handler (transitionPayrollLifecycle)
+// consults the same map for its defense-in-depth check. Committed and Cancelled
+// are terminal for this command (posting to Finance is a separate action).
+const PAYROLL_LIFECYCLE_TRANSITIONS = Object.freeze({
+  'Draft':     ['Reviewed', 'Ready', 'Cancelled'],
+  'Reviewed':  ['Ready', 'Draft', 'Cancelled'],
+  'Ready':     ['Draft', 'Cancelled'],
+  'Committed': [],
+  'Cancelled': []
+});
+
+const PayrollLifecycleAggregate = Object.freeze({
+  transition: function (id, transition) {
+    // 1. PayrollPlan existence (read-only; never mutates State).
+    var pp = (typeof payrollPlanById === 'function') ? payrollPlanById(id) : null;
+    if (!pp) return { ok: false, error: 'PayrollPlanNotFound' };
+
+    // Known stored statuses come from the single source of truth (core).
+    var STATES = (typeof PAYROLL_STATUSES !== 'undefined') ? PAYROLL_STATUSES
+      : ['Draft', 'Reviewed', 'Ready', 'Committed', 'Cancelled'];
+
+    // 2. The plan's CURRENT stored status must be a recognized status.
+    var from = pp.status;
+    if (STATES.indexOf(from) === -1) return { ok: false, error: 'InvalidPayrollLifecycleState' };
+
+    // 3. The requested target must be a recognized stored status.
+    var to = (transition == null ? '' : String(transition)).trim();
+    if (STATES.indexOf(to) === -1) return { ok: false, error: 'InvalidPayrollLifecycleState' };
+
+    // 4. The Payroll period lock blocks every lifecycle change (mirrors setPayrollStatus).
+    if (typeof isPayrollLocked === 'function' && isPayrollLocked(pp.monthKey)) {
+      return { ok: false, error: 'PayrollPeriodLocked' };
+    }
+
+    // 5. Committed payroll is immutable — it cannot be returned to a pre-posting
+    //    state. Existing runtime distinguishes this from a generic illegal
+    //    transition (a dedicated guard + message), so it gets its own typed failure.
+    if (from === 'Committed' && to !== 'Committed') {
+      return { ok: false, error: 'PayrollCommittedImmutable' };
+    }
+
+    // 6. The transition must be legal from the CURRENT status.
+    var allowed = PAYROLL_LIFECYCLE_TRANSITIONS[from] || [];
+    if (allowed.indexOf(to) === -1) return { ok: false, error: 'IllegalPayrollLifecycleTransition' };
+
+    // 7. Return the sanitized, legal transition only. No mutation performed.
+    return { ok: true, transition: { from: from, to: to } };
+  }
+});
+
+// Expose on the global object so the Domain facade can resolve this aggregate by
+// name (top-level `const` objects are not attached to `window`, unlike function
+// declarations). No eval; classic shared global scope.
+if (typeof window !== 'undefined') { window.PayrollLifecycleAggregate = PayrollLifecycleAggregate; }
 
 /* ============================================================
    DOMAIN LAYER — READ-ONLY REGISTRY FACADE (Enterprise Foundation, PR-5A)

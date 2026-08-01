@@ -9,6 +9,27 @@
    and summary helpers live in payroll-ops-engine.js.
    ============================================================ */
 function payrollSelSet(monthKey){ if(!State.payrollSel[monthKey]) State.payrollSel[monthKey]=new Set(); return State.payrollSel[monthKey]; }
+/* PR-5J "The Accountant" — the ONE official UI seam for a pre-posting PayrollPlan
+   lifecycle transition. Single-record and bulk callers both route through the
+   Domain command (payroll.lifecycle.transition); no UI ever calls the handler
+   (transitionPayrollLifecycle) directly. On a typed business failure it surfaces
+   the same user-facing messaging the former setPayrollStatus showed. Returns true
+   only on success. */
+async function requestPayrollLifecycle(id, targetStatus){
+  const outcome = await Domain.command('payroll.lifecycle.transition', id, targetStatus);
+  if(outcome && outcome.success) return true;
+  const err = outcome && outcome.error;
+  if(err==='PayrollPeriodLocked') showWarning('This payroll period is locked — unlock it to change status.');
+  else if(err==='PayrollCommittedImmutable') showWarning('Committed payroll cannot change status here — use the adjustment workflow.');
+  else if(err && err!=='PayrollPlanNotFound') showWarning('Could not change payroll status: '+err+'.');
+  return false;
+}
+// Compact "2 Locked; 1 Illegal…" summary of per-record lifecycle command failures for bulk reporting.
+function payrollBulkFailureSummary(failures){
+  const byErr={};
+  (failures||[]).forEach(f=>{ const e=f.error||'Unknown'; byErr[e]=(byErr[e]||0)+1; });
+  return Object.entries(byErr).map(([e,n])=>`${n} ${e}`).join('; ');
+}
 // Cycle-status pill (used by the dashboard payroll strip).
 function cycleStatusPill(cs){
   const map={'Not Generated':'pill-status-archived','Draft':'pill-status-planned','In Review':'pill-status-scheduled','Ready to Commit':'pill-status-partial','Committed':'pill-status-completed','Partially Executed':'pill-status-partial','Fully Executed':'pill-status-completed'};
@@ -143,9 +164,17 @@ function renderPayrollWorkspace(main){
     const spec=PAYROLL_BULK_ACTIONS[action];
     if(!eligible.length){ showWarning(`No selected rows are eligible for ${spec.label}.\n${spec.label} applies only to ${spec.eligibleLabel} payroll.${skipped.length?`\nSkipped: ${payrollSkipSummary(skipped)}.`:''}`); return; }
     if(!confirmAction(`${spec.label} ${eligible.length} eligible row(s)?${skipped.length?` (${skipped.length} selected row(s) will be skipped.)`:''}`)) return;
-    const n=await bulkPayrollStatus(monthKey, eligible, targetStatus);
+    // PR-5J — route EACH eligible row through the one official lifecycle Domain command.
+    // Each PayrollPlan transition is independently atomic; there is no cross-record rollback.
+    let n=0; const cmdFailures=[];
+    for(const pid of eligible){
+      const outcome=await Domain.command('payroll.lifecycle.transition', pid, targetStatus);
+      if(outcome && outcome.success) n++;
+      else cmdFailures.push({id:pid, error:(outcome && outcome.error)||'Unknown'});
+    }
     let msg=`${verbPast} ${n} payroll(s).`;
     if(skipped.length) msg+=`\n${skipped.length} skipped — ${payrollSkipSummary(skipped)}.`;
+    if(cmdFailures.length) msg+=`\n${cmdFailures.length} could not be updated — ${payrollBulkFailureSummary(cmdFailures)}.`;
     showSuccess(msg); renderPayrollWorkspace(main);
   };
   const ar=document.getElementById('actReview'); if(ar) ar.addEventListener('click', ()=>runBulkStatus('review','Reviewed','Reviewed'));
@@ -200,10 +229,10 @@ function bindPayrollRows(area, monthKey, main, sel){
   area.querySelectorAll('[data-pact]').forEach(b=>b.addEventListener('click', async ()=>{
     const id=b.dataset.pid, act=b.dataset.pact;
     if(act==='detail') hrNavTo('payrollDetail',{detailPayrollId:id});
-    else if(act==='review'){ await setPayrollStatus(id,'Reviewed'); render(); }
-    else if(act==='ready'){ await setPayrollStatus(id,'Ready'); render(); }
-    else if(act==='draft'){ await setPayrollStatus(id,'Draft'); render(); }
-    else if(act==='cancel'){ if(confirmAction('Cancel this payroll row? It will not be posted to finance.')){ await setPayrollStatus(id,'Cancelled'); render(); } }
+    else if(act==='review'){ await requestPayrollLifecycle(id,'Reviewed'); render(); }
+    else if(act==='ready'){ await requestPayrollLifecycle(id,'Ready'); render(); }
+    else if(act==='draft'){ await requestPayrollLifecycle(id,'Draft'); render(); }
+    else if(act==='cancel'){ if(confirmAction('Cancel this payroll row? It will not be posted to finance.')){ await requestPayrollLifecycle(id,'Cancelled'); render(); } }
     else if(act==='exec'){ const pp=payrollPlanById(id); const t=payrollTxnOf(pp); if(t){ focusTransactionInExecutionCenter(t.id); } else showWarning('Not posted to a transaction yet.'); }
   }));
   bindHRActions(area);
