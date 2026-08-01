@@ -35,6 +35,12 @@ const DOMAIN_COMMANDS = Object.freeze({
   // status only; posting to Finance (→ Committed) stays out of scope. Uses the shared
   // lifecycle contract (boundaryMethod/boundaryPayload = transition).
   'payroll.lifecycle.transition': Object.freeze({ aggregate: 'PayrollPlan', boundary: 'PayrollLifecycleAggregate', boundaryMethod: 'transition', boundaryPayload: 'transition', handler: 'transitionPayrollLifecycle', transition: 'controlled pre-posting PayrollPlan lifecycle transition (Draft↔Reviewed, Draft/Reviewed→Ready, →Cancelled) — OPERATIONAL via Domain.command(); business authority = PayrollLifecycleAggregate (PR-5J); posting to Finance is out of scope' }),
+  // PR-5K — seventh OPERATIONAL command, second Contract boundary. Narrow, dedicated
+  // Contract status transition over the stored status only (Draft→Active/Cancelled,
+  // Active→Cancelled; Renewed/Cancelled terminal). Renewed is produced only by the
+  // renewal workflow; creation/renewal status writes remain out of scope. Uses the
+  // shared lifecycle contract (boundaryMethod/boundaryPayload = transition).
+  'contract.status.transition': Object.freeze({ aggregate: 'Contract', boundary: 'ContractStatusAggregate', boundaryMethod: 'transition', boundaryPayload: 'transition', handler: 'transitionContractStatus', transition: 'controlled Contract status transition (Draft→Active/Cancelled, Active→Cancelled; Renewed/Cancelled terminal) — OPERATIONAL via Domain.command(); business authority = ContractStatusAggregate (PR-5K); Renewed is renewal-only, creation/renewal status writes out of scope' }),
   // Payroll
   'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
   // Finance

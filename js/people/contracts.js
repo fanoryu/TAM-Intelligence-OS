@@ -155,14 +155,60 @@ function openContractModal(id, presetEmpId){
     }});
 }
 
-async function setContractStatus(id, status){
-  const c = contractById(id); if(!c) return;
-  if(status==='Cancelled' && payrollPlansForContract(id).some(p=>p.status==='committed')){
-    if(!confirm('This contract has committed payroll. Cancelling it will NOT modify historical payroll or transactions. Continue?')) return;
+/* ============================================================
+   PR-5K "The Ledger" — Contract status transition HANDLER.
+   The IMPLEMENTATION AUTHORITY for the contract.status.transition command.
+   The business authority is ContractStatusAggregate (js/domain); this handler
+   keeps its own defense-in-depth transition check and owns mutation, updatedAt,
+   Contract history, persistence, and rollback. It receives the sanitized
+   { from, to } decision from the aggregate (via Domain.command), mutates ONLY
+   Contract.status, and never touches dates, salary, renewal, the employee, or
+   sibling contracts. Atomic: on a failed persist it reverts status, updatedAt,
+   and the history entry and returns PersistFailed. It replaces the former
+   setContractStatus procedural mutator. The history event preserves the existing
+   convention (status.toLowerCase() + "Status set to <status>"); the former call
+   wrote no audit entry, so none is added here.
+   ============================================================ */
+async function transitionContractStatus(id, transition){
+  const c = contractById(id);
+  if(!c) return { success:false, error:'ContractNotFound' };
+  transition = transition || {};
+  const to = transition.to;
+  const from = c.status;
+  // Defense-in-depth (the aggregate validated first): legal transition per the graph.
+  const allowed = (typeof CONTRACT_STATUS_TRANSITIONS !== 'undefined' && CONTRACT_STATUS_TRANSITIONS[from]) || [];
+  if(!to || allowed.indexOf(to)===-1) return { success:false, error:'IllegalContractStatusTransition' };
+  const prevStatus = c.status, prevUpdatedAt = c.updatedAt;
+  c.status = to;
+  c.updatedAt = new Date().toISOString();
+  (c.history=c.history||[]).push({event:to.toLowerCase(), ts:c.updatedAt, note:`Status set to ${to}`});
+  const ok = await persistContracts();
+  if(ok !== true){
+    // Atomic rollback — restore status, timestamp, and drop the history entry.
+    c.status = prevStatus;
+    c.history.pop();
+    c.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
   }
-  c.status = status; c.updatedAt = new Date().toISOString();
-  (c.history=c.history||[]).push({event:status.toLowerCase(), ts:c.updatedAt, note:`Status set to ${status}`});
-  await persistContracts(); toast(`Contract ${status.toLowerCase()}.`); render();
+  return { success:true, data:c };
+}
+
+// The ONE official UI seam for a Contract status transition. The row-menu dispatch
+// (ct-activate / ct-cancel) routes through here; no UI calls the handler directly.
+// It preserves the existing committed-payroll cancellation confirmation and the
+// success toast/re-render exactly as the former setContractStatus did, and surfaces
+// typed business failures. Returns true only on success.
+async function requestContractStatusTransition(id, targetStatus){
+  const c = contractById(id); if(!c) return false;
+  // Preserve the existing committed-payroll cancellation behavior exactly (the
+  // p.status==='committed' comparison quirk is intentionally left unchanged).
+  if(targetStatus==='Cancelled' && payrollPlansForContract(id).some(p=>p.status==='committed')){
+    if(!confirm('This contract has committed payroll. Cancelling it will NOT modify historical payroll or transactions. Continue?')) return false;
+  }
+  const outcome = await Domain.command('contract.status.transition', id, targetStatus);
+  if(outcome && outcome.success){ toast(`Contract ${targetStatus.toLowerCase()}.`); render(); return true; }
+  toast('Could not change contract status'+(outcome && outcome.error && outcome.error!=='ContractNotFound' ? ': '+outcome.error : '')+'.', 5000);
+  return false;
 }
 async function deleteContract(id){
   const c = contractById(id); if(!c) return;

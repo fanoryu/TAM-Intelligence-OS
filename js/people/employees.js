@@ -626,8 +626,8 @@ function bindHRActions(main){
     else if(a==='ct-detail') hrNavTo('contractDetail', {detailContractId:id});
     else if(a==='ct-edit') openContractModal(id);
     else if(a==='ct-renew') openRenewModal(id);
-    else if(a==='ct-activate') setContractStatus(id, 'Active');
-    else if(a==='ct-cancel') setContractStatus(id, 'Cancelled');
+    else if(a==='ct-activate') requestContractStatusTransition(id, 'Active');
+    else if(a==='ct-cancel') requestContractStatusTransition(id, 'Cancelled');
     else if(a==='ct-delete') deleteContract(id);
     else if(a==='re-edit') openRecurringModal(id);
     else if(a==='re-toggle') toggleRecurring(id);
