@@ -322,8 +322,8 @@ check(dist.includes("Domain.query('employee.filtered')"), 'migrated query call p
 check(/'employee\.filtered':\s*Object\.freeze\(\{[^}]*handler:\s*'employeesFiltered'/.test(qrySrc), 'employee.filtered query registered to handler employeesFiltered');
 // Exactly ONE command migrated (distinct routed command ids), and it is the approved contact command.
 const migratedCmdIds = Array.from(new Set((srcJs.match(/Domain\.command\('([^']+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1])));
-const EXPECTED_OP_CMDS = ['employee.contact.update','employee.employment.update','employee.lifecycle.transition','employee.compensation.update','contract.dates.update','payroll.lifecycle.transition'];
-check(migratedCmdIds.length === 6 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly six command ids routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
+const EXPECTED_OP_CMDS = ['employee.contact.update','employee.employment.update','employee.lifecycle.transition','employee.compensation.update','contract.dates.update','payroll.lifecycle.transition','contract.status.transition'];
+check(migratedCmdIds.length === 7 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly seven command ids routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
 check(dist.includes("Domain.command('employee.contact.update'"), 'migrated command call present in dist');
 check(dist.includes("Domain.command('employee.employment.update'"), 'employment command call present in dist');
 check(dist.includes("Domain.command('employee.lifecycle.transition'"), 'lifecycle command call present in dist');
@@ -363,7 +363,7 @@ check(/const EmployeeContactAggregate = Object\.freeze\(/.test(aggSrc2), 'Employ
 check(/prepare:\s*function/.test(aggSrc2), 'aggregate exposes prepare()');
 // Exactly one operational aggregate: only one *Aggregate object with a prepare() exists in js/domain.
 const aggregateDefs = (srcJs.match(/const \w*Aggregate = Object\.freeze\(\{\s*[\s\S]*?(?:prepare|transition):\s*function/g)||[]).length;
-check(aggregateDefs === 6, 'exactly six operational aggregates defined (found '+aggregateDefs+')');
+check(aggregateDefs === 7, 'exactly seven operational aggregates defined (found '+aggregateDefs+')');
 // The command registry binds the aggregate as the boundary for the one command.
 check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeContactAggregate'/.test(cmdSrc), 'employee.contact.update declares boundary EmployeeContactAggregate');
 // The facade routes a bounded command through the aggregate before the handler.
@@ -626,8 +626,8 @@ check(/error:'PersistFailed'/.test(udBody), 'contract-date handler returns Persi
 check(/error:'InvalidStartDate'/.test(udBody) && /error:'InvalidDurationMonths'/.test(udBody), 'contract-date handler performs defense-in-depth validation');
 check(!/logActivity\(/.test(udBody), 'contract-date handler adds no duplicate audit call (history-only)');
 check(/success:\s*true/.test(udBody) && /success:\s*false/.test(udBody), 'contract-date handler returns a typed success/failure outcome');
-// The UI routes through Domain.command exactly once in contracts.js (no direct handler call).
-check((ctSrc.match(/Domain\.command\(/g)||[]).length === 1, 'exactly one Domain.command() call site in contracts.js (the dates command)');
+// The UI routes through Domain.command in contracts.js (dates seam + PR-5K status seam); no direct handler call.
+check((ctSrc.match(/Domain\.command\(/g)||[]).length === 2, 'exactly two Domain.command() call sites in contracts.js (the dates command + the status command)');
 check((ctSrc.match(/updateContractDates\(/g)||[]).length === 1, 'UI never calls updateContractDates() directly (only the function definition appears)');
 // contractCalc() semantics are not modified by PR-5I (people-core.js untouched).
 check(!/function contractCalc/.test(ctAggSrc) && !/function contractCalc/.test(udBody), 'contract-date capability does not redefine contractCalc()');
@@ -721,6 +721,91 @@ check(!/BulkAggregate|bulkCommand|payroll\.lifecycle\.bulk/.test(srcJs), 'no sec
 // Existing aggregates remain operational and untouched by PR-5J.
 check(/const ContractDateAggregate = Object\.freeze\(/.test(ctAggSrc) && /const EmployeeLifecycleAggregate = Object\.freeze\(/.test(lifeAggSrc), 'existing Contract + Employee aggregates remain operational');
 
+// PR-5K "The Ledger" — second Contract aggregate boundary (ContractStatusAggregate).
+console.log('== CONTRACT STATUS AGGREGATE (PR-5K — business authority) ==');
+const csAggPath = path.join(root,'js','domain','contract-status-aggregate.js');
+check(fs.existsSync(csAggPath), 'aggregate module present: js/domain/contract-status-aggregate.js');
+check(jsFiles.indexOf('domain/contract-status-aggregate.js') !== -1, 'module-order.js includes domain/contract-status-aggregate.js');
+check(indexHtml.includes('<script src="js/domain/contract-status-aggregate.js"></script>'), 'index.html includes domain/contract-status-aggregate.js');
+// Load order: after helpers, before the facade.
+check(jsFiles.indexOf('domain/aggregate-helpers.js') < jsFiles.indexOf('domain/contract-status-aggregate.js') &&
+      jsFiles.indexOf('domain/contract-status-aggregate.js') < jsFiles.indexOf('domain/domain-layer.js'), 'contract status aggregate loads after helpers and before domain-layer.js');
+const csAggSrc = read(csAggPath);
+check(/const ContractStatusAggregate = Object\.freeze\(/.test(csAggSrc), 'ContractStatusAggregate is a frozen object');
+check(/transition:\s*function/.test(csAggSrc), 'contract status aggregate exposes transition()');
+// Command registration: boundary + lifecycle transition/transition contract + handler + aggregate id.
+check(/'contract\.status\.transition':\s*Object\.freeze\(\{[^}]*boundary:\s*'ContractStatusAggregate'/.test(cmdSrc), 'contract.status.transition declares boundary ContractStatusAggregate');
+check(/'contract\.status\.transition':\s*Object\.freeze\(\{[^}]*boundaryMethod:\s*'transition'/.test(cmdSrc) && /'contract\.status\.transition':\s*Object\.freeze\(\{[^}]*boundaryPayload:\s*'transition'/.test(cmdSrc), 'contract.status.transition declares boundaryMethod/boundaryPayload = transition');
+check(/'contract\.status\.transition':\s*Object\.freeze\(\{[^}]*handler:\s*'transitionContractStatus'/.test(cmdSrc), 'contract.status.transition registered to handler transitionContractStatus');
+check(/'contract\.status\.transition':\s*Object\.freeze\(\{[^}]*aggregate:\s*'Contract'/.test(cmdSrc), 'contract.status.transition declares aggregate Contract');
+check(dist.includes("Domain.command('contract.status.transition'"), 'contract status command call present in dist');
+// Domain routing (domain-layer.js) is UNCHANGED by PR-5K (reuses the transition/transition contract).
+check(!/contract\.status|ContractStatus/.test(facSrc), 'domain-layer.js is not modified for the contract status command');
+// The transition graph is derived from runtime behavior — exactly the discovered edges, no more.
+check(/'Draft':\s*\['Active',\s*'Cancelled'\]/.test(csAggSrc) && /'Active':\s*\['Cancelled'\]/.test(csAggSrc) &&
+      /'Renewed':\s*\[\]/.test(csAggSrc) && /'Cancelled':\s*\[\]/.test(csAggSrc), 'contract status transition map is exactly the derived graph (Renewed/Cancelled terminal)');
+// Uses the existing stored statuses; never treats derived display states as stored.
+check(/CONTRACT_STORED_STATUSES/.test(csAggSrc), 'contract status aggregate validates against CONTRACT_STORED_STATUSES (single source)');
+// Scope the following to the transition-map literal only (the header comment and the
+// STATES fallback legitimately name derived states / list Renewed).
+const csMapLit = (csAggSrc.match(/CONTRACT_STATUS_TRANSITIONS = Object\.freeze\(\{[\s\S]*?\}\)/)||[''])[0];
+check(csMapLit !== '' && !/Expiring Soon|Expired/.test(csMapLit), 'transition map never treats derived display states (Expiring Soon/Expired) as stored statuses');
+// Renewed is never a generic transition target: it appears in the map only as a key.
+check(!/'Renewed'/.test(csMapLit.replace(/'Renewed':/,'')), 'Renewed is never a transition target (produced only by the renewal workflow)');
+// Aggregate PURITY — no side effects (comments stripped).
+const csAggCode = csAggSrc.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+[['State mutation', /State\s*[.[]/],
+ ['persistContracts', /persistContracts\s*\(/],
+ ['persist', /\bpersist(HR|Contracts)?\s*\(/],
+ ['Contract mutation', /\bc\.\w+\s*=[^=]/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(/],
+ ['toast/alert', /\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(|\balert\s*\(|confirm\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/]
+].forEach(([label,re])=>check(!re.test(csAggCode), 'contract status aggregate never performs '+label));
+check(/contractById\(/.test(csAggSrc), 'aggregate reads existence read-only (contractById)');
+// Returns a sanitized transition on success and typed failures otherwise.
+check(/return \{ ok: true, transition:/.test(csAggSrc), 'contract status aggregate returns only a sanitized transition on success');
+['ContractNotFound','InvalidContractStatusState','IllegalContractStatusTransition'].forEach((err)=>
+  check(csAggSrc.includes("error: '"+err+"'"), 'contract status aggregate returns typed business failure: '+err));
+// Handler owns mutation/updatedAt/history/persistence/rollback (implementation authority).
+const tcStart = ctSrc.indexOf('async function transitionContractStatus(');
+check(tcStart !== -1, 'transitionContractStatus handler present');
+const tcRest = tcStart!==-1 ? ctSrc.slice(tcStart+1) : '';
+const tcNext = tcRest.search(/\n(async function|function) /);
+const tcBody = tcNext>=0 ? tcRest.slice(0, tcNext) : tcRest;
+// Status changes ONLY c.status (+ updatedAt/history); dates/salary/renewal/links are forbidden.
+['startDate','durationMonths','monthlySalary','renewedToId','renewedFromId','employeeId','contractNumber','notes','endDate'].forEach((f)=>
+  check(!tcBody.includes(f), 'contract status handler does not touch forbidden field: '+f));
+check((tcBody.match(/persistContracts\(/g)||[]).length === 1, 'handler persists exactly once (persistContracts)');
+check(!/persistEmployees\(|persistHR\(|persist\(\)/.test(tcBody), 'handler uses only the Contract persistence path');
+check(/c\.status = to/.test(tcBody), 'handler performs the status mutation (only Contract.status)');
+check(/c\.updatedAt = new Date/.test(tcBody), 'handler updates updatedAt');
+check((tcBody.match(/\.push\(/g)||[]).length === 1, 'handler appends exactly one Contract history entry on success');
+check(/c\.status = prevStatus/.test(tcBody) && /c\.history\.pop\(\)/.test(tcBody) && /c\.updatedAt = prevUpdatedAt/.test(tcBody), 'handler performs full rollback on persist failure (status + history + updatedAt)');
+check(/error:'PersistFailed'/.test(tcBody), 'handler returns PersistFailed on persistence failure');
+check(/error:'IllegalContractStatusTransition'/.test(tcBody), 'handler performs defense-in-depth transition validation');
+check(!/logActivity\(/.test(tcBody), 'handler adds no audit call (former setContractStatus wrote none — behavior preserved)');
+check(/event:to\.toLowerCase\(\)/.test(tcBody) && /Status set to \$\{to\}/.test(tcBody), 'handler preserves the existing Contract history convention');
+check(/success:\s*true/.test(tcBody) && /success:\s*false/.test(tcBody), 'handler returns a typed success/failure outcome');
+// The former procedural mutator is gone — no second status-transition authority remains.
+check(!/function setContractStatus\(/.test(ctSrc), 'setContractStatus removed (single status-transition authority via the Domain command)');
+check(!/setContractStatus\(/.test(srcJs), 'no caller of setContractStatus remains anywhere');
+// Single-record UI: routes through the one Domain-command seam (requestContractStatusTransition).
+check(/async function requestContractStatusTransition\(/.test(ctSrc) && /Domain\.command\('contract\.status\.transition', id, targetStatus\)/.test(ctSrc), 'requestContractStatusTransition seam routes status transitions through Domain.command()');
+check(/'ct-activate'\) requestContractStatusTransition\(id, 'Active'\)/.test(empSrc) && /'ct-cancel'\) requestContractStatusTransition\(id, 'Cancelled'\)/.test(empSrc), 'employee row menu (ct-activate/ct-cancel) routes through requestContractStatusTransition');
+check(!/transitionContractStatus\(/.test(empSrc), 'no UI file calls the handler transitionContractStatus() directly (employees.js)');
+check((ctSrc.match(/transitionContractStatus\(/g)||[]).length === 1, 'transitionContractStatus appears only as its definition (never invoked outside the Domain command)');
+// The committed-payroll cancellation confirmation is preserved (moved into the UI seam, quirk unchanged).
+check(/payrollPlansForContract\(id\)\.some\(p=>p\.status==='committed'\)/.test(ctSrc), 'committed-payroll cancellation confirmation preserved with its existing comparison quirk');
+// Transitions-only scope: creation (full editor) and renewal status writes intentionally remain (documented residual authority).
+check(/rec\.status = fd\.get\('status'\)/.test(ctSrc), 'full-editor status assignment remains (creation — out of scope, documented residual authority)');
+check(/c\.status='Renewed'/.test(ctSrc), 'renewal status assignment remains (compound op — out of scope, documented residual authority)');
+// Existing aggregates remain operational and untouched by PR-5K.
+check(/const ContractDateAggregate = Object\.freeze\(/.test(ctAggSrc) && /const PayrollLifecycleAggregate = Object\.freeze\(/.test(payAggSrc), 'existing Contract date + Payroll lifecycle aggregates remain operational');
+
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
 const helpPath = path.join(root,'js','domain','aggregate-helpers.js');
@@ -750,8 +835,8 @@ check(/employeeExists\(/.test(aggSrc2) && /normalizeAllowedFields\(/.test(aggSrc
 check(/employeeExists\(/.test(empAggSrc) && /normalizeAllowedFields\(/.test(empAggSrc) && /validateEnum\(/.test(empAggSrc), 'employment aggregate uses the shared helpers');
 // Operational surface is UNCHANGED by this refactor: still 2 aggregates, 2 commands, 1 query
 // (asserted above via aggregateDefs===2, migratedCmdIds.length===2, migratedQueryIds.length===1).
-check(aggregateDefs === 6, 'operational aggregate count remains exactly six');
-check(migratedCmdIds.length === 6, 'operational command count remains exactly six');
+check(aggregateDefs === 7, 'operational aggregate count remains exactly seven');
+check(migratedCmdIds.length === 7, 'operational command count remains exactly seven');
 check(migratedQueryIds.length === 1, 'operational query count remains exactly one');
 
 // Extract command/query identifiers and their handler names.
