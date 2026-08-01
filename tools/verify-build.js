@@ -854,6 +854,49 @@ check(cmdIds.filter(id=>qryIds.indexOf(id)!==-1).length === 0, 'no command/query
 cmdHandlers.forEach((h)=>check(dist.includes('function '+h+'('), 'command handler resolves to a real function: '+h+'()'));
 qryHandlers.forEach((h)=>check(dist.includes('function '+h+'('), 'query handler resolves to a real function: '+h+'()'));
 
+// PR-6A "The Gateway" — first Platform Layer boundary (ApplicationGateway).
+// Infrastructure only: a pure application boundary that DELEGATES to the Domain
+// facade and owns no business behavior. Milestone Delta begins here.
+console.log('== APPLICATION GATEWAY (PR-6A — platform boundary) ==');
+const gwPath = path.join(root,'js','platform','application-gateway.js');
+check(fs.existsSync(gwPath), 'platform module present: js/platform/application-gateway.js');
+check(jsFiles.indexOf('platform/application-gateway.js') !== -1, 'module-order.js includes platform/application-gateway.js');
+check(indexHtml.includes('<script src="js/platform/application-gateway.js"></script>'), 'index.html includes platform/application-gateway.js');
+// Load order: AFTER the Domain facade it delegates to, and before bootstrap.
+check(jsFiles.indexOf('domain/domain-layer.js') < jsFiles.indexOf('platform/application-gateway.js') &&
+      jsFiles.indexOf('platform/application-gateway.js') < jsFiles.indexOf('core/app-bootstrap.js'), 'gateway loads after domain-layer.js and before app-bootstrap.js');
+const gwSrc = read(gwPath);
+check(/const ApplicationGateway = \(function/.test(gwSrc) && /Object\.freeze\(\{/.test(gwSrc), 'ApplicationGateway is a frozen object');
+check(/execute:\s*function/.test(gwSrc), 'gateway exposes execute()');
+check(dist.includes('const ApplicationGateway') && dist.includes('window.ApplicationGateway = ApplicationGateway'), 'gateway present and exposed in dist');
+// DELEGATION CONTRACT — the gateway reaches business behavior ONLY via the Domain facade.
+check(/domain\.command\.apply\(/.test(gwSrc) && /domain\.query\.apply\(/.test(gwSrc), 'gateway delegates to Domain.command and Domain.query');
+check(/typeof Domain !== 'undefined'/.test(gwSrc), 'gateway resolves the Domain facade (delegation target)');
+// GATEWAY PURITY — it owns no business behavior (comments stripped).
+const gwCode = gwSrc.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+[['State access', /State\s*[.[]/],
+ ['persistence', /\bpersist\w*\s*\(/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(/],
+ ['toast/alert', /\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(|\balert\s*\(|confirm\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/]
+].forEach(([label,re])=>check(!re.test(gwCode), 'gateway never performs '+label));
+// NO DOMAIN BYPASS — the gateway never calls a handler or aggregate directly.
+cmdHandlers.forEach((h)=>check(!new RegExp('\\b'+h+'\\s*\\(').test(gwCode), 'gateway does not call handler directly: '+h));
+check(!/\w+Aggregate\s*[.[]/.test(gwCode), 'gateway does not touch any aggregate directly');
+// NO DUPLICATE AUTHORITY — the gateway does not re-implement command/query routing.
+check(!/DOMAIN_COMMANDS|DOMAIN_QUERIES|commandHandler\s*\(|queryHandler\s*\(/.test(gwCode), 'gateway does not re-implement the Domain registry/routing');
+// Structural request rejection (invalid requests never reach the Domain).
+['InvalidGatewayRequest','InvalidGatewayKind','InvalidGatewayName','InvalidGatewayArgs'].forEach((err)=>
+  check(gwSrc.includes("error: '"+err+"'"), 'gateway returns typed structural rejection: '+err));
+// The Domain facade must NOT depend on the platform layer (one-way dependency).
+check(!/ApplicationGateway|application-gateway|platform\//.test(facSrc), 'domain-layer.js has no dependency on the platform layer (one-way)');
+check(!/ApplicationGateway/.test(cmdSrc) && !/ApplicationGateway/.test(qrySrc) && !/ApplicationGateway/.test(aggSrc), 'domain registries have no dependency on the gateway');
+// Operational surface is UNCHANGED by PR-6A (infrastructure only).
+check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1, 'operational surface unchanged by the gateway (7 aggregates / 7 commands / 1 query)');
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');
