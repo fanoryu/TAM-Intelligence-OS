@@ -437,6 +437,39 @@ check(!/logActivity\(/.test(ueBody), 'employment handler adds no duplicate audit
 // Aggregate failure never invokes the handler: the facade returns early on !decision.ok.
 check(/decision\.ok !== true/.test(facSrc) && /return \{ success: false, error:/.test(facSrc), 'facade returns a typed failure without invoking the handler when the aggregate rejects');
 
+// PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
+console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
+const helpPath = path.join(root,'js','domain','aggregate-helpers.js');
+check(fs.existsSync(helpPath), 'helper module present: js/domain/aggregate-helpers.js');
+check(jsFiles.indexOf('domain/aggregate-helpers.js') !== -1, 'module-order.js includes domain/aggregate-helpers.js');
+check(indexHtml.includes('<script src="js/domain/aggregate-helpers.js"></script>'), 'index.html includes domain/aggregate-helpers.js');
+// Helpers must load BEFORE both aggregates that consume them.
+check(jsFiles.indexOf('domain/aggregate-helpers.js') < jsFiles.indexOf('domain/employee-contact-aggregate.js') &&
+      jsFiles.indexOf('domain/aggregate-helpers.js') < jsFiles.indexOf('domain/employee-employment-aggregate.js'), 'helpers load before both aggregates');
+const helpSrc = read(helpPath);
+// It is a toolkit of small functions, NOT a generic framework.
+['AggregateBase','BaseAggregate','AbstractAggregate','AggregateFactory','AggregateRegistry','class '].forEach((bad)=>
+  check(!helpSrc.includes(bad), 'helper module introduces no generic framework construct: '+bad.trim()));
+check(/function employeeExists\(/.test(helpSrc) && /function normalizeAllowedFields\(/.test(helpSrc) && /function validateEnum\(/.test(helpSrc), 'helper module defines the extracted utilities (employeeExists / normalizeAllowedFields / validateEnum)');
+// Helper PURITY — no implementation-side effects (comments stripped).
+const helpCode = helpSrc.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+[['State mutation', /State\s*[.[]/],
+ ['persistEmployees', /persistEmployees\s*\(/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/]
+].forEach(([label,re])=>check(!re.test(helpCode), 'helper module never performs '+label));
+// Extraction actually happened: both aggregates now call the shared helpers.
+check(/employeeExists\(/.test(aggSrc2) && /normalizeAllowedFields\(/.test(aggSrc2), 'contact aggregate uses the shared helpers');
+check(/employeeExists\(/.test(empAggSrc) && /normalizeAllowedFields\(/.test(empAggSrc) && /validateEnum\(/.test(empAggSrc), 'employment aggregate uses the shared helpers');
+// Operational surface is UNCHANGED by this refactor: still 2 aggregates, 2 commands, 1 query
+// (asserted above via aggregateDefs===2, migratedCmdIds.length===2, migratedQueryIds.length===1).
+check(aggregateDefs === 2, 'PR-5F: operational aggregate count remains exactly two');
+check(migratedCmdIds.length === 2, 'PR-5F: operational command count remains exactly two');
+check(migratedQueryIds.length === 1, 'PR-5F: operational query count remains exactly one');
+
 // Extract command/query identifiers and their handler names.
 function idKeys(src){ return (src.match(/^\s*'([a-z][a-zA-Z]*\.[a-zA-Z]+)':/gm)||[]).map(s=>s.match(/'([^']+)'/)[1]); }
 function handlerNames(src){ return (src.match(/handler:\s*'([A-Za-z0-9_]+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1]); }

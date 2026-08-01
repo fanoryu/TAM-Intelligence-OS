@@ -69,6 +69,7 @@ module.exports = [
   'domain/commands.js',
   'domain/queries.js',
   'domain/events.js',
+  'domain/aggregate-helpers.js',
   'domain/employee-contact-aggregate.js',
   'domain/employee-employment-aggregate.js',
   'domain/domain-layer.js',
