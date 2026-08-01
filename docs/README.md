@@ -46,8 +46,8 @@ The AI-facing entry point that requires this reading before implementation is
 The two ADR series are distinct: `adr/` (`ADR-NNNN`) records repository- and documentation-governance
 decisions; `03-adr/` (`ADR-001`…) records Domain-layer architecture decisions. They never share a
 number or overlap in scope. Domain ADRs may be **Accepted** (authoritative) or **Proposed**
-(ADR-008, ADR-009 — open questions from the PR-5G review that record no decision and authorize no
-implementation); the paired non-blocking backlog items live in the
+(ADR-008, ADR-009, ADR-010 — open questions from the PR-5G and PR-5H reviews that record no decision
+and authorize no implementation); the paired non-blocking backlog items live in the
 [Architecture Evolution Backlog](02-architecture/Architecture_Evolution_Backlog.md).
 
 Decision records are immutable once Accepted and are **superseded**, never rewritten
