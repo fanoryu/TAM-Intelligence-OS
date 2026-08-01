@@ -32,6 +32,14 @@ Reasoning is recorded so it survives the loss of chat history. Architectural dec
 work is authorized by Sprint Assignments and expressed as pull requests; supersession replaces
 rewriting. Nothing important lives only in someone's memory or a transient conversation.
 
+## Knowledge over Memory
+When the record and recollection disagree, the record wins. Decisions are trusted because they are
+written down and version-controlled, not because someone remembers them; engineering context must
+survive changes in people, tools, and AI assistants. This is the operating form of the
+*Knowledge over Memory* [Core Value](Core_Values.md) and of Law XII — documentation that no longer
+describes reality means the work is unfinished, so the register is kept current rather than
+reconstructed from memory.
+
 ---
 
 *These principles serve the [Engineering Constitution](Engineering_Constitution.md). Where a

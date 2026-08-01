@@ -23,6 +23,13 @@ The architecture advances in small, reversible, well-understood steps. We extend
 data shapes, extract only what is already duplicated, and supersede decisions rather than rewrite
 history. We do not rebuild what works to chase novelty.
 
+## Knowledge over Memory
+Important decisions live in the repository, not in anyone's head or a chat log. Institutional knowledge
+must not depend on conversation history that can be lost, and engineering context must survive changes
+in people, tools, and AI assistants. When recollection and the record disagree, the documented evidence
+takes precedence. This value is the daily expression of Law XII — *Documentation Is Executable
+Knowledge* — and Law X — *No Knowledge Loss*.
+
 ---
 
 *Values guide; they do not override the invariants in the [Engineering Constitution](Engineering_Constitution.md).

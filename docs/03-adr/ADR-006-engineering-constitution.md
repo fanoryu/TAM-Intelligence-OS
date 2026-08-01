@@ -35,3 +35,9 @@ truth lives in the Domain; everything else is a client.*
   rules win.
 - The governance library (values, principles, standards, ADRs) hangs coherently off the eleven laws,
   and future work can cite a specific law as its rationale.
+
+> **Forward pointer (PR-5G review, not a rewrite).** This ADR records the **eleven** laws adopted at
+> DOC-001 and is left intact per ADR immutability (`CLAUDE.md` §16.2). The Constitution is a living
+> document and is the authoritative source of the current law set; **Law XII — Documentation Is
+> Executable Knowledge** was added to it later, during the PR-5G Atlas Review. This note tracks that
+> pointer without altering the decision above.

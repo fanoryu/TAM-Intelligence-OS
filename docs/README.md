@@ -17,8 +17,8 @@ DOC-001. Each folder owns one area and carries its own README.
 |---|---|
 | [`00-governance/`](00-governance/README.md) | Engineering Constitution, Core Values, Principles, and the Governance Pyramid |
 | [`01-roadmap/`](01-roadmap/README.md) | The Domain roadmap and the milestone track (forward-looking) |
-| [`02-architecture/`](02-architecture/README.md) | The Domain layer as implemented today: architecture, aggregate pattern, command/query model, AI positioning |
-| [`03-adr/`](03-adr/README.md) | Domain Architecture Decision Records (`ADR-001`…, three-digit) |
+| [`02-architecture/`](02-architecture/README.md) | The Domain layer as implemented today: architecture, aggregate pattern, command/query model, AI positioning, and the [Architecture Evolution Backlog](02-architecture/Architecture_Evolution_Backlog.md) (non-blocking `ARCH-NNN` items) |
+| [`03-adr/`](03-adr/README.md) | Domain Architecture Decision Records (`ADR-001`…, three-digit) — Accepted and Proposed |
 | [`04-standards/`](04-standards/README.md) | SPR, PR, Review, Merge, Coding, Testing, and Release standards |
 | [`05-milestones/`](05-milestones/README.md) | Milestones Alpha → Omega and their status |
 | [`06-releases/`](06-releases/README.md) | Release strategy, flow, checklist, and hotfix flow |
@@ -45,7 +45,10 @@ The AI-facing entry point that requires this reading before implementation is
 
 The two ADR series are distinct: `adr/` (`ADR-NNNN`) records repository- and documentation-governance
 decisions; `03-adr/` (`ADR-001`…) records Domain-layer architecture decisions. They never share a
-number or overlap in scope.
+number or overlap in scope. Domain ADRs may be **Accepted** (authoritative) or **Proposed**
+(ADR-008, ADR-009 — open questions from the PR-5G review that record no decision and authorize no
+implementation); the paired non-blocking backlog items live in the
+[Architecture Evolution Backlog](02-architecture/Architecture_Evolution_Backlog.md).
 
 Decision records are immutable once Accepted and are **superseded**, never rewritten
 (`CLAUDE.md` §14.4, §16.2). Point-in-time audit records live under [`../audit/`](../audit/).

@@ -1,4 +1,4 @@
-# Engineering Constitution — The Eleven Engineering Laws
+# Engineering Constitution — The Twelve Engineering Laws
 
 TAM Intelligence OS is a proprietary, client-side finance, payroll, and operations application for
 PT Total Asset Manajemen. It handles confidential data, runs entirely in the browser, and ships as a
@@ -21,7 +21,7 @@ client may request a decision; it never *is* the decision.
 
 ---
 
-## The Eleven Engineering Laws
+## The Twelve Engineering Laws
 
 ### Law I — Business Truth Lives in the Domain
 Every business decision — whether a change is allowed, what a value means, how input is sanitized —
@@ -75,6 +75,18 @@ It reads the Constitution, the Core Values, the Roadmap, and the relevant ADRs b
 it acts through registered commands and queries; it respects the verifier and the Approval Matrix;
 and it never bypasses the Domain to reach state directly. The AI proposes and prepares — approval
 and merge remain human authority.
+
+### Law XII — Documentation Is Executable Knowledge
+Engineering documentation is part of the system, not commentary about it. It is version-controlled in
+the repository, evolves in lockstep with the implementation, is reviewed like code, and is verified
+like code. It is the authoritative source of engineering knowledge: when a question about how the
+system works has an answer, that answer lives here, not only in someone's memory or a past
+conversation.
+
+Because documentation and implementation describe the same system, they must agree. **If documentation
+no longer describes reality, the implementation is incomplete** — the change that made them diverge is
+unfinished until the documentation is brought back into truth. Stale documentation is a defect, not a
+lesser artifact.
 
 ---
 
