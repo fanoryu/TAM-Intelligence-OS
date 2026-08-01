@@ -74,6 +74,7 @@ module.exports = [
   'domain/employee-employment-aggregate.js',
   'domain/employee-lifecycle-aggregate.js',
   'domain/employee-compensation-aggregate.js',
+  'domain/contract-date-aggregate.js',
   'domain/domain-layer.js',
   // --- bootstrap (19) ---
   'core/app-bootstrap.js'
