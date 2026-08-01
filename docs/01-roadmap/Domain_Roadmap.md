@@ -29,21 +29,23 @@ The Domain layer established as a read-only registry and facade, then its first 
 | PR-5E | The Custodian | Second aggregate boundary — `EmployeeEmploymentAggregate` |
 | PR-5F | The Sentinel | Shared aggregate helpers extracted (refactor; no behavior change) |
 
-## Phase: Domain Expansion — **Upcoming**
+## Phase: Domain Expansion (Milestone Gamma) — **Completed** for PR-5G–PR-5J; **PR-5K Upcoming**
 
-Widen the operational Domain surface across more of the business, one aggregate/command at a time,
-following the established aggregate → handler pattern.
+The operational Domain surface widened across the business, one aggregate/command at a time,
+following the established aggregate → handler pattern. PR-5G–PR-5J merged to `main` and close
+Milestone Gamma; PR-5K remains an approved-but-unauthorized direction.
 
-| Slice | Name | Intent |
-|---|---|---|
-| PR-5G | The Gatekeeper | Next controlled aggregate boundary in the employee/people domain |
-| PR-5H | The Arbiter | Extend controlled, validated updates to a further bounded area |
-| PR-5I | The Binder | Bring a relationship/consistency scope under a Domain boundary |
-| PR-5J | The Accountant | Route a finance-adjacent operation through the Domain |
-| PR-5K | The Ledger | Bring an auditable finance record path under a Domain boundary |
+| Slice | Name | Status | Outcome / Intent |
+|---|---|---|---|
+| PR-5G | The Gatekeeper | Completed | `EmployeeLifecycleAggregate` — `employee.lifecycle.transition` |
+| PR-5H | The Arbiter | Completed | `EmployeeCompensationAggregate` — `employee.compensation.update` |
+| PR-5I | The Binder | Completed | `ContractDateAggregate` — `contract.dates.update` (endDate stays derived) |
+| PR-5J | The Accountant | Completed | `PayrollLifecycleAggregate` — `payroll.lifecycle.transition` (posting deferred) |
+| PR-5K | The Ledger | Upcoming | Bring an auditable finance record path under a Domain boundary |
 
-*Names are stable placeholders for approved directions; the precise aggregate, command, fields, and
-typed failures for each are defined only when its Sprint Assignment is issued.*
+*Names are stable; the precise aggregate, command, fields, and typed failures for an **Upcoming** slice
+are defined only when its Sprint Assignment is issued. The frozen Gamma state is snapshotted in
+[RDR-001](../RDR/RDR-001-gamma-repository-snapshot.md).*
 
 ## Phase: Domain Events — **Upcoming**
 
