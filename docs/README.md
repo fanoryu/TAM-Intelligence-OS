@@ -42,6 +42,7 @@ The AI-facing entry point that requires this reading before implementation is
 | Repository & documentation governance | [`adr/`](adr/README.md) | Architecture Decision Records (`ADR-NNNN`, four-digit) |
 | Domain architecture | [`03-adr/`](03-adr/README.md) | Domain Architecture Decision Records (`ADR-001`…, three-digit) |
 | Security | [`security/`](security/README.md) | Security Decision Records (`SDR-NNNN`) |
+| Repository snapshots | [`RDR/`](RDR/README.md) | Repository Decision Records (`RDR-NNN`) — factual state snapshots at milestone boundaries |
 
 The two ADR series are distinct: `adr/` (`ADR-NNNN`) records repository- and documentation-governance
 decisions; `03-adr/` (`ADR-001`…) records Domain-layer architecture decisions. They never share a

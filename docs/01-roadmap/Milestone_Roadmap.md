@@ -9,7 +9,7 @@ them into named eras. Detailed, per-milestone scope is recorded in
 |---|---|---|
 | **Alpha** | Completed | Product foundation — application, deterministic build, mechanical verifier |
 | **Beta** | Completed | Domain Foundation — registry, query, command, aggregates, shared helpers |
-| **Gamma** | Upcoming | Domain Expansion — widen the operational aggregate/command surface |
+| **Gamma** | Completed | Domain Expansion — widened the operational aggregate/command surface (PR-5G–PR-5J) |
 | **Delta** | Upcoming | Domain Events & Policies — observable transitions and explicit cross-aggregate rules |
 | **Epsilon** | Upcoming | Workflow — explicit lifecycles over existing status values |
 | **Zeta** | Upcoming | Intelligence Layer — read-only analytical clients of the Domain |

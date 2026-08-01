@@ -27,11 +27,20 @@ The Domain layer established and made operational in thin, reversible slices:
 
 **Milestone Beta identifies Domain Foundation as completed.**
 
-## Milestone Gamma — **Upcoming**
+## Milestone Gamma — **Completed**
 **Theme:** Domain Expansion.
 
-Widen the operational aggregate/command surface across more of the business, one bounded area at a
-time, following the established aggregate → handler pattern (roadmap slices PR-5G … PR-5K).
+The operational aggregate/command surface widened from Employee alone into the Contract and Payroll
+areas, one bounded slice at a time, following the established aggregate → handler pattern:
+
+- **PR-5G** — The Gatekeeper — third aggregate boundary (`EmployeeLifecycleAggregate`).
+- **PR-5H** — The Arbiter — fourth aggregate boundary (`EmployeeCompensationAggregate`).
+- **PR-5I** — The Binder — first Contract boundary (`ContractDateAggregate`).
+- **PR-5J** — The Accountant — first Payroll boundary (`PayrollLifecycleAggregate`).
+
+At close: **6 aggregates, 6 commands, 1 query** on `main`. The next slice, **PR-5K — The Ledger**,
+remains Upcoming and is carried forward to future Domain expansion. The frozen repository state is
+recorded in [RDR-001](../RDR/RDR-001-gamma-repository-snapshot.md).
 
 ## Milestone Delta — **Upcoming**
 **Theme:** Domain Events & Policies.
