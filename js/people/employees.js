@@ -327,6 +327,73 @@ function openEmployeeEmploymentModal(id){
     }});
 }
 
+/* ============================================================
+   PR-5G — narrow Employee LIFECYCLE-TRANSITION command.
+   Applies a supported lifecycle state-machine transition over the existing
+   employmentStatus field (Active↔Resigned, Active↔Terminated) and nothing
+   else. It never touches salary, contact/bank data, job/department, schedule,
+   contracts, payroll, or finance. Reuses empById + persistEmployees + the
+   existing `history` audit style, and returns a typed command outcome. Atomic:
+   on a failed persist it reverts the status, updatedAt, and the audit entry.
+   The business authority is EmployeeLifecycleAggregate (PR-5G); this handler
+   keeps its own defense-in-depth guard against the same transition map and
+   remains the implementation authority.
+   ============================================================ */
+async function transitionEmployeeLifecycle(id, transition){
+  const e = empById(id);
+  if(!e) return { success:false, error:'EmployeeNotFound' };
+  transition = transition || {};
+  const to = transition.to;
+  const from = e.employmentStatus;
+  // Defense-in-depth: only supported transitions from the CURRENT state proceed.
+  const allowed = (typeof EMPLOYEE_LIFECYCLE_TRANSITIONS !== 'undefined' && EMPLOYEE_LIFECYCLE_TRANSITIONS[from]) || [];
+  if(!to || allowed.indexOf(to)===-1) return { success:false, error:'IllegalLifecycleTransition' };
+  const prevStatus = e.employmentStatus, prevUpdatedAt = e.updatedAt;
+  e.employmentStatus = to;
+  e.updatedAt = new Date().toISOString();
+  (e.history = e.history || []).push({ event:'lifecycle-transition', ts:e.updatedAt, note:'Lifecycle '+from+' → '+to });
+  const ok = await persistEmployees();
+  if(ok !== true){
+    // Atomic rollback — restore status, timestamp, and drop the audit entry.
+    e.employmentStatus = prevStatus;
+    e.history.pop();
+    e.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
+  }
+  return { success:true, data:e };
+}
+
+// Narrow lifecycle editor. Routes through the Domain command seam and never
+// calls transitionEmployeeLifecycle directly. It offers only the transitions
+// that are legal from the employee's current state.
+function openEmployeeLifecycleModal(id){
+  const e = empById(id); if(!e) return;
+  const from = e.employmentStatus;
+  const targets = (typeof EMPLOYEE_LIFECYCLE_TRANSITIONS !== 'undefined' && EMPLOYEE_LIFECYCLE_TRANSITIONS[from]) || [];
+  const body = targets.length
+    ? `<form id="empLifecycleForm">
+        <div class="field"><label>Current Status</label><input class="input" value="${escapeHtml(from||'—')}" disabled></div>
+        <div class="field"><label>Transition To</label><select class="input" name="to">${targets.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</select></div>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="empLifecycleCancel">Cancel</button>
+          <button type="submit" class="btn btn-accent">Apply Transition</button>
+        </div>
+      </form>`
+    : `<p class="dim">No lifecycle transitions are available from the current status (${escapeHtml(from||'—')}).</p>
+       <div class="modal-actions"><button type="button" class="btn" id="empLifecycleCancel">Close</button></div>`;
+  openModalHTML(`<h3>Employee Lifecycle</h3>`+body, {width:480, onMount:(root)=>{
+    root.querySelector('#empLifecycleCancel').addEventListener('click', closeModal);
+    const form = root.querySelector('#empLifecycleForm');
+    if(form) form.addEventListener('submit', async ev=>{
+      ev.preventDefault();
+      const fd = new FormData(ev.target);
+      const outcome = await Domain.command('employee.lifecycle.transition', id, fd.get('to'));
+      if(outcome && outcome.success){ closeModal(); toast('Lifecycle updated.'); render(); }
+      else { toast('Could not update lifecycle'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
+    });
+  }});
+}
+
 function renderEmployeeDetail(main){
   const e = empById(State.detailEmpId);
   if(!e){ main.innerHTML = emptyState('Employee not found','It may have been deleted.'); return; }
@@ -349,6 +416,7 @@ function renderEmployeeDetail(main){
         <button class="btn" id="backEmp">← Employees</button>
         <button class="btn" id="editContactD">Edit Contact</button>
         <button class="btn" id="editEmploymentD">Edit Employment</button>
+        <button class="btn" id="editLifecycleD">Lifecycle</button>
         <button class="btn" id="editEmpD">Edit</button>
         <button class="btn btn-accent" id="newCtForEmp">+ New Contract</button>
       </div>
@@ -440,6 +508,7 @@ function renderEmployeeDetail(main){
   document.getElementById('backEmp').addEventListener('click', ()=>hrNavTo('employees'));
   document.getElementById('editContactD').addEventListener('click', ()=>openEmployeeContactModal(e.id));
   document.getElementById('editEmploymentD').addEventListener('click', ()=>openEmployeeEmploymentModal(e.id));
+  document.getElementById('editLifecycleD').addEventListener('click', ()=>openEmployeeLifecycleModal(e.id));
   document.getElementById('editEmpD').addEventListener('click', ()=>openEmployeeModal(e.id));
   document.getElementById('newCtForEmp').addEventListener('click', ()=>openContractModal(null, e.id));
   main.querySelectorAll('[data-ct-detail]').forEach(b=>b.addEventListener('click', ()=>hrNavTo('contractDetail', {detailContractId:b.dataset.ctDetail})));
