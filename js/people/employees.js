@@ -641,10 +641,10 @@ function bindHRActions(main){
     else if(a==='cacc-deactivate') setCompanyAccountStatus(id, 'Inactive');
     else if(a==='cacc-archive') setCompanyAccountStatus(id, 'Archived');
     else if(a==='prow-detail') hrNavTo('payrollDetail',{detailPayrollId:id});
-    else if(a==='prow-review') { await setPayrollStatus(id,'Reviewed'); render(); }
-    else if(a==='prow-ready') { await setPayrollStatus(id,'Ready'); render(); }
-    else if(a==='prow-draft') { await setPayrollStatus(id,'Draft'); render(); }
-    else if(a==='prow-cancel') { if(confirmAction('Cancel this payroll row? It will not create a finance transaction.')){ await setPayrollStatus(id,'Cancelled'); render(); } }
+    else if(a==='prow-review') { await requestPayrollLifecycle(id,'Reviewed'); render(); }
+    else if(a==='prow-ready') { await requestPayrollLifecycle(id,'Ready'); render(); }
+    else if(a==='prow-draft') { await requestPayrollLifecycle(id,'Draft'); render(); }
+    else if(a==='prow-cancel') { if(confirmAction('Cancel this payroll row? It will not create a finance transaction.')){ await requestPayrollLifecycle(id,'Cancelled'); render(); } }
     else if(a==='prow-exec') { const pp=payrollPlanById(id); const t=pp&&payrollTxnOf(pp); if(t) focusTransactionInExecutionCenter(t.id); else { State.view='executioncenter'; render(); } }
     else if(a==='ot-view') openOvertimeBreakdown(id);
     else if(a==='ot-edit') openOvertimeModal(id);

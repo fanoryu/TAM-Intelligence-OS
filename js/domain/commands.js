@@ -30,6 +30,11 @@ const DOMAIN_COMMANDS = Object.freeze({
   // Contract date facts (startDate + durationMonths) only; endDate stays derived.
   // Uses the DEFAULT prepare/patch contract.
   'contract.dates.update': Object.freeze({ aggregate: 'Contract', boundary: 'ContractDateAggregate', handler: 'updateContractDates', transition: 'controlled update of Contract start date and duration (endDate remains derived) — OPERATIONAL via Domain.command(); business authority = ContractDateAggregate (PR-5I)' }),
+  // PR-5J — sixth OPERATIONAL command, first Payroll boundary. Narrow, pre-posting
+  // PayrollPlan lifecycle transition (Draft/Reviewed/Ready/Cancelled) over the stored
+  // status only; posting to Finance (→ Committed) stays out of scope. Uses the shared
+  // lifecycle contract (boundaryMethod/boundaryPayload = transition).
+  'payroll.lifecycle.transition': Object.freeze({ aggregate: 'PayrollPlan', boundary: 'PayrollLifecycleAggregate', boundaryMethod: 'transition', boundaryPayload: 'transition', handler: 'transitionPayrollLifecycle', transition: 'controlled pre-posting PayrollPlan lifecycle transition (Draft↔Reviewed, Draft/Reviewed→Ready, →Cancelled) — OPERATIONAL via Domain.command(); business authority = PayrollLifecycleAggregate (PR-5J); posting to Finance is out of scope' }),
   // Payroll
   'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
   // Finance
