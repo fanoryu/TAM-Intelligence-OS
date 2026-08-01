@@ -37,7 +37,8 @@ links forward if it is ever superseded.
 | [ADR-007](ADR-007-shared-aggregate-helpers.md) | Shared Aggregate Helpers | Accepted | PR-5F |
 | [ADR-008](ADR-008-Aggregate-Entry-Contract.md) | Aggregate Entry Contract | **Proposed** | PR-5G review ([ARCH-001](../02-architecture/Architecture_Evolution_Backlog.md#arch-001--aggregate-entry-contract)) |
 | [ADR-009](ADR-009-Employment-vs-Lifecycle-Responsibility.md) | Employment vs Lifecycle Responsibility | **Proposed** | PR-5G review ([ARCH-002](../02-architecture/Architecture_Evolution_Backlog.md#arch-002--employment-vs-lifecycle-responsibility)) |
+| [ADR-010](ADR-010-Compensation-Write-Authority.md) | Compensation Write Authority | **Proposed** | PR-5H review ([ARCH-003](../02-architecture/Architecture_Evolution_Backlog.md#arch-003--compensation-write-authority)) |
 
-**Proposed** ADRs (ADR-008, ADR-009) record open questions from the PR-5G Atlas Review. They are not
-Accepted, record no decision, and authorize no implementation; see the
+**Proposed** ADRs (ADR-008, ADR-009, ADR-010) record open questions from the PR-5G and PR-5H Atlas
+Reviews. They are not Accepted, record no decision, and authorize no implementation; see the
 [Architecture Evolution Backlog](../02-architecture/Architecture_Evolution_Backlog.md).

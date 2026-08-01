@@ -23,6 +23,9 @@ const DOMAIN_COMMANDS = Object.freeze({
   // PR-5G — third OPERATIONAL command routed through Domain.command().
   // Narrow lifecycle state machine over employmentStatus (Active/Resigned/Terminated).
   'employee.lifecycle.transition': Object.freeze({ aggregate: 'Employee', boundary: 'EmployeeLifecycleAggregate', boundaryMethod: 'transition', boundaryPayload: 'transition', handler: 'transitionEmployeeLifecycle', transition: 'controlled Employee lifecycle transition (Active↔Resigned, Active↔Terminated) — OPERATIONAL via Domain.command(); business authority = EmployeeLifecycleAggregate (PR-5G)' }),
+  // PR-5H — fourth OPERATIONAL command routed through Domain.command().
+  // Narrow: monthly base salary only. Uses the DEFAULT prepare/patch contract.
+  'employee.compensation.update': Object.freeze({ aggregate: 'Employee', boundary: 'EmployeeCompensationAggregate', handler: 'updateEmployeeCompensation', transition: 'controlled update of Employee monthly base compensation — OPERATIONAL via Domain.command(); business authority = EmployeeCompensationAggregate (PR-5H)' }),
   // Payroll
   'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
   // Finance

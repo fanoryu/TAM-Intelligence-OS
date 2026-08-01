@@ -25,6 +25,7 @@ hold open, not a problem it is ignoring.
 |---|---|---|---|
 | [ARCH-001](#arch-001--aggregate-entry-contract) | Aggregate Entry Contract | Planned | [ADR-008](../03-adr/ADR-008-Aggregate-Entry-Contract.md) (Proposed) |
 | [ARCH-002](#arch-002--employment-vs-lifecycle-responsibility) | Employment vs Lifecycle Responsibility | Planned | [ADR-009](../03-adr/ADR-009-Employment-vs-Lifecycle-Responsibility.md) (Proposed) |
+| [ARCH-003](#arch-003--compensation-write-authority) | Compensation Write Authority | Planned | [ADR-010](../03-adr/ADR-010-Compensation-Write-Authority.md) (Proposed) |
 
 ---
 
@@ -91,3 +92,36 @@ Clarify the authoritative boundary for lifecycle status changes.
 - Preserve existing runtime until a separately authorized decision is implemented.
 
 Evaluated in [ADR-009 (Proposed)](../03-adr/ADR-009-Employment-vs-Lifecycle-Responsibility.md).
+
+---
+
+## ARCH-003 — Compensation Write Authority
+
+**Status:** Planned
+
+### Context
+PR-5H introduced `EmployeeCompensationAggregate` as the controlled Domain path for `monthlyBaseSalary`
+updates, via `employee.compensation.update`. The legacy full Employee editor (`openEmployeeModal`) can
+still write `monthlyBaseSalary` directly, outside the aggregate gate. Both paths are correct and
+intentional as shipped; this item records the open question of which one is authoritative.
+
+### Objective
+Determine the authoritative write path for Employee compensation.
+
+### Questions to evaluate
+- Should `monthlyBaseSalary` be writable **only** through `employee.compensation.update`?
+- Should the legacy Employee editor stop writing salary directly?
+- How should any migration occur without runtime regression?
+- What business meaning distinguishes `null` from `0` for `monthlyBaseSalary`?
+- Should compensation history eventually include the previous and new values (it currently records
+  neither)?
+
+### Constraints
+- No runtime change.
+- No UI migration.
+- No implementation authorization.
+- Preserve existing behavior.
+
+**ARCH-003 is Planned, non-blocking, not a defect, and not implementation authorization.**
+
+Evaluated in [ADR-010 (Proposed)](../03-adr/ADR-010-Compensation-Write-Authority.md).
