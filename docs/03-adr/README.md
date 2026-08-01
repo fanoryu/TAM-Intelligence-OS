@@ -1,9 +1,10 @@
 # 03 — Domain Architecture Decision Records
 
-This register records the **Domain-layer** architecture decisions established during PR-5A through
-PR-5F. Each ADR captures one decision — its context, the decision itself, its consequences, and its
-status. ADRs are **immutable once Accepted**: a later decision supersedes an ADR with a new record
-that links back; it never rewrites history.
+This register records the **Domain-layer** architecture decisions. Each ADR captures one decision — its
+context, the decision itself, its consequences, and its status. ADRs are **immutable once Accepted**: a
+later decision supersedes an ADR with a new record that links back; it never rewrites history. An ADR
+may also be **Proposed** — an open question under evaluation that records no decision and authorizes no
+implementation.
 
 ## Two registers, one convention
 
@@ -34,3 +35,9 @@ links forward if it is ever superseded.
 | [ADR-005](ADR-005-ai-is-a-domain-client.md) | AI Is a Domain Client | Accepted | DOC-001 |
 | [ADR-006](ADR-006-engineering-constitution.md) | Engineering Constitution | Accepted | DOC-001 |
 | [ADR-007](ADR-007-shared-aggregate-helpers.md) | Shared Aggregate Helpers | Accepted | PR-5F |
+| [ADR-008](ADR-008-Aggregate-Entry-Contract.md) | Aggregate Entry Contract | **Proposed** | PR-5G review ([ARCH-001](../02-architecture/Architecture_Evolution_Backlog.md#arch-001--aggregate-entry-contract)) |
+| [ADR-009](ADR-009-Employment-vs-Lifecycle-Responsibility.md) | Employment vs Lifecycle Responsibility | **Proposed** | PR-5G review ([ARCH-002](../02-architecture/Architecture_Evolution_Backlog.md#arch-002--employment-vs-lifecycle-responsibility)) |
+
+**Proposed** ADRs (ADR-008, ADR-009) record open questions from the PR-5G Atlas Review. They are not
+Accepted, record no decision, and authorize no implementation; see the
+[Architecture Evolution Backlog](../02-architecture/Architecture_Evolution_Backlog.md).

@@ -66,14 +66,19 @@ const Domain = (function () {
       return fn.apply(null, Array.prototype.slice.call(arguments, 1));
     },
 
-    // Operational command routing (PR-5C.1 + PR-5D + PR-5E). Resolves the registered
-    // handler and calls it EXACTLY ONCE, returning its typed outcome unchanged.
-    // PR-5D: if the command declares a `boundary` aggregate, that aggregate is
-    // the BUSINESS AUTHORITY — it runs first and either returns a typed business
-    // failure (the handler is then NOT called) or the sanitized input passed on
-    // to the handler. The handler remains the IMPLEMENTATION AUTHORITY (its own
-    // validation, mutation, persistence, and audit). Throws only on an unknown
-    // command / missing handler / missing aggregate (programmer errors).
+    // Operational command routing (PR-5C.1 + PR-5D + PR-5E + PR-5G). Resolves the
+    // registered handler and calls it EXACTLY ONCE, returning its typed outcome
+    // unchanged. PR-5D: if the command declares a `boundary` aggregate, that
+    // aggregate is the BUSINESS AUTHORITY — it runs first and either returns a
+    // typed business failure (the handler is then NOT called) or the sanitized
+    // input passed on to the handler. The handler remains the IMPLEMENTATION
+    // AUTHORITY (its own validation, mutation, persistence, and audit).
+    //
+    // PR-5G: the aggregate's decision method and its sanitized-payload key are
+    // declared per command (`boundaryMethod` / `boundaryPayload`), defaulting to
+    // `prepare` / `patch` so the existing contact and employment commands route
+    // exactly as before. Throws only on an unknown command / missing handler /
+    // missing aggregate (programmer errors).
     command: function (name) {
       var c = DOMAIN_COMMANDS[name];
       if (!c) throw new Error('Unknown domain command: ' + name);
@@ -83,12 +88,13 @@ const Domain = (function () {
       if (c.boundary) {
         // Aggregates are top-level const objects exposed on the global object.
         var agg = (typeof window !== 'undefined') ? window[c.boundary] : null;
-        if (!agg || typeof agg.prepare !== 'function') throw new Error('Aggregate not found: ' + c.boundary);
-        var decision = agg.prepare(args[0], args[1]);   // business authority decides
+        var method = c.boundaryMethod || 'prepare';
+        if (!agg || typeof agg[method] !== 'function') throw new Error('Aggregate not found: ' + c.boundary);
+        var decision = agg[method](args[0], args[1]);   // business authority decides
         if (!decision || decision.ok !== true) {
           return { success: false, error: (decision && decision.error) || 'InvalidCommand' };
         }
-        args = [args[0], decision.patch];   // sanitized command input
+        args = [args[0], decision[c.boundaryPayload || 'patch']];   // sanitized command input
       }
       return fn.apply(null, args);   // implementation authority mutates
     }

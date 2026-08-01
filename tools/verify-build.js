@@ -322,10 +322,11 @@ check(dist.includes("Domain.query('employee.filtered')"), 'migrated query call p
 check(/'employee\.filtered':\s*Object\.freeze\(\{[^}]*handler:\s*'employeesFiltered'/.test(qrySrc), 'employee.filtered query registered to handler employeesFiltered');
 // Exactly ONE command migrated (distinct routed command ids), and it is the approved contact command.
 const migratedCmdIds = Array.from(new Set((srcJs.match(/Domain\.command\('([^']+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1])));
-const EXPECTED_OP_CMDS = ['employee.contact.update','employee.employment.update'];
-check(migratedCmdIds.length === 2 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly two command ids routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
+const EXPECTED_OP_CMDS = ['employee.contact.update','employee.employment.update','employee.lifecycle.transition'];
+check(migratedCmdIds.length === 3 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly three command ids routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
 check(dist.includes("Domain.command('employee.contact.update'"), 'migrated command call present in dist');
 check(dist.includes("Domain.command('employee.employment.update'"), 'employment command call present in dist');
+check(dist.includes("Domain.command('employee.lifecycle.transition'"), 'lifecycle command call present in dist');
 check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateEmployeeContact'/.test(cmdSrc), 'employee.contact.update registered to handler updateEmployeeContact');
 check(/'employee\.employment\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateEmployeeEmployment'/.test(cmdSrc), 'employee.employment.update registered to handler updateEmployeeEmployment');
 // The facade command() calls the handler exactly once (a single fn.apply, no loop).
@@ -348,7 +349,7 @@ check(/success:\s*true/.test(ucBody) && /success:\s*false/.test(ucBody), 'contac
 // the empForm submit handler exists and Domain.command is used exactly once in
 // this module (the contact command only) — the monolithic save is not routed.
 check(/querySelector\('#empForm'\)\.addEventListener\('submit'/.test(empSrc), 'full employee save (empForm) submit handler still present');
-check((empSrc.match(/Domain\.command\(/g)||[]).length === 2, 'exactly two Domain.command() call sites in employees.js (contact + employment; monolithic save stays direct)');
+check((empSrc.match(/Domain\.command\(/g)||[]).length === 3, 'exactly three Domain.command() call sites in employees.js (contact + employment + lifecycle; monolithic save stays direct)');
 
 // PR-5D "The Steward" — first aggregate boundary (EmployeeContactAggregate).
 console.log('== EMPLOYEE CONTACT AGGREGATE (PR-5D — business authority) ==');
@@ -360,12 +361,13 @@ const aggSrc2 = read(aggPath);
 check(/const EmployeeContactAggregate = Object\.freeze\(/.test(aggSrc2), 'EmployeeContactAggregate is a frozen object');
 check(/prepare:\s*function/.test(aggSrc2), 'aggregate exposes prepare()');
 // Exactly one operational aggregate: only one *Aggregate object with a prepare() exists in js/domain.
-const aggregateDefs = (srcJs.match(/const \w*Aggregate = Object\.freeze\(\{\s*[\s\S]*?prepare:\s*function/g)||[]).length;
-check(aggregateDefs === 2, 'exactly two operational aggregates defined (found '+aggregateDefs+')');
+const aggregateDefs = (srcJs.match(/const \w*Aggregate = Object\.freeze\(\{\s*[\s\S]*?(?:prepare|transition):\s*function/g)||[]).length;
+check(aggregateDefs === 3, 'exactly three operational aggregates defined (found '+aggregateDefs+')');
 // The command registry binds the aggregate as the boundary for the one command.
 check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeContactAggregate'/.test(cmdSrc), 'employee.contact.update declares boundary EmployeeContactAggregate');
 // The facade routes a bounded command through the aggregate before the handler.
-check(/c\.boundary/.test(facSrc) && /agg\.prepare\(/.test(facSrc), 'Domain.command routes bounded commands through the aggregate before the handler');
+check(/c\.boundary/.test(facSrc) && /agg\[method\]\(/.test(facSrc), 'Domain.command routes bounded commands through the aggregate before the handler');
+check(/c\.boundaryMethod \|\| 'prepare'/.test(facSrc) && /c\.boundaryPayload \|\| 'patch'/.test(facSrc), 'facade defaults boundary method/payload to prepare/patch (existing routing unchanged)');
 // Aggregate PURITY — it must have no side effects. Assert its CODE (comments
 // stripped) contains none of the forbidden operations. It reads existence via
 // empById only.
@@ -437,6 +439,63 @@ check(!/logActivity\(/.test(ueBody), 'employment handler adds no duplicate audit
 // Aggregate failure never invokes the handler: the facade returns early on !decision.ok.
 check(/decision\.ok !== true/.test(facSrc) && /return \{ success: false, error:/.test(facSrc), 'facade returns a typed failure without invoking the handler when the aggregate rejects');
 
+// PR-5G "The Gatekeeper" — third aggregate boundary (EmployeeLifecycleAggregate).
+console.log('== EMPLOYEE LIFECYCLE AGGREGATE (PR-5G — business authority) ==');
+const lifeAggPath = path.join(root,'js','domain','employee-lifecycle-aggregate.js');
+check(fs.existsSync(lifeAggPath), 'aggregate module present: js/domain/employee-lifecycle-aggregate.js');
+check(jsFiles.indexOf('domain/employee-lifecycle-aggregate.js') !== -1, 'module-order.js includes domain/employee-lifecycle-aggregate.js');
+check(indexHtml.includes('<script src="js/domain/employee-lifecycle-aggregate.js"></script>'), 'index.html includes domain/employee-lifecycle-aggregate.js');
+// Load order: the lifecycle aggregate loads before the facade and after the helpers.
+check(jsFiles.indexOf('domain/employee-lifecycle-aggregate.js') < jsFiles.indexOf('domain/domain-layer.js') &&
+      jsFiles.indexOf('domain/aggregate-helpers.js') < jsFiles.indexOf('domain/employee-lifecycle-aggregate.js'), 'lifecycle aggregate loads after helpers and before domain-layer.js');
+const lifeAggSrc = read(lifeAggPath);
+check(/const EmployeeLifecycleAggregate = Object\.freeze\(/.test(lifeAggSrc), 'EmployeeLifecycleAggregate is a frozen object');
+check(/transition:\s*function/.test(lifeAggSrc), 'lifecycle aggregate exposes transition()');
+// The command registry binds the aggregate as the boundary and declares its method/payload.
+check(/'employee\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeLifecycleAggregate'/.test(cmdSrc), 'employee.lifecycle.transition declares boundary EmployeeLifecycleAggregate');
+check(/'employee\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*boundaryMethod:\s*'transition'/.test(cmdSrc) && /'employee\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*boundaryPayload:\s*'transition'/.test(cmdSrc), 'employee.lifecycle.transition declares boundaryMethod/boundaryPayload = transition');
+check(/'employee\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*handler:\s*'transitionEmployeeLifecycle'/.test(cmdSrc), 'employee.lifecycle.transition registered to handler transitionEmployeeLifecycle');
+// Only the four supported transitions are permitted; no extra lifecycle states.
+check(/'Active':\s*\['Resigned',\s*'Terminated'\]/.test(lifeAggSrc) && /'Resigned':\s*\['Active'\]/.test(lifeAggSrc) && /'Terminated':\s*\['Active'\]/.test(lifeAggSrc), 'lifecycle transition map is exactly the four supported transitions');
+check(/const EMPLOYEE_LIFECYCLE_STATES = \['Active', 'Resigned', 'Terminated'\]/.test(lifeAggSrc), 'lifecycle states are exactly [Active, Resigned, Terminated] (no new states)');
+// Lifecycle aggregate PURITY — no side effects (comments stripped).
+const lifeAggCode = lifeAggSrc.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+[['State mutation', /State\s*[.[]/],
+ ['persistEmployees', /persistEmployees\s*\(/],
+ ['Employee mutation', /\be\.\w+\s*=/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/]
+].forEach(([label,re])=>check(!re.test(lifeAggCode), 'lifecycle aggregate never performs '+label));
+// It uses the shared existence helper (PR-5F) rather than re-inlining empById.
+check(/employeeExists\(/.test(lifeAggSrc), 'lifecycle aggregate uses the shared employeeExists helper');
+// Aggregate returns a sanitized transition on success and typed failures otherwise.
+check(/return \{ ok: true, transition:/.test(lifeAggSrc), 'lifecycle aggregate returns only a sanitized transition on success');
+['EmployeeNotFound','InvalidLifecycleState','IllegalLifecycleTransition'].forEach((err)=>
+  check(lifeAggSrc.includes("error: '"+err+"'"), 'lifecycle aggregate returns typed business failure: '+err));
+// Handler owns mutation/persistence/history/rollback (implementation authority).
+const tlStart = empSrc.indexOf('async function transitionEmployeeLifecycle(');
+check(tlStart !== -1, 'transitionEmployeeLifecycle handler present');
+const tlRest = tlStart!==-1 ? empSrc.slice(tlStart+1) : '';
+const tlNext = tlRest.search(/\n(async function|function) /);
+const tlBody = tlNext>=0 ? tlRest.slice(0, tlNext) : tlRest;
+// Lifecycle changes ONLY employmentStatus (+ updatedAt/history); every other field is forbidden.
+['monthlyBaseSalary','jobTitle','department','joinDate','contractType','email','phone','notes','bankName','bankAccount','bankAccountNumber','bankAccountHolder','active','fullName','employeeId','createdAt'].forEach((f)=>
+  check(!tlBody.includes(f), 'lifecycle handler does not touch forbidden field: '+f));
+check((tlBody.match(/persistEmployees\(/g)||[]).length === 1, 'lifecycle handler persists exactly once (persistEmployees)');
+check(/e\.employmentStatus = to/.test(tlBody), 'lifecycle handler performs the status mutation');
+check(/e\.updatedAt = new Date/.test(tlBody), 'lifecycle handler updates updatedAt');
+check(/event:'lifecycle-transition'/.test(tlBody), 'lifecycle handler appends exactly one lifecycle-transition history entry');
+check(/e\.employmentStatus = prevStatus/.test(tlBody) && /e\.history\.pop\(\)/.test(tlBody) && /e\.updatedAt = prevUpdatedAt/.test(tlBody), 'lifecycle handler performs full rollback on persist failure');
+check(/error:'PersistFailed'/.test(tlBody), 'lifecycle handler returns PersistFailed on persistence failure');
+check(/error:'IllegalLifecycleTransition'/.test(tlBody), 'lifecycle handler performs defense-in-depth transition validation');
+check(!/logActivity\(/.test(tlBody), 'lifecycle handler adds no duplicate audit call (history-only)');
+check(/success:\s*true/.test(tlBody) && /success:\s*false/.test(tlBody), 'lifecycle handler returns a typed success/failure outcome');
+// The existing contact and employment aggregates are untouched by PR-5G.
+check(/const EmployeeContactAggregate = Object\.freeze\(/.test(aggSrc2) && /const EmployeeEmploymentAggregate = Object\.freeze\(/.test(empAggSrc), 'contact and employment aggregates remain operational');
+
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
 const helpPath = path.join(root,'js','domain','aggregate-helpers.js');
@@ -466,9 +525,9 @@ check(/employeeExists\(/.test(aggSrc2) && /normalizeAllowedFields\(/.test(aggSrc
 check(/employeeExists\(/.test(empAggSrc) && /normalizeAllowedFields\(/.test(empAggSrc) && /validateEnum\(/.test(empAggSrc), 'employment aggregate uses the shared helpers');
 // Operational surface is UNCHANGED by this refactor: still 2 aggregates, 2 commands, 1 query
 // (asserted above via aggregateDefs===2, migratedCmdIds.length===2, migratedQueryIds.length===1).
-check(aggregateDefs === 2, 'PR-5F: operational aggregate count remains exactly two');
-check(migratedCmdIds.length === 2, 'PR-5F: operational command count remains exactly two');
-check(migratedQueryIds.length === 1, 'PR-5F: operational query count remains exactly one');
+check(aggregateDefs === 3, 'operational aggregate count remains exactly three');
+check(migratedCmdIds.length === 3, 'operational command count remains exactly three');
+check(migratedQueryIds.length === 1, 'operational query count remains exactly one');
 
 // Extract command/query identifiers and their handler names.
 function idKeys(src){ return (src.match(/^\s*'([a-z][a-zA-Z]*\.[a-zA-Z]+)':/gm)||[]).map(s=>s.match(/'([^']+)'/)[1]); }

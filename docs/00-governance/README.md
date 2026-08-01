@@ -6,8 +6,8 @@ only when an engineering rule itself changes.
 
 | Document | Read it for |
 |---|---|
-| [Engineering_Constitution.md](Engineering_Constitution.md) | The Eleven Engineering Laws and the Product Motto |
-| [Core_Values.md](Core_Values.md) | The four values that resolve judgement calls |
+| [Engineering_Constitution.md](Engineering_Constitution.md) | The Twelve Engineering Laws and the Product Motto |
+| [Core_Values.md](Core_Values.md) | The five values that resolve judgement calls |
 | [Engineering_Principles.md](Engineering_Principles.md) | The operating principles that turn values into practice |
 | [Project_Governance.md](Project_Governance.md) | The Governance Pyramid — how a decision travels from vision to release |
 

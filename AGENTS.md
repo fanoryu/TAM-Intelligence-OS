@@ -16,12 +16,16 @@ bypass the Domain to reach state directly.
 Read these, in order, before touching code. For a given task, read the ADRs relevant to it — not all
 of them, but every one your change touches.
 
-1. **[Engineering Constitution](docs/00-governance/Engineering_Constitution.md)** — the Eleven
-   Engineering Laws and the Product Motto.
+1. **[Engineering Constitution](docs/00-governance/Engineering_Constitution.md)** — the Engineering
+   Laws and the Product Motto.
 2. **[Core Values](docs/00-governance/Core_Values.md)** — how judgement calls are resolved.
 3. **[Roadmap](docs/01-roadmap/README.md)** — where the project is going and what is authorized.
 4. **Relevant [Domain ADRs](docs/03-adr/README.md)** — the reasoning behind the architecture your task
-   touches (and, for governance/process, the [repository ADRs](docs/adr/README.md)).
+   touches (and, for governance/process, the [repository ADRs](docs/adr/README.md)). Read the
+   **Accepted** ADRs your change touches, and **inspect** any **Proposed** ADR or **Planned**
+   [Architecture Evolution Backlog](docs/02-architecture/Architecture_Evolution_Backlog.md) item in the
+   same area — a Proposed ADR or Planned ARCH item is context to respect, **never** implementation
+   authorization.
 5. **The Standards for your task** —
    [SPR](docs/04-standards/SPR_Standard.md) ·
    [PR](docs/04-standards/PR_Standard.md) ·
@@ -40,7 +44,10 @@ governs.**
 Every engineering AI working here **must**:
 
 - **Read the Engineering Constitution, Core Values, and Roadmap** before implementing.
-- **Read the ADRs relevant to the task** and honor the decisions they record.
+- **Read the ADRs relevant to the task** and honor the decisions the **Accepted** ones record.
+- **Inspect relevant Proposed ADRs and Planned Architecture Backlog items** for context, and **never
+  treat a Proposed ADR or a Planned ARCH item as implementation authorization** — only a Sprint
+  Assignment (typically after an ADR is Accepted) authorizes the corresponding work.
 - **Follow the SPR Standard** — implement only what a Sprint Assignment authorizes, within its named
   scope, and stop and report if any gate fails.
 - **Follow the PR Standard** — one purpose, one feature commit, draft until every pre-review gate is
