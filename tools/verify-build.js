@@ -322,11 +322,12 @@ check(dist.includes("Domain.query('employee.filtered')"), 'migrated query call p
 check(/'employee\.filtered':\s*Object\.freeze\(\{[^}]*handler:\s*'employeesFiltered'/.test(qrySrc), 'employee.filtered query registered to handler employeesFiltered');
 // Exactly ONE command migrated (distinct routed command ids), and it is the approved contact command.
 const migratedCmdIds = Array.from(new Set((srcJs.match(/Domain\.command\('([^']+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1])));
-const EXPECTED_OP_CMDS = ['employee.contact.update','employee.employment.update','employee.lifecycle.transition'];
-check(migratedCmdIds.length === 3 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly three command ids routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
+const EXPECTED_OP_CMDS = ['employee.contact.update','employee.employment.update','employee.lifecycle.transition','employee.compensation.update'];
+check(migratedCmdIds.length === 4 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly four command ids routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
 check(dist.includes("Domain.command('employee.contact.update'"), 'migrated command call present in dist');
 check(dist.includes("Domain.command('employee.employment.update'"), 'employment command call present in dist');
 check(dist.includes("Domain.command('employee.lifecycle.transition'"), 'lifecycle command call present in dist');
+check(dist.includes("Domain.command('employee.compensation.update'"), 'compensation command call present in dist');
 check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateEmployeeContact'/.test(cmdSrc), 'employee.contact.update registered to handler updateEmployeeContact');
 check(/'employee\.employment\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateEmployeeEmployment'/.test(cmdSrc), 'employee.employment.update registered to handler updateEmployeeEmployment');
 // The facade command() calls the handler exactly once (a single fn.apply, no loop).
@@ -349,7 +350,7 @@ check(/success:\s*true/.test(ucBody) && /success:\s*false/.test(ucBody), 'contac
 // the empForm submit handler exists and Domain.command is used exactly once in
 // this module (the contact command only) — the monolithic save is not routed.
 check(/querySelector\('#empForm'\)\.addEventListener\('submit'/.test(empSrc), 'full employee save (empForm) submit handler still present');
-check((empSrc.match(/Domain\.command\(/g)||[]).length === 3, 'exactly three Domain.command() call sites in employees.js (contact + employment + lifecycle; monolithic save stays direct)');
+check((empSrc.match(/Domain\.command\(/g)||[]).length === 4, 'exactly four Domain.command() call sites in employees.js (contact + employment + lifecycle + compensation; monolithic save stays direct)');
 
 // PR-5D "The Steward" — first aggregate boundary (EmployeeContactAggregate).
 console.log('== EMPLOYEE CONTACT AGGREGATE (PR-5D — business authority) ==');
@@ -362,7 +363,7 @@ check(/const EmployeeContactAggregate = Object\.freeze\(/.test(aggSrc2), 'Employ
 check(/prepare:\s*function/.test(aggSrc2), 'aggregate exposes prepare()');
 // Exactly one operational aggregate: only one *Aggregate object with a prepare() exists in js/domain.
 const aggregateDefs = (srcJs.match(/const \w*Aggregate = Object\.freeze\(\{\s*[\s\S]*?(?:prepare|transition):\s*function/g)||[]).length;
-check(aggregateDefs === 3, 'exactly three operational aggregates defined (found '+aggregateDefs+')');
+check(aggregateDefs === 4, 'exactly four operational aggregates defined (found '+aggregateDefs+')');
 // The command registry binds the aggregate as the boundary for the one command.
 check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeContactAggregate'/.test(cmdSrc), 'employee.contact.update declares boundary EmployeeContactAggregate');
 // The facade routes a bounded command through the aggregate before the handler.
@@ -496,6 +497,70 @@ check(/success:\s*true/.test(tlBody) && /success:\s*false/.test(tlBody), 'lifecy
 // The existing contact and employment aggregates are untouched by PR-5G.
 check(/const EmployeeContactAggregate = Object\.freeze\(/.test(aggSrc2) && /const EmployeeEmploymentAggregate = Object\.freeze\(/.test(empAggSrc), 'contact and employment aggregates remain operational');
 
+// PR-5H "The Arbiter" — fourth aggregate boundary (EmployeeCompensationAggregate).
+console.log('== EMPLOYEE COMPENSATION AGGREGATE (PR-5H — business authority) ==');
+const compAggPath = path.join(root,'js','domain','employee-compensation-aggregate.js');
+check(fs.existsSync(compAggPath), 'aggregate module present: js/domain/employee-compensation-aggregate.js');
+check(jsFiles.indexOf('domain/employee-compensation-aggregate.js') !== -1, 'module-order.js includes domain/employee-compensation-aggregate.js');
+check(indexHtml.includes('<script src="js/domain/employee-compensation-aggregate.js"></script>'), 'index.html includes domain/employee-compensation-aggregate.js');
+// Load order: after helpers, before the facade.
+check(jsFiles.indexOf('domain/aggregate-helpers.js') < jsFiles.indexOf('domain/employee-compensation-aggregate.js') &&
+      jsFiles.indexOf('domain/employee-compensation-aggregate.js') < jsFiles.indexOf('domain/domain-layer.js'), 'compensation aggregate loads after helpers and before domain-layer.js');
+const compAggSrc = read(compAggPath);
+check(/const EmployeeCompensationAggregate = Object\.freeze\(/.test(compAggSrc), 'EmployeeCompensationAggregate is a frozen object');
+check(/prepare:\s*function/.test(compAggSrc), 'compensation aggregate exposes prepare() (default entry contract)');
+// Command registration + DEFAULT prepare/patch contract (no boundaryMethod/boundaryPayload).
+check(/'employee\.compensation\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeCompensationAggregate'/.test(cmdSrc), 'employee.compensation.update declares boundary EmployeeCompensationAggregate');
+check(/'employee\.compensation\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateEmployeeCompensation'/.test(cmdSrc), 'employee.compensation.update registered to handler updateEmployeeCompensation');
+const compCmdEntry = (cmdSrc.match(/'employee\.compensation\.update':\s*Object\.freeze\(\{[^}]*\}\)/)||[''])[0];
+check(compCmdEntry !== '' && !/boundaryMethod/.test(compCmdEntry) && !/boundaryPayload/.test(compCmdEntry), 'compensation command uses the DEFAULT prepare/patch contract (no boundaryMethod/boundaryPayload)');
+// Domain routing (domain-layer.js) is UNCHANGED by PR-5H.
+check(!/employee\.compensation|EmployeeCompensation/.test(facSrc), 'domain-layer.js is not modified for the compensation command');
+// Compensation allowlist is exactly [monthlyBaseSalary].
+check(/const EMPLOYEE_COMPENSATION_FIELDS = \['monthlyBaseSalary'\]/.test(empSrc), 'compensation allowlist is exactly [monthlyBaseSalary]');
+// Compensation aggregate PURITY — no side effects (comments stripped).
+const compAggCode = compAggSrc.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+[['State mutation', /State\s*[.[]/],
+ ['persistEmployees', /persistEmployees\s*\(/],
+ ['Employee mutation', /\be\.\w+\s*=/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(/],
+ ['toast', /\btoast\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/]
+].forEach(([label,re])=>check(!re.test(compAggCode), 'compensation aggregate never performs '+label));
+// Uses the shared existence helper.
+check(/employeeExists\(/.test(compAggSrc), 'compensation aggregate uses the shared employeeExists helper');
+// Returns a sanitized {monthlyBaseSalary} patch on success and typed failures otherwise.
+check(/return \{ ok: true, patch: \{ monthlyBaseSalary: value \} \}/.test(compAggSrc), 'compensation aggregate returns only a sanitized { monthlyBaseSalary } patch on success');
+['EmployeeNotFound','NoCompensationFieldsProvided','InvalidMonthlyBaseSalary'].forEach((err)=>
+  check(compAggSrc.includes("error: '"+err+"'"), 'compensation aggregate returns typed business failure: '+err));
+// Handler owns mutation/updatedAt/history/persistence/rollback (implementation authority).
+const ucoStart = empSrc.indexOf('async function updateEmployeeCompensation(');
+check(ucoStart !== -1, 'updateEmployeeCompensation handler present');
+const ucoRest = ucoStart!==-1 ? empSrc.slice(ucoStart+1) : '';
+const ucoNext = ucoRest.search(/\n(async function|function) /);
+const ucoBody = ucoNext>=0 ? ucoRest.slice(0, ucoNext) : ucoRest;
+// Compensation changes ONLY monthlyBaseSalary (+ updatedAt/history); every other field forbidden.
+['employmentStatus','jobTitle','department','joinDate','contractType','email','phone','notes','bankName','bankAccount','bankAccountNumber','bankAccountHolder','active','fullName','employeeId','createdAt'].forEach((f)=>
+  check(!ucoBody.includes(f), 'compensation handler does not touch forbidden field: '+f));
+check((ucoBody.match(/persistEmployees\(/g)||[]).length === 1, 'compensation handler persists exactly once (persistEmployees)');
+check(/e\.monthlyBaseSalary = value/.test(ucoBody), 'compensation handler performs the monthlyBaseSalary mutation');
+check(/e\.updatedAt = new Date/.test(ucoBody), 'compensation handler updates updatedAt');
+check(/event:'compensation-edited'/.test(ucoBody), 'compensation handler appends exactly one compensation-edited history entry');
+check(/e\.monthlyBaseSalary = before/.test(ucoBody) && /e\.history\.pop\(\)/.test(ucoBody) && /e\.updatedAt = prevUpdatedAt/.test(ucoBody), 'compensation handler performs full rollback on persist failure');
+check(/error:'PersistFailed'/.test(ucoBody), 'compensation handler returns PersistFailed on persistence failure');
+check(/error:'InvalidMonthlyBaseSalary'/.test(ucoBody), 'compensation handler performs defense-in-depth value validation');
+check(!/logActivity\(/.test(ucoBody), 'compensation handler adds no duplicate audit call (history-only)');
+check(/success:\s*true/.test(ucoBody) && /success:\s*false/.test(ucoBody), 'compensation handler returns a typed success/failure outcome');
+// The history note must NOT record the salary value (no standard requires it).
+check(/note:'Monthly base salary updated'/.test(ucoBody), 'compensation history note does not record the salary value');
+// Existing aggregates remain operational and untouched by PR-5H.
+check(/const EmployeeLifecycleAggregate = Object\.freeze\(/.test(lifeAggSrc), 'lifecycle aggregate remains operational');
+// Architecture backlog / Proposed ADRs remain untouched (governance, not code — checked as docs).
+check(/\*\*Status:\*\* Planned/.test(read(path.join(root,'docs','02-architecture','Architecture_Evolution_Backlog.md'))), 'ARCH backlog items remain Planned (not implemented here)');
+
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
 const helpPath = path.join(root,'js','domain','aggregate-helpers.js');
@@ -525,8 +590,8 @@ check(/employeeExists\(/.test(aggSrc2) && /normalizeAllowedFields\(/.test(aggSrc
 check(/employeeExists\(/.test(empAggSrc) && /normalizeAllowedFields\(/.test(empAggSrc) && /validateEnum\(/.test(empAggSrc), 'employment aggregate uses the shared helpers');
 // Operational surface is UNCHANGED by this refactor: still 2 aggregates, 2 commands, 1 query
 // (asserted above via aggregateDefs===2, migratedCmdIds.length===2, migratedQueryIds.length===1).
-check(aggregateDefs === 3, 'operational aggregate count remains exactly three');
-check(migratedCmdIds.length === 3, 'operational command count remains exactly three');
+check(aggregateDefs === 4, 'operational aggregate count remains exactly four');
+check(migratedCmdIds.length === 4, 'operational command count remains exactly four');
 check(migratedQueryIds.length === 1, 'operational query count remains exactly one');
 
 // Extract command/query identifiers and their handler names.

@@ -394,6 +394,72 @@ function openEmployeeLifecycleModal(id){
   }});
 }
 
+/* ============================================================
+   PR-5H — narrow Employee COMPENSATION-UPDATE command.
+   Mutates ONLY monthlyBaseSalary. It never touches contact, employment,
+   lifecycle, bank, schedule, contract, payroll, finance, overtime, or
+   supplemental data, and it performs no payroll recalculation. Reuses
+   empById + persistEmployees + the existing `history` audit style, and
+   returns a typed command outcome. Atomic: on a failed persist it reverts
+   the salary, updatedAt, and the audit entry. The business authority is
+   EmployeeCompensationAggregate (PR-5H); this handler keeps its own
+   defense-in-depth validation and remains the implementation authority.
+   ============================================================ */
+const EMPLOYEE_COMPENSATION_FIELDS = ['monthlyBaseSalary'];
+async function updateEmployeeCompensation(id, patch){
+  const e = empById(id);
+  if(!e) return { success:false, error:'EmployeeNotFound' };
+  patch = patch || {};
+  // Allowlist: only monthlyBaseSalary is considered; all else is ignored.
+  if(!Object.prototype.hasOwnProperty.call(patch, 'monthlyBaseSalary')) return { success:false, error:'NoCompensationFieldsProvided' };
+  // Defense-in-depth normalization/validation (the aggregate validates first).
+  const raw = patch.monthlyBaseSalary;
+  let value;
+  if(raw === null || raw === undefined){ value = null; }
+  else {
+    const s = String(raw).trim();
+    if(s === ''){ value = null; }
+    else { const n = Number(s); if(!isFinite(n) || n < 0) return { success:false, error:'InvalidMonthlyBaseSalary' }; value = n; }
+  }
+  const before = e.monthlyBaseSalary, prevUpdatedAt = e.updatedAt;
+  e.monthlyBaseSalary = value;
+  e.updatedAt = new Date().toISOString();
+  (e.history = e.history || []).push({ event:'compensation-edited', ts:e.updatedAt, note:'Monthly base salary updated' });
+  const ok = await persistEmployees();
+  if(ok !== true){
+    // Atomic rollback — restore the salary, timestamp, and drop the audit entry.
+    e.monthlyBaseSalary = before;
+    e.history.pop();
+    e.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
+  }
+  return { success:true, data:e };
+}
+
+// Narrow compensation-only editor. Routes through the Domain command seam and
+// never calls updateEmployeeCompensation directly.
+function openEmployeeCompensationModal(id){
+  const e = empById(id); if(!e) return;
+  openModalHTML(`
+    <h3>Edit Compensation</h3>
+    <form id="empCompensationForm">
+      <div class="field"><label>Monthly Base Salary</label><input class="input" type="number" min="0" step="any" name="monthlyBaseSalary" value="${escapeHtml(e.monthlyBaseSalary==null?'':String(e.monthlyBaseSalary))}"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="empCompensationCancel">Cancel</button>
+        <button type="submit" class="btn btn-accent">Save Compensation</button>
+      </div>
+    </form>`, {width:460, onMount:(root)=>{
+      root.querySelector('#empCompensationCancel').addEventListener('click', closeModal);
+      root.querySelector('#empCompensationForm').addEventListener('submit', async ev=>{
+        ev.preventDefault();
+        const fd = new FormData(ev.target);
+        const outcome = await Domain.command('employee.compensation.update', id, { monthlyBaseSalary: fd.get('monthlyBaseSalary') });
+        if(outcome && outcome.success){ closeModal(); toast('Compensation updated.'); render(); }
+        else { toast('Could not update compensation'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
+      });
+    }});
+}
+
 function renderEmployeeDetail(main){
   const e = empById(State.detailEmpId);
   if(!e){ main.innerHTML = emptyState('Employee not found','It may have been deleted.'); return; }
@@ -417,6 +483,7 @@ function renderEmployeeDetail(main){
         <button class="btn" id="editContactD">Edit Contact</button>
         <button class="btn" id="editEmploymentD">Edit Employment</button>
         <button class="btn" id="editLifecycleD">Lifecycle</button>
+        <button class="btn" id="editCompensationD">Edit Compensation</button>
         <button class="btn" id="editEmpD">Edit</button>
         <button class="btn btn-accent" id="newCtForEmp">+ New Contract</button>
       </div>
@@ -509,6 +576,7 @@ function renderEmployeeDetail(main){
   document.getElementById('editContactD').addEventListener('click', ()=>openEmployeeContactModal(e.id));
   document.getElementById('editEmploymentD').addEventListener('click', ()=>openEmployeeEmploymentModal(e.id));
   document.getElementById('editLifecycleD').addEventListener('click', ()=>openEmployeeLifecycleModal(e.id));
+  document.getElementById('editCompensationD').addEventListener('click', ()=>openEmployeeCompensationModal(e.id));
   document.getElementById('editEmpD').addEventListener('click', ()=>openEmployeeModal(e.id));
   document.getElementById('newCtForEmp').addEventListener('click', ()=>openContractModal(null, e.id));
   main.querySelectorAll('[data-ct-detail]').forEach(b=>b.addEventListener('click', ()=>hrNavTo('contractDetail', {detailContractId:b.dataset.ctDetail})));
