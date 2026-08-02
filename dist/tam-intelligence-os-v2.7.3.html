@@ -5533,6 +5533,41 @@ function nextEmployeeCode(){
 /* v2.6.1 — Employees incremental list: filtered set, row markup, and a refresh that
    swaps only the <tbody>. The search box and filter dropdowns call applyEmployeeFilter
    so the search input keeps focus/caret/selection and the table keeps its scroll. */
+/* ============================================================
+   PR-7B "THE CONDUIT" — the single official UI-to-Transport execution seam.
+   ------------------------------------------------------------
+   Every migrated aggregate-backed browser operation reaches the Domain ONLY
+   through here, over the canonical application path:
+
+     UI -> uiExecute() -> TransportAdapter.execute() -> ApplicationGateway.execute()
+        -> Domain.command()/Domain.query() -> Aggregate -> Handler -> Persistence
+
+   It builds the canonical Transport request { kind, name, args, meta? }, AWAITS
+   the Transport, and DISTINGUISHES a Transport/Gateway BOUNDARY failure
+   (response.ok === false) from the Domain BUSINESS outcome (response.ok === true,
+   whose `result` is returned VERBATIM — a business rejection stays { success:false }
+   inside that result). It owns NO business behavior: it mutates nothing, persists
+   nothing, writes no history, performs no rollback, and NEVER calls Domain, an
+   Aggregate, or a Handler directly. On a boundary failure it returns a typed, safe
+   { success:false, boundary:true } shape so existing callers surface the failure
+   through their normal feedback and never dereference undefined. TransportAdapter is
+   a top-level const resolved at call time (this file loads before the transport, but
+   the seam only runs from user events, long after all scripts have loaded).
+   ============================================================ */
+async function uiExecute(kind, name, args, meta){
+  const request = { kind: kind, name: name, args: Array.isArray(args) ? args : [] };
+  if (meta !== undefined) request.meta = meta;
+  const response = await TransportAdapter.execute(request);
+  if (!response || response.ok !== true){
+    // BOUNDARY failure (Transport/Gateway) — NOT a business rejection. Kept
+    // distinguishable via `boundary:true`; never collapses Gateway/Domain semantics.
+    const be = (response && response.error) ? response.error : { source: 'transport', code: 'NO_RESPONSE', message: 'No transport response.' };
+    return { success: false, boundary: true, error: (be.message || be.code || 'Transport failure'), transportError: be };
+  }
+  // Completed THROUGH the Platform boundary — hand back the Domain result VERBATIM.
+  return response.result;
+}
+
 function employeesFiltered(){
   const f = State.empFilter;
   let rows = State.employees.slice();
@@ -5544,11 +5579,10 @@ function employeesFiltered(){
   rows.sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||'')));
   return rows;
 }
-function employeeRowsHTML(){
-  // PR-5B — first production read routed through the Domain layer. Behavior is
-  // identical: Domain.query('employee.filtered') is a read-only pass-through to
-  // employeesFiltered() and returns the same Employee[] result.
-  return Domain.query('employee.filtered').map(e=>{
+function employeeRowsHTMLFrom(list){
+  // PR-7B — pure row builder from a supplied Employee[] (the read now arrives via
+  // the canonical UI-to-Transport seam; see fillEmployeeRows). Markup is unchanged.
+  return (list||[]).map(e=>{
     const ct = activeContractToday(e.id);
     const calc = ct ? contractCalc(ct, todayKey()) : null;
     return `<tr>
@@ -5567,10 +5601,18 @@ function employeeRowsHTML(){
     </tr>`;
   }).join('') || `<tr><td colspan="7" class="empty">No employees match. Click “+ Add Employee” to create the first record.</td></tr>`;
 }
-function applyEmployeeFilter(main){
+async function fillEmployeeRows(main){
   const tb = document.getElementById('empRows'); if(!tb) return;
-  tb.innerHTML = employeeRowsHTML();
+  // PR-7B "The Conduit" — the employee list read flows through the canonical path
+  // (seam -> Transport -> Gateway -> the employee.filtered query). The async
+  // fill preserves the rendered result and re-binds row actions after injection.
+  const result = await uiExecute('query', 'employee.filtered', []);
+  const rows = Array.isArray(result) ? result : [];
+  tb.innerHTML = employeeRowsHTMLFrom(rows);
   bindHRActions(main);
+}
+function applyEmployeeFilter(main){
+  fillEmployeeRows(main);
 }
 function renderEmployees(main){
   const f = State.empFilter;
@@ -5607,7 +5649,7 @@ function renderEmployees(main){
       <div class="table-wrap" style="max-height:620px;overflow-y:auto;">
         <table>
           <thead><tr><th>Employee</th><th>Job Title</th><th>Department</th><th>Status</th><th>Active Contract</th><th class="num">Base Salary</th><th></th></tr></thead>
-          <tbody id="empRows">${employeeRowsHTML()}</tbody>
+          <tbody id="empRows"></tbody>
         </table>
       </div>
     </div>`;
@@ -5620,7 +5662,7 @@ function renderEmployees(main){
   const goDedup=()=>{ State.view='employeeDedup'; render(); };
   const db1=document.getElementById('dedupEmp'); if(db1) db1.addEventListener('click', goDedup);
   const db2=document.getElementById('dedupEmp2'); if(db2) db2.addEventListener('click', goDedup);
-  bindHRActions(main);
+  fillEmployeeRows(main);
 }
 
 function openEmployeeModal(id){
@@ -5766,9 +5808,9 @@ function openEmployeeContactModal(id){
       root.querySelector('#empContactForm').addEventListener('submit', async ev=>{
         ev.preventDefault();
         const fd = new FormData(ev.target);
-        const outcome = await Domain.command('employee.contact.update', id, {
+        const outcome = await uiExecute('command', 'employee.contact.update', [id, {
           email: fd.get('email'), phone: fd.get('phone'), notes: fd.get('notes')
-        });
+        }]);
         if(outcome && outcome.success){ closeModal(); toast('Contact updated.'); render(); }
         else { toast('Could not update contact'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
       });
@@ -5845,11 +5887,11 @@ function openEmployeeEmploymentModal(id){
       root.querySelector('#empEmploymentForm').addEventListener('submit', async ev=>{
         ev.preventDefault();
         const fd = new FormData(ev.target);
-        const outcome = await Domain.command('employee.employment.update', id, {
+        const outcome = await uiExecute('command', 'employee.employment.update', [id, {
           jobTitle: fd.get('jobTitle'), department: fd.get('department'),
           employmentStatus: fd.get('employmentStatus'), joinDate: fd.get('joinDate'),
           contractType: fd.get('contractType')
-        });
+        }]);
         if(outcome && outcome.success){ closeModal(); toast('Employment updated.'); render(); }
         else { toast('Could not update employment'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
       });
@@ -5916,7 +5958,7 @@ function openEmployeeLifecycleModal(id){
     if(form) form.addEventListener('submit', async ev=>{
       ev.preventDefault();
       const fd = new FormData(ev.target);
-      const outcome = await Domain.command('employee.lifecycle.transition', id, fd.get('to'));
+      const outcome = await uiExecute('command', 'employee.lifecycle.transition', [id, fd.get('to')]);
       if(outcome && outcome.success){ closeModal(); toast('Lifecycle updated.'); render(); }
       else { toast('Could not update lifecycle'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
     });
@@ -5982,7 +6024,7 @@ function openEmployeeCompensationModal(id){
       root.querySelector('#empCompensationForm').addEventListener('submit', async ev=>{
         ev.preventDefault();
         const fd = new FormData(ev.target);
-        const outcome = await Domain.command('employee.compensation.update', id, { monthlyBaseSalary: fd.get('monthlyBaseSalary') });
+        const outcome = await uiExecute('command', 'employee.compensation.update', [id, { monthlyBaseSalary: fd.get('monthlyBaseSalary') }]);
         if(outcome && outcome.success){ closeModal(); toast('Compensation updated.'); render(); }
         else { toast('Could not update compensation'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
       });
@@ -6406,7 +6448,7 @@ async function requestContractStatusTransition(id, targetStatus){
   if(targetStatus==='Cancelled' && payrollPlansForContract(id).some(p=>p.status==='committed')){
     if(!confirm('This contract has committed payroll. Cancelling it will NOT modify historical payroll or transactions. Continue?')) return false;
   }
-  const outcome = await Domain.command('contract.status.transition', id, targetStatus);
+  const outcome = await uiExecute('command', 'contract.status.transition', [id, targetStatus]);
   if(outcome && outcome.success){ toast(`Contract ${targetStatus.toLowerCase()}.`); render(); return true; }
   toast('Could not change contract status'+(outcome && outcome.error && outcome.error!=='ContractNotFound' ? ': '+outcome.error : '')+'.', 5000);
   return false;
@@ -6549,9 +6591,9 @@ function openContractDatesModal(id){
       form.addEventListener('submit', async ev=>{
         ev.preventDefault();
         const fd = new FormData(ev.target);
-        const outcome = await Domain.command('contract.dates.update', id, {
+        const outcome = await uiExecute('command', 'contract.dates.update', [id, {
           startDate: fd.get('startDate'), durationMonths: fd.get('durationMonths')
-        });
+        }]);
         if(outcome && outcome.success){ closeModal(); toast('Contract dates updated.'); render(); }
         else { toast('Could not update contract dates'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
       });
@@ -10069,7 +10111,7 @@ function payrollSelSet(monthKey){ if(!State.payrollSel[monthKey]) State.payrollS
    the same user-facing messaging the former setPayrollStatus showed. Returns true
    only on success. */
 async function requestPayrollLifecycle(id, targetStatus){
-  const outcome = await Domain.command('payroll.lifecycle.transition', id, targetStatus);
+  const outcome = await uiExecute('command', 'payroll.lifecycle.transition', [id, targetStatus]);
   if(outcome && outcome.success) return true;
   const err = outcome && outcome.error;
   if(err==='PayrollPeriodLocked') showWarning('This payroll period is locked — unlock it to change status.');
@@ -10221,7 +10263,7 @@ function renderPayrollWorkspace(main){
     // Each PayrollPlan transition is independently atomic; there is no cross-record rollback.
     let n=0; const cmdFailures=[];
     for(const pid of eligible){
-      const outcome=await Domain.command('payroll.lifecycle.transition', pid, targetStatus);
+      const outcome=await uiExecute('command', 'payroll.lifecycle.transition', [pid, targetStatus]);
       if(outcome && outcome.success) n++;
       else cmdFailures.push({id:pid, error:(outcome && outcome.error)||'Unknown'});
     }

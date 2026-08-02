@@ -316,18 +316,24 @@ check(/\bquery:\s*function/.test(facSrc), 'Domain facade exposes read-only query
 // PR-5C.1 — operational command routing exists on the facade.
 check(/\bcommand:\s*function/.test(facSrc), 'Domain facade exposes command() routing (PR-5C.1)');
 // Exactly ONE query migrated (distinct routed query ids).
-const migratedQueryIds = Array.from(new Set((srcJs.match(/Domain\.query\('([^']+)'\)/g)||[]).map(s=>s.match(/'([^']+)'/)[1])));
-check(migratedQueryIds.length === 1 && migratedQueryIds[0] === 'employee.filtered', 'exactly one query id routed through Domain.query(): '+JSON.stringify(migratedQueryIds));
-check(dist.includes("Domain.query('employee.filtered')"), 'migrated query call present in dist');
+// PR-7B "The Conduit" — operational UI pathways now reach the Domain through the
+// single UI-to-Transport seam (uiExecute), not via direct Domain.command/query. The
+// seam id is the SECOND quoted literal: uiExecute('command'|'query', '<id>', [...]).
+// Deriving from the seam call (which requires the '(' ) means comment-only mentions
+// of Domain.command/Domain.query are NOT counted as operational call sites.
+function seamIds(kind){ const re = new RegExp("uiExecute\\('"+kind+"',\\s*'([^']+)'","g"); const out=[]; let m; while((m=re.exec(srcJs))!==null) out.push(m[1]); return Array.from(new Set(out)); }
+const migratedQueryIds = seamIds('query');
+check(migratedQueryIds.length === 1 && migratedQueryIds[0] === 'employee.filtered', 'exactly one query id routed through the UI-to-Transport seam: '+JSON.stringify(migratedQueryIds));
+check(dist.includes("uiExecute('command', 'employee.contact.update'") || dist.includes("uiExecute('query', 'employee.filtered'"), 'migrated query call present in dist (via the UI-to-Transport seam)');
 check(/'employee\.filtered':\s*Object\.freeze\(\{[^}]*handler:\s*'employeesFiltered'/.test(qrySrc), 'employee.filtered query registered to handler employeesFiltered');
 // Exactly ONE command migrated (distinct routed command ids), and it is the approved contact command.
-const migratedCmdIds = Array.from(new Set((srcJs.match(/Domain\.command\('([^']+)'/g)||[]).map(s=>s.match(/'([^']+)'/)[1])));
+const migratedCmdIds = seamIds('command');
 const EXPECTED_OP_CMDS = ['employee.contact.update','employee.employment.update','employee.lifecycle.transition','employee.compensation.update','contract.dates.update','payroll.lifecycle.transition','contract.status.transition'];
-check(migratedCmdIds.length === 7 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly seven command ids routed through Domain.command(): '+JSON.stringify(migratedCmdIds));
-check(dist.includes("Domain.command('employee.contact.update'"), 'migrated command call present in dist');
-check(dist.includes("Domain.command('employee.employment.update'"), 'employment command call present in dist');
-check(dist.includes("Domain.command('employee.lifecycle.transition'"), 'lifecycle command call present in dist');
-check(dist.includes("Domain.command('employee.compensation.update'"), 'compensation command call present in dist');
+check(migratedCmdIds.length === 7 && EXPECTED_OP_CMDS.every(id=>migratedCmdIds.indexOf(id)!==-1), 'exactly seven command ids routed through the UI-to-Transport seam: '+JSON.stringify(migratedCmdIds));
+check(dist.includes("uiExecute('command', 'employee.contact.update'"), 'migrated command call present in dist (via the seam)');
+check(dist.includes("uiExecute('command', 'employee.employment.update'"), 'employment command call present in dist (via the seam)');
+check(dist.includes("uiExecute('command', 'employee.lifecycle.transition'"), 'lifecycle command call present in dist (via the seam)');
+check(dist.includes("uiExecute('command', 'employee.compensation.update'"), 'compensation command call present in dist (via the seam)');
 check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateEmployeeContact'/.test(cmdSrc), 'employee.contact.update registered to handler updateEmployeeContact');
 check(/'employee\.employment\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateEmployeeEmployment'/.test(cmdSrc), 'employee.employment.update registered to handler updateEmployeeEmployment');
 // The facade command() calls the handler exactly once (a single fn.apply, no loop).
@@ -350,7 +356,11 @@ check(/success:\s*true/.test(ucBody) && /success:\s*false/.test(ucBody), 'contac
 // the empForm submit handler exists and Domain.command is used exactly once in
 // this module (the contact command only) — the monolithic save is not routed.
 check(/querySelector\('#empForm'\)\.addEventListener\('submit'/.test(empSrc), 'full employee save (empForm) submit handler still present');
-check((empSrc.match(/Domain\.command\(/g)||[]).length === 4, 'exactly four Domain.command() call sites in employees.js (contact + employment + lifecycle + compensation; monolithic save stays direct)');
+// comment-stripped: a comment mentioning Domain.command()/Domain.query() is not an operational call site.
+function stripComments(s){ return s.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,''); }
+const empCode = stripComments(empSrc);
+check(!/Domain\.command\(/.test(empCode) && !/Domain\.query\(/.test(empCode), 'employees.js no longer calls Domain.command()/Domain.query() directly (authorized ops routed through the UI-to-Transport seam)');
+check((empSrc.match(/uiExecute\('command'/g)||[]).length === 4, 'employees.js routes exactly four aggregate-backed commands through the seam (contact + employment + lifecycle + compensation)');
 
 // PR-5D "The Steward" — first aggregate boundary (EmployeeContactAggregate).
 console.log('== EMPLOYEE CONTACT AGGREGATE (PR-5D — business authority) ==');
@@ -579,7 +589,7 @@ check(/'contract\.dates\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateCon
 check(/'contract\.dates\.update':\s*Object\.freeze\(\{[^}]*aggregate:\s*'Contract'/.test(cmdSrc), 'contract.dates.update declares aggregate Contract');
 const ctCmdEntry = (cmdSrc.match(/'contract\.dates\.update':\s*Object\.freeze\(\{[^}]*\}\)/)||[''])[0];
 check(ctCmdEntry !== '' && !/boundaryMethod/.test(ctCmdEntry) && !/boundaryPayload/.test(ctCmdEntry), 'contract.dates.update uses the DEFAULT prepare/patch contract (no boundaryMethod/boundaryPayload)');
-check(dist.includes("Domain.command('contract.dates.update'"), 'contract dates command call present in dist');
+check(dist.includes("uiExecute('command', 'contract.dates.update'"), 'contract dates command call present in dist (via the seam)');
 // Domain routing (domain-layer.js) is UNCHANGED by PR-5I.
 check(!/contract\.dates|ContractDate/.test(facSrc), 'domain-layer.js is not modified for the contract command');
 // Allowlist is exactly [startDate, durationMonths] (stored facts; NOT endDate).
@@ -627,7 +637,8 @@ check(/error:'InvalidStartDate'/.test(udBody) && /error:'InvalidDurationMonths'/
 check(!/logActivity\(/.test(udBody), 'contract-date handler adds no duplicate audit call (history-only)');
 check(/success:\s*true/.test(udBody) && /success:\s*false/.test(udBody), 'contract-date handler returns a typed success/failure outcome');
 // The UI routes through Domain.command in contracts.js (dates seam + PR-5K status seam); no direct handler call.
-check((ctSrc.match(/Domain\.command\(/g)||[]).length === 2, 'exactly two Domain.command() call sites in contracts.js (the dates command + the status command)');
+check(!/Domain\.command\(/.test(ctSrc) && !/Domain\.query\(/.test(ctSrc), 'contracts.js no longer calls Domain.command()/Domain.query() directly (routed through the seam)');
+check((ctSrc.match(/uiExecute\('command'/g)||[]).length === 2, 'contracts.js routes exactly two aggregate-backed commands through the seam (dates + status)');
 check((ctSrc.match(/updateContractDates\(/g)||[]).length === 1, 'UI never calls updateContractDates() directly (only the function definition appears)');
 // contractCalc() semantics are not modified by PR-5I (people-core.js untouched).
 check(!/function contractCalc/.test(ctAggSrc) && !/function contractCalc/.test(udBody), 'contract-date capability does not redefine contractCalc()');
@@ -650,7 +661,7 @@ check(/'payroll\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*boundary:\s*'P
 check(/'payroll\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*boundaryMethod:\s*'transition'/.test(cmdSrc) && /'payroll\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*boundaryPayload:\s*'transition'/.test(cmdSrc), 'payroll.lifecycle.transition declares boundaryMethod/boundaryPayload = transition');
 check(/'payroll\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*handler:\s*'transitionPayrollLifecycle'/.test(cmdSrc), 'payroll.lifecycle.transition registered to handler transitionPayrollLifecycle');
 check(/'payroll\.lifecycle\.transition':\s*Object\.freeze\(\{[^}]*aggregate:\s*'PayrollPlan'/.test(cmdSrc), 'payroll.lifecycle.transition declares aggregate PayrollPlan');
-check(dist.includes("Domain.command('payroll.lifecycle.transition'"), 'payroll lifecycle command call present in dist');
+check(dist.includes("uiExecute('command', 'payroll.lifecycle.transition'"), 'payroll lifecycle command call present in dist (via the seam)');
 // Domain routing (domain-layer.js) is UNCHANGED by PR-5J (reuses the transition/transition contract).
 check(!/payroll\.lifecycle|PayrollLifecycle/.test(facSrc), 'domain-layer.js is not modified for the payroll lifecycle command');
 // The transition graph is derived from runtime behavior — exactly the discovered edges, no more.
@@ -709,13 +720,13 @@ check(!/function setPayrollStatus\(/.test(poeSrc) && !/function bulkPayrollStatu
 check(!/setPayrollStatus\(|bulkPayrollStatus\(/.test(srcJs), 'no caller of setPayrollStatus / bulkPayrollStatus remains anywhere');
 // Single-record UI: routes through the one Domain-command seam (requestPayrollLifecycle); never the handler.
 const pwsSrc = read(path.join(root,'js','people','payroll-workspace.js'));
-check(/async function requestPayrollLifecycle\(/.test(pwsSrc) && /Domain\.command\('payroll\.lifecycle\.transition',\s*id,\s*targetStatus\)/.test(pwsSrc), 'requestPayrollLifecycle seam routes single-record transitions through Domain.command()');
+check(/async function requestPayrollLifecycle\(/.test(pwsSrc) && /uiExecute\('command', 'payroll\.lifecycle\.transition', \[id, targetStatus\]\)/.test(pwsSrc), 'requestPayrollLifecycle routes single-record transitions through the UI-to-Transport seam');
 check(/'prow-review'\)\s*\{ await requestPayrollLifecycle\(id,'Reviewed'\)/.test(empSrc) && /'prow-cancel'\)/.test(empSrc) && /requestPayrollLifecycle\(id,'Cancelled'\)/.test(empSrc), 'employee worksheet menu (prow-*) routes single-record transitions through requestPayrollLifecycle');
 check(!/setPayrollStatus\(/.test(empSrc), 'the migrated single-record menu no longer calls setPayrollStatus directly');
 check(!/transitionPayrollLifecycle\(/.test(empSrc) && !/transitionPayrollLifecycle\(/.test(pwsSrc), 'no UI file calls the handler transitionPayrollLifecycle() directly');
 check((poeSrc.match(/transitionPayrollLifecycle\(/g)||[]).length === 1, 'transitionPayrollLifecycle appears only as its definition (never invoked outside the Domain command)');
 // Bulk UI: one Domain command PER eligible record (no bulk aggregate/command, no cross-record rollback claim).
-check(/for\(const pid of eligible\)\{[\s\S]*?Domain\.command\('payroll\.lifecycle\.transition', pid, targetStatus\)/.test(pwsSrc), 'bulk runner invokes one Domain.command per eligible PayrollPlan');
+check(/for\(const pid of eligible\)\{[\s\S]*?uiExecute\('command', 'payroll\.lifecycle\.transition', \[pid, targetStatus\]\)/.test(pwsSrc), 'bulk runner invokes one seam transition per eligible PayrollPlan (via the UI-to-Transport seam)');
 check(/partitionPayrollSelection\(/.test(pwsSrc), 'bulk runner preserves the existing eligible/ineligible partition (partitionPayrollSelection)');
 check(!/BulkAggregate|bulkCommand|payroll\.lifecycle\.bulk/.test(srcJs), 'no second bulk aggregate/command introduced');
 // Existing aggregates remain operational and untouched by PR-5J.
@@ -738,7 +749,7 @@ check(/'contract\.status\.transition':\s*Object\.freeze\(\{[^}]*boundary:\s*'Con
 check(/'contract\.status\.transition':\s*Object\.freeze\(\{[^}]*boundaryMethod:\s*'transition'/.test(cmdSrc) && /'contract\.status\.transition':\s*Object\.freeze\(\{[^}]*boundaryPayload:\s*'transition'/.test(cmdSrc), 'contract.status.transition declares boundaryMethod/boundaryPayload = transition');
 check(/'contract\.status\.transition':\s*Object\.freeze\(\{[^}]*handler:\s*'transitionContractStatus'/.test(cmdSrc), 'contract.status.transition registered to handler transitionContractStatus');
 check(/'contract\.status\.transition':\s*Object\.freeze\(\{[^}]*aggregate:\s*'Contract'/.test(cmdSrc), 'contract.status.transition declares aggregate Contract');
-check(dist.includes("Domain.command('contract.status.transition'"), 'contract status command call present in dist');
+check(dist.includes("uiExecute('command', 'contract.status.transition'"), 'contract status command call present in dist (via the seam)');
 // Domain routing (domain-layer.js) is UNCHANGED by PR-5K (reuses the transition/transition contract).
 check(!/contract\.status|ContractStatus/.test(facSrc), 'domain-layer.js is not modified for the contract status command');
 // The transition graph is derived from runtime behavior — exactly the discovered edges, no more.
@@ -794,7 +805,7 @@ check(/success:\s*true/.test(tcBody) && /success:\s*false/.test(tcBody), 'handle
 check(!/function setContractStatus\(/.test(ctSrc), 'setContractStatus removed (single status-transition authority via the Domain command)');
 check(!/setContractStatus\(/.test(srcJs), 'no caller of setContractStatus remains anywhere');
 // Single-record UI: routes through the one Domain-command seam (requestContractStatusTransition).
-check(/async function requestContractStatusTransition\(/.test(ctSrc) && /Domain\.command\('contract\.status\.transition', id, targetStatus\)/.test(ctSrc), 'requestContractStatusTransition seam routes status transitions through Domain.command()');
+check(/async function requestContractStatusTransition\(/.test(ctSrc) && /uiExecute\('command', 'contract\.status\.transition', \[id, targetStatus\]\)/.test(ctSrc), 'requestContractStatusTransition routes status transitions through the UI-to-Transport seam');
 check(/'ct-activate'\) requestContractStatusTransition\(id, 'Active'\)/.test(empSrc) && /'ct-cancel'\) requestContractStatusTransition\(id, 'Cancelled'\)/.test(empSrc), 'employee row menu (ct-activate/ct-cancel) routes through requestContractStatusTransition');
 check(!/transitionContractStatus\(/.test(empSrc), 'no UI file calls the handler transitionContractStatus() directly (employees.js)');
 check((ctSrc.match(/transitionContractStatus\(/g)||[]).length === 1, 'transitionContractStatus appears only as its definition (never invoked outside the Domain command)');
@@ -981,6 +992,48 @@ function allRegisteredIds(src){ return (src.match(/^\s*'([a-z][a-zA-Z]*(?:\.[a-z
 const allCmdIds = allRegisteredIds(cmdSrc), allQryIds = allRegisteredIds(qrySrc);
 check(allCmdIds.length === 13, 'registered command surface is exactly 13 (found '+allCmdIds.length+')');
 check(allQryIds.length === 4, 'registered query surface is exactly 4 (found '+allQryIds.length+')');
+
+// PR-7B "The Conduit" — the browser UI now CONSUMES the canonical application path.
+// The authorized aggregate-backed operations reach the Domain ONLY through one
+// official UI-to-Transport seam (uiExecute) → TransportAdapter → ApplicationGateway →
+// Domain. No business authority moves into the UI, Transport, or Platform layers.
+console.log('== UI-TO-TRANSPORT SEAM (PR-7B — operational transport consumption) ==');
+const pwsSrc7b = read(path.join(root,'js','people','payroll-workspace.js'));
+// ONE official seam exists, is async, and is present in the build.
+check(/async function uiExecute\(kind, name, args, meta\)\{/.test(empSrc), 'exactly one official UI-to-Transport seam is defined: async uiExecute(kind, name, args, meta)');
+check((srcJs.match(/async function uiExecute\(/g)||[]).length === 1, 'the UI-to-Transport seam is defined exactly once (single official seam)');
+check(dist.includes('async function uiExecute('), 'UI-to-Transport seam present in dist');
+// The seam DELEGATES only to the Transport Adapter — its single application dependency.
+const seamStart = empSrc.indexOf('async function uiExecute(');
+const seamBody = seamStart!==-1 ? empSrc.slice(seamStart, empSrc.indexOf('\n}', seamStart)+2) : '';
+check(/await TransportAdapter\.execute\(request\)/.test(seamBody), 'the seam delegates to (and awaits) TransportAdapter.execute — its only application execution dependency');
+check(!/\bDomain\s*[.[]/.test(seamBody) && !/ApplicationGateway/.test(seamBody), 'the seam never calls Domain or ApplicationGateway directly (Transport is the only path)');
+cmdHandlers.forEach((h)=>check(!new RegExp('\\b'+h+'\\s*\\(').test(seamBody), 'the seam does not call handler directly: '+h));
+check(!/\w+Aggregate\s*[.[]/.test(seamBody), 'the seam does not touch any aggregate directly');
+// The seam owns NO business behavior (no state/persistence/history/rollback/render/UI writes).
+[['State access', /State\s*[.[]/],
+ ['persistence', /\bpersist\w*\s*\(/],
+ ['history append', /\.history\b|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(|innerHTML/],
+ ['toast/alert', /\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(/],
+ ['localStorage', /localStorage/]
+].forEach(([label,re])=>check(!re.test(seamBody), 'the seam never performs '+label));
+// The seam distinguishes a BOUNDARY failure from the Domain business RESULT (not collapsed).
+check(/response\.ok !== true/.test(seamBody) && /return response\.result/.test(seamBody), 'the seam distinguishes a Transport/Gateway boundary failure from the Domain result (returned verbatim on ok:true)');
+// ZERO direct Domain bypass remains in any migrated UI file for the authorized ops.
+const ctCode7b = stripComments(ctSrc), pwsCode7b = stripComments(pwsSrc7b);
+check(!/Domain\.command\(/.test(empCode) && !/Domain\.command\(/.test(ctCode7b) && !/Domain\.command\(/.test(pwsCode7b), 'no direct Domain.command() call remains in employees.js / contracts.js / payroll-workspace.js');
+check(!/Domain\.query\(/.test(empCode) && !/Domain\.query\(/.test(ctCode7b) && !/Domain\.query\(/.test(pwsCode7b), 'no direct Domain.query() call remains in employees.js / contracts.js / payroll-workspace.js');
+// employee.lifecycle.transition is NOT exempted — it is migrated through the seam.
+check(migratedCmdIds.indexOf('employee.lifecycle.transition')!==-1, 'employee.lifecycle.transition is migrated through the seam (not left as a direct bypass)');
+// Payroll lifecycle migration is verified specifically in js/people/payroll-workspace.js (both live call sites).
+check((pwsSrc7b.match(/uiExecute\('command', 'payroll\.lifecycle\.transition'/g)||[]).length === 2, 'payroll-workspace.js routes both live payroll.lifecycle.transition call sites through the seam');
+// One-way independence: the Gateway and the Domain never reference the UI seam.
+check(!/uiExecute/.test(gwCode), 'Application Gateway is independent of the UI seam (never references uiExecute)');
+check(!/uiExecute|TransportAdapter/.test(facSrc), 'Domain is independent of the Transport/UI seam (never references uiExecute/TransportAdapter)');
+// Operational surface is UNCHANGED by PR-7B (consumption paths only; no Domain op added/removed).
+check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational surface unchanged by the conduit (7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query; 13 registered commands / 4 registered queries)');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

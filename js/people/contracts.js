@@ -205,7 +205,7 @@ async function requestContractStatusTransition(id, targetStatus){
   if(targetStatus==='Cancelled' && payrollPlansForContract(id).some(p=>p.status==='committed')){
     if(!confirm('This contract has committed payroll. Cancelling it will NOT modify historical payroll or transactions. Continue?')) return false;
   }
-  const outcome = await Domain.command('contract.status.transition', id, targetStatus);
+  const outcome = await uiExecute('command', 'contract.status.transition', [id, targetStatus]);
   if(outcome && outcome.success){ toast(`Contract ${targetStatus.toLowerCase()}.`); render(); return true; }
   toast('Could not change contract status'+(outcome && outcome.error && outcome.error!=='ContractNotFound' ? ': '+outcome.error : '')+'.', 5000);
   return false;
@@ -348,9 +348,9 @@ function openContractDatesModal(id){
       form.addEventListener('submit', async ev=>{
         ev.preventDefault();
         const fd = new FormData(ev.target);
-        const outcome = await Domain.command('contract.dates.update', id, {
+        const outcome = await uiExecute('command', 'contract.dates.update', [id, {
           startDate: fd.get('startDate'), durationMonths: fd.get('durationMonths')
-        });
+        }]);
         if(outcome && outcome.success){ closeModal(); toast('Contract dates updated.'); render(); }
         else { toast('Could not update contract dates'+(outcome && outcome.error ? ': '+outcome.error : '')+'.', 5000); }
       });

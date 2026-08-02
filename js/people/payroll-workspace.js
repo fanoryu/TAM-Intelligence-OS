@@ -16,7 +16,7 @@ function payrollSelSet(monthKey){ if(!State.payrollSel[monthKey]) State.payrollS
    the same user-facing messaging the former setPayrollStatus showed. Returns true
    only on success. */
 async function requestPayrollLifecycle(id, targetStatus){
-  const outcome = await Domain.command('payroll.lifecycle.transition', id, targetStatus);
+  const outcome = await uiExecute('command', 'payroll.lifecycle.transition', [id, targetStatus]);
   if(outcome && outcome.success) return true;
   const err = outcome && outcome.error;
   if(err==='PayrollPeriodLocked') showWarning('This payroll period is locked — unlock it to change status.');
@@ -168,7 +168,7 @@ function renderPayrollWorkspace(main){
     // Each PayrollPlan transition is independently atomic; there is no cross-record rollback.
     let n=0; const cmdFailures=[];
     for(const pid of eligible){
-      const outcome=await Domain.command('payroll.lifecycle.transition', pid, targetStatus);
+      const outcome=await uiExecute('command', 'payroll.lifecycle.transition', [pid, targetStatus]);
       if(outcome && outcome.success) n++;
       else cmdFailures.push({id:pid, error:(outcome && outcome.error)||'Unknown'});
     }
