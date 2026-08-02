@@ -41,17 +41,29 @@ areas, one bounded slice at a time, following the established aggregate → hand
 At close: **6 aggregates, 6 commands, 1 query** on `main`, recorded in
 [RDR-001](../RDR/RDR-001-gamma-repository-snapshot.md).
 
-> **Since Gamma closed:** PR-5K "The Ledger" (`ContractStatusAggregate`) and PR-6A "The Gateway" (the
-> first Platform boundary) have both merged. The **current authoritative baseline is
-> [RDR-003](../RDR/RDR-003-delta-repository-snapshot.md)** — 7 aggregate-backed commands + 1
-> aggregate-backed query behind 7 aggregates (13 registered commands / 4 registered queries), plus 1
-> Application Gateway, at commit `851c038`. RDR-001 is no longer the latest baseline.
+> **Since Gamma closed:** PR-5K "The Ledger" (`ContractStatusAggregate`) merged, then Milestone Delta ran
+> to completion (see below). The **current authoritative baseline is
+> [RDR-007](../RDR/RDR-007-delta-repository-snapshot.md)** at commit `55499f2`; RDR-001 and RDR-003 are
+> immutable predecessors and no longer the latest baseline.
 
-## Milestone Delta — **Upcoming**
-**Theme:** Domain Events & Policies.
+## Milestone Delta — **Completed**
+**Theme:** Platform & Transport.
 
-Promote events toward operational, observable domain events emitted after committed transitions, and
-express cross-aggregate rules as explicit, testable policies.
+Delta established the canonical application Platform and proved it transport-agnostic, one bounded slice at
+a time (delivery recorded in [DPR-005](../DPR/DPR-005-delta-completion-report.md)):
+
+- **PR-6A** — The Gateway — the Application Gateway (canonical Platform boundary).
+- **PR-6B** — The Record — governance publication (RDR-003, GHA-001).
+- **PR-7A** — The Transport — the Transport Adapter (canonical transport boundary).
+- **PR-7B** — The Conduit — the browser UI consumes the canonical path (UI-to-Transport seam).
+- **PR-8A** — The Repository — the first persistence-mechanics boundary (one bounded slice).
+- **PR-8B** — The CLI — the first non-browser, read-only ingress over the same contract.
+
+At close: **two ingresses (Browser + CLI) over one canonical Platform contract**; 7 aggregates / 7
+aggregate-backed commands / 1 aggregate-backed query; 13 registered commands / 4 registered queries;
+v2.7.3, SCHEMA 6, commit `55499f2`, 824 verifier checks. The frozen state is recorded in
+[RDR-007](../RDR/RDR-007-delta-repository-snapshot.md); completion in
+[DPR-005](../DPR/DPR-005-delta-completion-report.md).
 
 ## Milestone Epsilon — **Upcoming**
 **Theme:** Workflow.

@@ -6,8 +6,28 @@ AI assistants get productive quickly. It is descriptive (what *is*), whereas
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
 there rather than duplicating it.
 
-**As of the current release:** v2.7.1 — "Payroll Integrity & Reporting Foundation"; `SCHEMA_VERSION` 6.
+**As of the current release:** v2.7.3 — "Supplemental-Aware Payroll History"; `SCHEMA_VERSION` 6.
 When these change, update this document (not `CLAUDE.md`).
+
+**Current baseline (Milestone Delta complete):** [RDR-007](docs/RDR/RDR-007-delta-repository-snapshot.md)
+at commit `55499f2`; completion recorded in [DPR-005](docs/DPR/DPR-005-delta-completion-report.md).
+Milestone Delta established the canonical application **Platform** and proved it transport-agnostic. The
+current architecture has **two ingresses over one canonical contract**:
+
+```
+Browser ┐
+        ├→ Transport Adapter → Application Gateway → Domain → Aggregate → Handler → Repository → StorageAdapter
+CLI    ─┘
+```
+
+- **Application Gateway** (PR-6A) — exclusive, business-blind Platform boundary.
+- **Transport Adapter** (PR-7A) — canonical transport boundary; the browser consumes it via the
+  `uiExecute` seam (PR-7B "The Conduit").
+- **Repository** (PR-8A) — first persistence-mechanics boundary, one bounded slice (handler keeps rollback).
+- **CLI** (PR-8B) — first non-browser, read-only ingress delegating solely through `TransportAdapter`.
+
+Operational surface: 7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query; 13 registered
+commands / 4 registered queries. Business authority remains exclusively in the Domain.
 
 **v2.7.1 note.** Posted/Executed payroll and supplemental display now derive from a single stage-aware
 historical source-of-truth helper (`payrollHistoricalSnapshot`) backed by immutable snapshots frozen

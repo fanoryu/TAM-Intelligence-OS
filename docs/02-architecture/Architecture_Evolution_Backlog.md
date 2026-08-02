@@ -244,7 +244,7 @@ Determine the permanent authoritative write path for Contract status, and how re
 ### Context
 Several operational engines predate the aggregate boundaries and still mutate lifecycle status directly.
 They are correct and intentional as shipped, and are the pre-existing operational paths behind the
-descriptive (handler-only) registry entries (see [RDR-003 §2.2](../RDR/RDR-003-delta-repository-snapshot.md#22-total-registered-executable-surface--full-registry)):
+descriptive (handler-only) registry entries (see [RDR-007 §2](../RDR/RDR-007-delta-repository-snapshot.md#2-operational-surface-unchanged-since-rdr-003)):
 
 - **Supplemental lifecycle** — `js/people/supplemental-engine.js` (e.g. `:236` `Posted`, `:273`
   `Executed`, `:310` rollback to `Approved`). Registered descriptive commands (`supplemental.generate` /

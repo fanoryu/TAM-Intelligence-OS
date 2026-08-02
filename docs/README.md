@@ -42,7 +42,8 @@ The AI-facing entry point that requires this reading before implementation is
 | Repository & documentation governance | [`adr/`](adr/README.md) | Architecture Decision Records (`ADR-NNNN`, four-digit) |
 | Domain architecture | [`03-adr/`](03-adr/README.md) | Domain Architecture Decision Records (`ADR-001`…, three-digit) |
 | Security | [`security/`](security/README.md) | Security Decision Records (`SDR-NNNN`) |
-| Repository snapshots | [`RDR/`](RDR/README.md) | Repository Decision Records (`RDR-NNN`) — factual state snapshots at milestone boundaries. **Current baseline: [RDR-003](RDR/RDR-003-delta-repository-snapshot.md)** (Delta); RDR-001 (Gamma) is superseded as baseline |
+| Repository snapshots | [`RDR/`](RDR/README.md) | Repository Decision Records (`RDR-NNN`) — factual state snapshots at milestone boundaries. **Current baseline: [RDR-007](RDR/RDR-007-delta-repository-snapshot.md)** (Milestone Delta complete, `55499f2`); RDR-001 (Gamma) and RDR-003 (Gateway boundary) are superseded as baseline |
+| Delta progress reports | [`DPR/`](DPR/README.md) | Delta Progress Reports (`DPR-NNN`). **Milestone Delta completion: [DPR-005](DPR/DPR-005-delta-completion-report.md)** |
 | Governance artifact index | [`00-governance/Atlas_Governance_Register.md`](00-governance/Atlas_Governance_Register.md) | Discovery index of Atlas governance artifacts (published + pending source text) — points to homes, defines no new record type |
 | Point-in-time audits | [`../audit/`](../audit/) | Dated immutable audit/incident records, incl. [GHA-001](../audit/github-audit-2026-08-02/GHA-001-github-repository-comprehensive-audit.md) (2026-08-02 repository audit) |
 

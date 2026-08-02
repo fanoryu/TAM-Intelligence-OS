@@ -17,33 +17,38 @@ fabricated.
 
 | Artifact | Title | Home | Status |
 |---|---|---|---|
-| [RDR-001](../RDR/RDR-001-gamma-repository-snapshot.md) | Gamma Repository Snapshot | `docs/RDR/` | Accepted (superseded as baseline by RDR-003) |
-| [RDR-003](../RDR/RDR-003-delta-repository-snapshot.md) | Delta Repository Snapshot | `docs/RDR/` | **Accepted — current authoritative baseline** |
+| [RDR-001](../RDR/RDR-001-gamma-repository-snapshot.md) | Gamma Repository Snapshot | `docs/RDR/` | Accepted (superseded as baseline) |
+| [RDR-003](../RDR/RDR-003-delta-repository-snapshot.md) | Delta Repository Snapshot (Gateway boundary) | `docs/RDR/` | Accepted (superseded as baseline by RDR-007) |
+| [RDR-007](../RDR/RDR-007-delta-repository-snapshot.md) | Delta Repository Snapshot (post-PR-8B) | `docs/RDR/` | **Accepted — current authoritative baseline** (`55499f2`) |
+| [DPR-005](../DPR/DPR-005-delta-completion-report.md) | Delta Completion Report | `docs/DPR/` | **Accepted — official Milestone Delta completion report** |
 | [GHA-001](../../audit/github-audit-2026-08-02/GHA-001-github-repository-comprehensive-audit.md) | GitHub & Repository Comprehensive Audit | `audit/` | Complete — recorded |
 | [SDR-0001](../security/SDR-0001-codeql-baseline-disposition.md) | CodeQL Baseline Disposition | `docs/security/` | Accepted (dispositions CodeQL #1–5) |
 
-## Pending repository publication
+## Milestone Delta governance trail (record-only / superseded)
 
-The following **7 Atlas governance artifacts remain external to the repository pending authoritative
-publication** — their authoritative text currently exists in the Atlas governance system and has not yet
-been supplied to the repository. They are **reserved and referenced** here; their bodies are **not**
-authored locally to avoid fabricating governance history (`CLAUDE.md` §16.4). Each will be published
-verbatim into the appropriate home once its source text is provided.
+The artifacts below are Atlas governance records produced across Milestone Delta. Progress reports and
+repository snapshots are **superseded** by the current baselines ([RDR-007](../RDR/RDR-007-delta-repository-snapshot.md),
+[DPR-005](../DPR/DPR-005-delta-completion-report.md)); reviews/approvals are recorded as milestone events.
+Record-only entries were maintained in the Atlas governance system; their substance is captured by the
+current published records and by the in-repo verifier/merge trail — they are **not** separately published
+as files (no fabricated bodies; `CLAUDE.md` §16.4).
 
-| Artifact | Title (as referenced) | Intended home | Status |
-|---|---|---|---|
-| RDR-002 | Repository snapshot (subject/scope not yet supplied) | `docs/RDR/` | Pending source text |
-| GCR-001 | Gamma Closure Report | `docs/05-milestones/` or `audit/` (TBD on receipt) | Pending source text |
-| DPR-001 | Delta Progress Report | `docs/05-milestones/` (TBD on receipt) | Pending source text |
-| ATR-003 | Delta Readiness Review | TBD on receipt | Pending source text |
-| ATR-004 | Platform Gateway Contract Review | TBD on receipt | Pending source text (decision recorded in [RDR-003 §3.1](../RDR/RDR-003-delta-repository-snapshot.md#31-gateway-envelope-semantics-atr-004--intentional-not-a-defect)) |
-| SRD-062A | Platform Gateway Contract Revision | `docs/02-architecture/` or `docs/03-adr/` (TBD on receipt) | Pending source text (contract implemented at commit `a4eedac`) |
-| FAA-PR6A | Final Architecture Approval — PR-6A | TBD on receipt | Pending source text (PR-6A merged in PR #21) |
+| Artifact | Title | Status |
+|---|---|---|
+| RDR-002 / RDR-004 / RDR-005 / RDR-006 | Intermediate Delta repository snapshots | Record-only — **superseded by RDR-007** (see [RDR register](../RDR/README.md)) |
+| DPR-001 / DPR-002 / DPR-003 / DPR-004 | Delta progress reports | Record-only — **superseded by [DPR-005](../DPR/DPR-005-delta-completion-report.md)** (see [DPR register](../DPR/README.md)) |
+| ATR-003 | Delta Readiness Review | Record-only — milestone review |
+| ATR-004 | Platform Gateway Contract Review | Record-only — decision captured in [RDR-003 §3.1](../RDR/RDR-003-delta-repository-snapshot.md#31-gateway-envelope-semantics-atr-004--intentional-not-a-defect) |
+| ATR-005 / ATR-006 / ATR-007 | Delta capability/multi-transport reviews | Record-only — milestone reviews (informed PR-7A/PR-8A/PR-8B) |
+| SRD-062A | Platform Gateway Contract Revision | Record-only — contract implemented at commit `a4eedac` |
+| SRD-065A | Repository Scope Correction Directive | Record-only — corrected scope for PR-7B |
+| FAA-PR6A … FAA-PR8B | Final Architecture Approvals (per PR) | Record-only — each captured by its merge commit (PR #21–#26) |
+| GCR-001 | Gamma Closure Report | Record-only (pre-Delta) |
+| SPR-058 … SPR-068 | Sprint Assignments | Process instruments — governed by [`SPR_Standard.md`](../04-standards/SPR_Standard.md); realized as PRs #19–#26 |
 
-> **Why some rows point elsewhere for the decision.** Where an artifact's *decision* is independently
-> and verifiably captured by an in-repo record (e.g. ATR-004's gateway-envelope decision in RDR-003 §3.1),
-> that record — not this index — is the authoritative statement. This register only tracks the artifact's
-> own publication status.
+> **Authoritative statements live in the published records**, not this index. Where a decision is captured
+> by an in-repo record (e.g. ATR-004 → RDR-003 §3.1) or by the merge/verifier trail, that record is
+> authoritative; this register only tracks each artifact's status.
 
 ## Notes
 
