@@ -82,6 +82,11 @@ module.exports = [
   //     the Domain. Loads AFTER the Domain facade (which it delegates to) and
   //     before bootstrap. Owns no business behavior. ---
   'platform/application-gateway.js',
+  // --- transport layer (Milestone Delta, PR-7A): the canonical application
+  //     transport boundary ABOVE the Application Gateway. Loads AFTER the
+  //     gateway it delegates to (and only to) and before bootstrap. Owns no
+  //     business behavior. ---
+  'transport/transport-adapter.js',
   // --- bootstrap (19) ---
   'core/app-bootstrap.js'
 ];

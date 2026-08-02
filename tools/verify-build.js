@@ -920,6 +920,64 @@ check(!/ApplicationGateway/.test(cmdSrc) && !/ApplicationGateway/.test(qrySrc) &
 // Operational surface is UNCHANGED by PR-6A (infrastructure only).
 check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1, 'operational surface unchanged by the gateway (7 aggregates / 7 commands / 1 query)');
 
+// PR-7A "The Transport" — Transport Layer boundary (TransportAdapter), the first
+// operational Platform expansion. Infrastructure only: the canonical application
+// transport boundary ABOVE the Application Gateway. It DELEGATES solely to the
+// Gateway and owns no business behavior. It never touches the Domain directly.
+console.log('== TRANSPORT ADAPTER (PR-7A — canonical application transport boundary) ==');
+const txPath = path.join(root,'js','transport','transport-adapter.js');
+check(fs.existsSync(txPath), 'transport module present: js/transport/transport-adapter.js');
+check(jsFiles.indexOf('transport/transport-adapter.js') !== -1, 'module-order.js includes transport/transport-adapter.js');
+check(indexHtml.includes('<script src="js/transport/transport-adapter.js"></script>'), 'index.html includes transport/transport-adapter.js');
+// Load order: ABOVE the gateway it delegates to — AFTER application-gateway.js and before bootstrap.
+check(jsFiles.indexOf('platform/application-gateway.js') < jsFiles.indexOf('transport/transport-adapter.js') &&
+      jsFiles.indexOf('transport/transport-adapter.js') < jsFiles.indexOf('core/app-bootstrap.js'), 'transport loads after application-gateway.js and before app-bootstrap.js');
+const txSrc = read(txPath);
+check(/const TransportAdapter = \(function/.test(txSrc) && /Object\.freeze\(\{/.test(txSrc), 'TransportAdapter is a frozen object');
+check(/execute:\s*async function/.test(txSrc), 'transport exposes async execute() (awaits the async Gateway)');
+check(dist.includes('const TransportAdapter') && dist.includes('window.TransportAdapter = TransportAdapter'), 'transport present and exposed in dist');
+// DELEGATION CONTRACT — the transport reaches business behavior ONLY via the Application Gateway.
+check(/gateway\.execute\(request\)/.test(txSrc) && /return await gateway\.execute\(/.test(txSrc), 'transport delegates to (and awaits) ApplicationGateway.execute — the canonical request passes through unchanged');
+check(/typeof ApplicationGateway !== 'undefined'/.test(txSrc), 'transport resolves the Application Gateway (its sole delegation target)');
+// TRANSPORT PURITY — it owns no business behavior (comments stripped).
+const txCode = txSrc.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+[['State access', /State\s*[.[]/],
+ ['persistence', /\bpersist\w*\s*\(/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(/],
+ ['toast/alert', /\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(|\balert\s*\(|confirm\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/]
+].forEach(([label,re])=>check(!re.test(txCode), 'transport never performs '+label));
+// NO PLATFORM BYPASS — the transport never reaches the Domain, an Aggregate, a Handler, or a registry.
+check(!/\bDomain\s*[.[]/.test(txCode), 'transport never calls the Domain facade directly (must go through the Gateway)');
+check(!/domain\.(command|query)/.test(txCode), 'transport never invokes Domain.command/Domain.query directly');
+cmdHandlers.forEach((h)=>check(!new RegExp('\\b'+h+'\\s*\\(').test(txCode), 'transport does not call handler directly: '+h));
+check(!/\w+Aggregate\s*[.[]/.test(txCode), 'transport does not touch any aggregate directly');
+check(!/DOMAIN_COMMANDS|DOMAIN_QUERIES|commandHandler\s*\(|queryHandler\s*\(/.test(txCode), 'transport does not re-implement the Domain registry/routing');
+// TRANSPORT RESPONSE — the canonical Platform response is returned VERBATIM (business outcome never reinterpreted).
+check(!/result\.success|result\.ok|result\.error|\.result\b/.test(txCode), 'transport never inspects/reinterprets the Platform/Domain result (returned verbatim)');
+// TRANSPORT ERROR CONTRACT — may classify ONLY invalid transport request + transport unavailable (source:'transport').
+check(/error: \{ source: 'transport', code: 'INVALID_TRANSPORT_REQUEST'/.test(txSrc), 'transport classifies an invalid transport request: { ok:false, error:{ source:"transport", code:"INVALID_TRANSPORT_REQUEST" } }');
+check(/error: \{ source: 'transport', code: 'TRANSPORT_UNAVAILABLE'/.test(txSrc), 'transport classifies a missing Gateway: { ok:false, error:{ source:"transport", code:"TRANSPORT_UNAVAILABLE" } }');
+check(!/DOMAIN_FAULT|'gateway'|source: 'domain'/.test(txCode), 'transport does not mint Platform/Domain error sources (only source:"transport")');
+// META is opaque — the transport carries the request through and never rewrites meta contents.
+check(!/meta\s*=\s*\{|meta\.[a-zA-Z]/.test(txCode), 'transport treats meta as opaque (never constructs or reads meta contents)');
+// DETERMINISM — the transport generates no ids/timestamps/randomness of its own.
+check(!/Math\.random|Date\.now|new Date\(|crypto\./.test(txCode), 'transport is deterministic — it generates no ids/timestamps/randomness');
+// ONE-WAY DEPENDENCY — neither the Domain nor the Gateway depends on the transport.
+check(!/TransportAdapter|transport-adapter|transport\//.test(facSrc), 'domain-layer.js has no dependency on the transport layer (one-way)');
+// (test the comment-stripped gateway code: its comments legitimately mention "a transport-adapter concern")
+check(!/TransportAdapter|transport-adapter|transport\//.test(gwCode), 'application-gateway.js has no dependency on the transport layer (one-way; the Gateway stays the boundary below)');
+// Operational surface is UNCHANGED by PR-7A (infrastructure only).
+check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1, 'operational surface unchanged by the transport (7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query)');
+// Registered executable surface (full registry, incl. multi-segment ids) is 13 commands / 4 queries.
+function allRegisteredIds(src){ return (src.match(/^\s*'([a-z][a-zA-Z]*(?:\.[a-zA-Z]+)+)':/gm)||[]).map(s=>s.match(/'([^']+)'/)[1]); }
+const allCmdIds = allRegisteredIds(cmdSrc), allQryIds = allRegisteredIds(qrySrc);
+check(allCmdIds.length === 13, 'registered command surface is exactly 13 (found '+allCmdIds.length+')');
+check(allQryIds.length === 4, 'registered query surface is exactly 4 (found '+allQryIds.length+')');
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');
