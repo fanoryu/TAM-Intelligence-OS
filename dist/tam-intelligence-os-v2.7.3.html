@@ -5996,8 +5996,13 @@ async function transitionEmployeeLifecycle(id, transition){
   e.employmentStatus = to;
   e.updatedAt = new Date().toISOString();
   (e.history = e.history || []).push({ event:'lifecycle-transition', ts:e.updatedAt, note:'Lifecycle '+from+' → '+to });
-  const ok = await persistEmployees();
-  if(ok !== true){
+  // PR-9B "The Adoption" — persistence mechanics now go through the Repository
+  // boundary (EmployeeRepository.save() -> persistEmployees() -> StorageAdapter),
+  // matching the contact (PR-8A) and employment (PR-9A) slices. The handler still
+  // owns the lifecycle mutation, updatedAt, history, the single persistence
+  // invocation, and rollback; the Repository only normalizes the write result.
+  const persisted = await EmployeeRepository.save();
+  if(persisted.ok !== true){
     // Atomic rollback — restore status, timestamp, and drop the audit entry.
     e.employmentStatus = prevStatus;
     e.history.pop();
