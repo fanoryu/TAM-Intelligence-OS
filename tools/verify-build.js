@@ -443,7 +443,10 @@ const ueNext = ueRest.search(/\n(async function|function) /);
 const ueBody = ueNext>=0 ? ueRest.slice(0, ueNext) : ueRest;
 ['monthlyBaseSalary','email','phone','notes','bankName','bankAccount','bankAccountNumber','bankAccountHolder','active','fullName','employeeId','createdAt'].forEach((f)=>
   check(!ueBody.includes(f), 'employment handler does not touch forbidden field: '+f));
-check((ueBody.match(/persistEmployees\(/g)||[]).length === 1, 'employment handler persists exactly once (persistEmployees)');
+// PR-9A — the employment handler's persistence now goes through the Repository (comment-stripped).
+const ueCode = stripComments(ueBody);
+check((ueCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1, 'employment handler persists exactly once (via EmployeeRepository.save())');
+check(!/persistEmployees\(/.test(ueCode), 'employment handler no longer calls persistEmployees() directly (routed through the Repository)');
 check(/e\[k\] = applied\[k\]/.test(ueBody), 'employment handler performs the field mutation');
 check(/e\.updatedAt = new Date/.test(ueBody), 'employment handler updates updatedAt');
 check(/event:'employment-edited'/.test(ueBody), 'employment handler appends exactly one employment-edited history entry');
@@ -1081,7 +1084,13 @@ const storageSrc = read(path.join(root,'js','core','storage-adapter.js'));
 check(/const StorageAdapter = \{/.test(storageSrc) && /async set\(key, value\)/.test(storageSrc) && /async get\(key\)/.test(storageSrc), 'StorageAdapter remains the unchanged storage-backend boundary (get/set present)');
 check(!/EmployeeRepository|repository\//.test(storageSrc), 'StorageAdapter has no dependency on the Repository (one-way)');
 // Unrelated employee handlers are UNCHANGED — they still persist directly (only contact migrated).
-check((ueBody.match(/persistEmployees\(/g)||[]).length === 1 && (tlBody.match(/persistEmployees\(/g)||[]).length === 1 && (ucoBody.match(/persistEmployees\(/g)||[]).length === 1, 'unrelated employee handlers (employment/lifecycle/compensation) still persist directly — only the contact slice is migrated');
+// PR-9A adoption state: contact + employment are Repository-mediated; lifecycle + compensation remain direct.
+const tlCode = stripComments(tlBody), ucoCode = stripComments(ucoBody);
+check((ucCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1 && (ueCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1, 'exactly two aggregate-backed Employee handlers are Repository-mediated (contact + employment)');
+check((tlCode.match(/persistEmployees\(/g)||[]).length === 1 && !/EmployeeRepository\.save\(/.test(tlCode), 'Employee Lifecycle handler remains direct (persistEmployees, not Repository)');
+check((ucoCode.match(/persistEmployees\(/g)||[]).length === 1 && !/EmployeeRepository\.save\(/.test(ucoCode), 'Employee Compensation handler remains direct (persistEmployees, not Repository)');
+// Total Repository call sites across employees.js is exactly two (no unrelated migration).
+check((stripComments(empSrc).match(/EmployeeRepository\.save\(\)/g)||[]).length === 2, 'exactly two EmployeeRepository.save() call sites in employees.js (contact + employment only)');
 // The Domain facade has no dependency on the Repository (one-way).
 check(!/EmployeeRepository|repository\//.test(facSrc), 'domain-layer.js has no dependency on the repository layer (one-way)');
 // Operational surface is UNCHANGED by PR-8A (persistence infrastructure only).
