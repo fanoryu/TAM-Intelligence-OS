@@ -32,6 +32,10 @@ module.exports = [
   //     Loads AFTER the persist functions (persistEmployees) it delegates to and
   //     BEFORE the migrated handler (people/employees.js). Owns no business behavior. ---
   'repository/employee-repository.js',
+  // --- PR-10A: the SECOND entity Repository. Loads AFTER the persist functions
+  //     (persistContracts) it delegates to and BEFORE the migrated handler
+  //     (people/contracts.js). Owns no business behavior. ---
+  'repository/contract-repository.js',
   // --- import UI + analytics + settings + reports (from 11) ---
   'import/import-preview.js',
   'analytics/plan-vs-actual.js',

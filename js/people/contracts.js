@@ -309,8 +309,13 @@ async function updateContractDates(id, patch){
   changed.forEach(k=>{ before[k] = c[k]; c[k] = applied[k]; });
   c.updatedAt = new Date().toISOString();
   (c.history=c.history||[]).push({ event:'contract-dates-edited', ts:c.updatedAt, note:'Contract dates updated ('+changed.join(', ')+')' });
-  const ok = await persistContracts();
-  if(ok !== true){
+  // PR-10A "The Contract Foundation" — persistence mechanics now go through the
+  // Repository boundary (ContractRepository.save() -> persistContracts() ->
+  // StorageAdapter), the second entity Repository. The handler still owns
+  // validation, mutation, updatedAt, history, the single persistence invocation,
+  // and rollback; the Repository only normalizes the write result.
+  const persisted = await ContractRepository.save();
+  if(persisted.ok !== true){
     // Atomic rollback — restore the changed fields, timestamp, and drop the entry.
     changed.forEach(k=> c[k] = before[k]);
     c.history.pop();
