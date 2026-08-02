@@ -854,6 +854,72 @@ check(cmdIds.filter(id=>qryIds.indexOf(id)!==-1).length === 0, 'no command/query
 cmdHandlers.forEach((h)=>check(dist.includes('function '+h+'('), 'command handler resolves to a real function: '+h+'()'));
 qryHandlers.forEach((h)=>check(dist.includes('function '+h+'('), 'query handler resolves to a real function: '+h+'()'));
 
+// PR-6A "The Gateway" — first Platform Layer boundary (ApplicationGateway).
+// Infrastructure only: a pure application boundary that DELEGATES to the Domain
+// facade and owns no business behavior. Implements the ATR-004 / SRD-062A canonical
+// Platform Contract (request {kind,name,args,meta?}; uniform response envelope;
+// three-class errors). Milestone Delta begins here.
+console.log('== APPLICATION GATEWAY (PR-6A — canonical platform contract) ==');
+const gwPath = path.join(root,'js','platform','application-gateway.js');
+check(fs.existsSync(gwPath), 'platform module present: js/platform/application-gateway.js');
+check(jsFiles.indexOf('platform/application-gateway.js') !== -1, 'module-order.js includes platform/application-gateway.js');
+check(indexHtml.includes('<script src="js/platform/application-gateway.js"></script>'), 'index.html includes platform/application-gateway.js');
+// Load order: AFTER the Domain facade it delegates to, and before bootstrap.
+check(jsFiles.indexOf('domain/domain-layer.js') < jsFiles.indexOf('platform/application-gateway.js') &&
+      jsFiles.indexOf('platform/application-gateway.js') < jsFiles.indexOf('core/app-bootstrap.js'), 'gateway loads after domain-layer.js and before app-bootstrap.js');
+const gwSrc = read(gwPath);
+check(/const ApplicationGateway = \(function/.test(gwSrc) && /Object\.freeze\(\{/.test(gwSrc), 'ApplicationGateway is a frozen object');
+check(/execute:\s*(async\s+)?function/.test(gwSrc), 'gateway exposes execute()');
+check(dist.includes('const ApplicationGateway') && dist.includes('window.ApplicationGateway = ApplicationGateway'), 'gateway present and exposed in dist');
+// DELEGATION CONTRACT — the gateway reaches business behavior ONLY via the Domain facade.
+check(/domain\.command\.apply\(/.test(gwSrc) && /domain\.query\.apply\(/.test(gwSrc), 'gateway delegates to Domain.command and Domain.query');
+check(/typeof Domain !== 'undefined'/.test(gwSrc), 'gateway resolves the Domain facade (delegation target)');
+// GATEWAY PURITY — it owns no business behavior (comments stripped).
+const gwCode = gwSrc.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+[['State access', /State\s*[.[]/],
+ ['persistence', /\bpersist\w*\s*\(/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(/],
+ ['toast/alert', /\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(|\balert\s*\(|confirm\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/]
+].forEach(([label,re])=>check(!re.test(gwCode), 'gateway never performs '+label));
+// NO DOMAIN BYPASS — the gateway never calls a handler or aggregate directly.
+cmdHandlers.forEach((h)=>check(!new RegExp('\\b'+h+'\\s*\\(').test(gwCode), 'gateway does not call handler directly: '+h));
+check(!/\w+Aggregate\s*[.[]/.test(gwCode), 'gateway does not touch any aggregate directly');
+// NO DUPLICATE AUTHORITY — the gateway does not re-implement command/query routing.
+check(!/DOMAIN_COMMANDS|DOMAIN_QUERIES|commandHandler\s*\(|queryHandler\s*\(/.test(gwCode), 'gateway does not re-implement the Domain registry/routing');
+// --- CANONICAL REQUEST CONTRACT (ATR-004 / SRD-062A) ---
+check(/request\.kind/.test(gwSrc) && /request\.name/.test(gwSrc) && /request\.args/.test(gwSrc) && /request\.meta/.test(gwSrc), 'gateway request contract reads kind / name / args / meta');
+check(/kind !== 'command' && kind !== 'query'/.test(gwSrc), 'kind is constrained to command | query');
+check(/request\.args === undefined\) \? \[\]/.test(gwSrc), 'args defaults to [] and is the canonical positional carrier');
+check(/meta !== undefined/.test(gwSrc) && /INVALID_META/.test(gwSrc), 'meta is OPTIONAL and shape-validated (plain object) when present');
+// --- CANONICAL RESPONSE ENVELOPE (uniform: ok/kind/name/result?/error?/meta?) ---
+check(/\{ ok: true, kind: n\.kind, name: n\.name, result: result \}/.test(gwSrc), 'success envelope is { ok:true, kind, name, result } with the Domain result verbatim');
+check(/ok: false, error: \{ source: 'gateway'/.test(gwSrc), 'structural failure envelope is { ok:false, error:{ source:"gateway", ... } }');
+check(/if \(n\.meta !== undefined\) ok\.meta = n\.meta/.test(gwSrc), 'meta is transported back into the response verbatim (opaque)');
+// `ok` reflects GATEWAY execution only — a business failure stays inside `result` (ok stays true).
+check(!/result\.success|result\.ok|result\.error/.test(gwCode), 'gateway never inspects/reinterprets the Domain business outcome (result is opaque)');
+// --- STRUCTURAL ERROR CONTRACT — typed codes, never reaches the Domain ---
+['INVALID_REQUEST','INVALID_KIND','INVALID_NAME','INVALID_ARGS','INVALID_META'].forEach((code)=>
+  check(gwSrc.includes("'"+code+"'"), 'gateway returns typed structural rejection code: '+code));
+// --- FAULT CONTRACT — unexpected Domain exceptions are caught and enveloped ---
+check(/try \{[\s\S]*domain\.(command|query)\.apply[\s\S]*\} catch \(err\)/.test(gwSrc), 'gateway wraps Domain delegation in try/catch (no unhandled exception escapes)');
+// Domain command handlers are async — the gateway AWAITS delegation so result is the
+// resolved outcome and async rejections are caught (not left as unhandled Promises).
+check(/execute:\s*async function/.test(gwSrc), 'gateway execute() is async (Domain handlers return Promises)');
+check(/await domain\.command\.apply\(/.test(gwSrc) && /await domain\.query\.apply\(/.test(gwSrc), 'gateway awaits Domain delegation (resolved result under `result`; async rejections caught)');
+check(/source: 'domain', code: 'DOMAIN_FAULT'/.test(gwSrc), 'fault envelope is { ok:false, error:{ source:"domain", code:"DOMAIN_FAULT" } }');
+check(/DOMAIN_UNAVAILABLE/.test(gwSrc), 'a missing Domain facade returns a typed gateway-source DOMAIN_UNAVAILABLE (never throws)');
+// --- DETERMINISM — the gateway generates no ids/timestamps/randomness of its own ---
+check(!/Math\.random|Date\.now|new Date\(|Date\.now\(|crypto\./.test(gwCode), 'gateway is deterministic — it generates no ids/timestamps/randomness (a transport-adapter concern)');
+// The Domain facade must NOT depend on the platform layer (one-way dependency).
+check(!/ApplicationGateway|application-gateway|platform\//.test(facSrc), 'domain-layer.js has no dependency on the platform layer (one-way)');
+check(!/ApplicationGateway/.test(cmdSrc) && !/ApplicationGateway/.test(qrySrc) && !/ApplicationGateway/.test(aggSrc), 'domain registries have no dependency on the gateway');
+// Operational surface is UNCHANGED by PR-6A (infrastructure only).
+check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1, 'operational surface unchanged by the gateway (7 aggregates / 7 commands / 1 query)');
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');

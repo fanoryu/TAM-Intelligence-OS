@@ -78,6 +78,10 @@ module.exports = [
   'domain/payroll-lifecycle-aggregate.js',
   'domain/contract-status-aggregate.js',
   'domain/domain-layer.js',
+  // --- platform layer (Milestone Delta, PR-6A): the application boundary above
+  //     the Domain. Loads AFTER the Domain facade (which it delegates to) and
+  //     before bootstrap. Owns no business behavior. ---
+  'platform/application-gateway.js',
   // --- bootstrap (19) ---
   'core/app-bootstrap.js'
 ];
