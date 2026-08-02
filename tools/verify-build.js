@@ -565,7 +565,10 @@ const ucoBody = ucoNext>=0 ? ucoRest.slice(0, ucoNext) : ucoRest;
 // Compensation changes ONLY monthlyBaseSalary (+ updatedAt/history); every other field forbidden.
 ['employmentStatus','jobTitle','department','joinDate','contractType','email','phone','notes','bankName','bankAccount','bankAccountNumber','bankAccountHolder','active','fullName','employeeId','createdAt'].forEach((f)=>
   check(!ucoBody.includes(f), 'compensation handler does not touch forbidden field: '+f));
-check((ucoBody.match(/persistEmployees\(/g)||[]).length === 1, 'compensation handler persists exactly once (persistEmployees)');
+// PR-9C — the compensation handler's persistence now goes through the Repository (comment-stripped).
+const ucoCodeLc = stripComments(ucoBody);
+check((ucoCodeLc.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1, 'compensation handler persists exactly once (via EmployeeRepository.save())');
+check(!/persistEmployees\(/.test(ucoCodeLc), 'compensation handler no longer calls persistEmployees() directly (routed through the Repository)');
 check(/e\.monthlyBaseSalary = value/.test(ucoBody), 'compensation handler performs the monthlyBaseSalary mutation');
 check(/e\.updatedAt = new Date/.test(ucoBody), 'compensation handler updates updatedAt');
 check(/event:'compensation-edited'/.test(ucoBody), 'compensation handler appends exactly one compensation-edited history entry');
@@ -1087,12 +1090,12 @@ const storageSrc = read(path.join(root,'js','core','storage-adapter.js'));
 check(/const StorageAdapter = \{/.test(storageSrc) && /async set\(key, value\)/.test(storageSrc) && /async get\(key\)/.test(storageSrc), 'StorageAdapter remains the unchanged storage-backend boundary (get/set present)');
 check(!/EmployeeRepository|repository\//.test(storageSrc), 'StorageAdapter has no dependency on the Repository (one-way)');
 // Unrelated employee handlers are UNCHANGED — they still persist directly (only contact migrated).
-// PR-9B adoption state: contact + employment + lifecycle are Repository-mediated; compensation remains direct.
+// PR-9C adoption state: the Employee aggregate is now FULLY Repository-mediated (all four handlers).
 const tlCode = stripComments(tlBody), ucoCode = stripComments(ucoBody);
-check((ucCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1 && (ueCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1 && (tlCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1, 'exactly three aggregate-backed Employee handlers are Repository-mediated (contact + employment + lifecycle)');
-check((ucoCode.match(/persistEmployees\(/g)||[]).length === 1 && !/EmployeeRepository\.save\(/.test(ucoCode), 'Employee Compensation handler remains direct (persistEmployees, not Repository)');
-// Total Repository call sites across employees.js is exactly three (no unrelated migration).
-check((stripComments(empSrc).match(/EmployeeRepository\.save\(\)/g)||[]).length === 3, 'exactly three EmployeeRepository.save() call sites in employees.js (contact + employment + lifecycle only)');
+check((ucCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1 && (ueCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1 && (tlCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1 && (ucoCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1, 'exactly four aggregate-backed Employee handlers are Repository-mediated (contact + employment + lifecycle + compensation) — Employee aggregate fully mediated');
+check(!/persistEmployees\(/.test(ucCode) && !/persistEmployees\(/.test(ueCode) && !/persistEmployees\(/.test(tlCode) && !/persistEmployees\(/.test(ucoCode), 'no aggregate-backed Employee handler calls persistEmployees() directly (all four route through the Repository)');
+// Total Repository call sites across employees.js is exactly four (no unrelated migration).
+check((stripComments(empSrc).match(/EmployeeRepository\.save\(\)/g)||[]).length === 4, 'exactly four EmployeeRepository.save() call sites in employees.js (contact + employment + lifecycle + compensation only)');
 // The Domain facade has no dependency on the Repository (one-way).
 check(!/EmployeeRepository|repository\//.test(facSrc), 'domain-layer.js has no dependency on the repository layer (one-way)');
 // Operational surface is UNCHANGED by PR-8A (persistence infrastructure only).
