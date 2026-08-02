@@ -28,6 +28,8 @@ hold open, not a problem it is ignoring.
 | [ARCH-003](#arch-003--compensation-write-authority) | Compensation Write Authority | Planned | [ADR-010](../03-adr/ADR-010-Compensation-Write-Authority.md) (Proposed) |
 | [ARCH-004](#arch-004--contract-date-model-authority) | Contract Date Model Authority | Planned | [ADR-011](../03-adr/ADR-011-Contract-Date-Model-Authority.md) (Proposed) |
 | [ARCH-005](#arch-005--contract-overlap-enforcement) | Contract Overlap Enforcement | Planned | [ADR-012](../03-adr/ADR-012-Contract-Overlap-Enforcement.md) (Proposed) |
+| [ARCH-006](#arch-006--contract-status--renewal-write-authority) | Contract Status & Renewal Write Authority | Planned | — |
+| [ARCH-007](#arch-007--legacy-lifecycle-mutation-paths) | Legacy Lifecycle Mutation Paths | Planned | — |
 
 ---
 
@@ -191,3 +193,75 @@ warning only.
 **ARCH-005 is Planned, non-blocking, not a defect, and not implementation authorization.**
 
 Evaluated in [ADR-012 (Proposed)](../03-adr/ADR-012-Contract-Overlap-Enforcement.md).
+
+---
+
+## ARCH-006 — Contract Status & Renewal Write Authority
+
+**Status:** Planned
+
+### Context
+PR-5K introduced `ContractStatusAggregate` via `contract.status.transition` as the controlled Domain
+path for Contract status transitions. Two write paths still assign Contract status **outside** that
+aggregate gate, and both are correct and intentional as shipped:
+
+- **Full Contract editor** (`js/people/contracts.js:146`) — `rec.status = fd.get('status')` sets status
+  directly when the full editor is saved.
+- **Contract renewal** (`js/people/contracts.js:262`) — `c.status = 'Renewed'` marks the source contract
+  as renewed while creating its successor.
+
+This is the same residual-authority pattern already recorded for compensation (ARCH-003) and contract
+dates (ARCH-004): a controlled aggregate path coexists with a legacy editor path. It is **documented
+technical debt, not a defect, and not authorization to migrate it here.**
+
+### Objective
+Determine the permanent authoritative write path for Contract status, and how renewal relates to it.
+
+### Questions to evaluate
+- Should Contract status edits from the full editor route exclusively through
+  `contract.status.transition`?
+- Should the legacy Contract editor stop writing `status` directly?
+- How should any migration occur without runtime regression?
+
+### Constraints (recorded decisions)
+- **Contract renewal must NOT be routed into the generic `contract.status.transition` command.** Renewal
+  is a compound operation (mark source `Renewed` **and** create a successor contract); the generic
+  status transition models neither the linkage nor the successor creation.
+- **`Renewed` remains renewal-only** — it is not a general transition target and must not be reachable as
+  an ordinary status change.
+- Any future consolidation requires a **compound renewal command** or a **dedicated renewal/lifecycle
+  authority**, evaluated on its own, before the renewal path is migrated.
+- No runtime change, no UI migration, no implementation authorization in this record.
+
+**ARCH-006 is Planned, non-blocking, not a defect, and not implementation authorization.**
+
+---
+
+## ARCH-007 — Legacy Lifecycle Mutation Paths
+
+**Status:** Planned
+
+### Context
+Several operational engines predate the aggregate boundaries and still mutate lifecycle status directly.
+They are correct and intentional as shipped, and are the pre-existing operational paths behind the
+descriptive (handler-only) registry entries (see [RDR-003 §2.2](../RDR/RDR-003-delta-repository-snapshot.md#22-total-registered-executable-surface--full-registry)):
+
+- **Supplemental lifecycle** — `js/people/supplemental-engine.js` (e.g. `:236` `Posted`, `:273`
+  `Executed`, `:310` rollback to `Approved`). Registered descriptive commands (`supplemental.generate` /
+  `.transition` / `.post`) exist, but the engine still writes status directly.
+- **Payroll & Overtime** — `js/people/payroll-ops-engine.js` (`:446`/`:452`/`:458`) and
+  `js/people/payroll-planning.js` (`:106`/`:109`) set `Committed` / `Committed to Payroll`;
+  `js/people/overtime.js` (`:142`/`:423`) sets overtime status.
+- **Monthly plan** — `js/people/monthly-plan.js` (`:74` `Committed`, `:136` `Reviewed`).
+
+### Objective
+Record these as known residual authority to be evaluated when their aggregates are introduced — not to
+migrate now.
+
+### Constraints
+- No runtime change.
+- No implementation authorization.
+- Committed payroll and posted finance remain immutable (`CLAUDE.md` §8, §9); any future migration must
+  preserve that invariant.
+
+**ARCH-007 is Planned, non-blocking, not a defect, and not implementation authorization.**

@@ -38,9 +38,14 @@ areas, one bounded slice at a time, following the established aggregate → hand
 - **PR-5I** — The Binder — first Contract boundary (`ContractDateAggregate`).
 - **PR-5J** — The Accountant — first Payroll boundary (`PayrollLifecycleAggregate`).
 
-At close: **6 aggregates, 6 commands, 1 query** on `main`. The next slice, **PR-5K — The Ledger**,
-remains Upcoming and is carried forward to future Domain expansion. The frozen repository state is
-recorded in [RDR-001](../RDR/RDR-001-gamma-repository-snapshot.md).
+At close: **6 aggregates, 6 commands, 1 query** on `main`, recorded in
+[RDR-001](../RDR/RDR-001-gamma-repository-snapshot.md).
+
+> **Since Gamma closed:** PR-5K "The Ledger" (`ContractStatusAggregate`) and PR-6A "The Gateway" (the
+> first Platform boundary) have both merged. The **current authoritative baseline is
+> [RDR-003](../RDR/RDR-003-delta-repository-snapshot.md)** — 7 aggregate-backed commands + 1
+> aggregate-backed query behind 7 aggregates (13 registered commands / 4 registered queries), plus 1
+> Application Gateway, at commit `851c038`. RDR-001 is no longer the latest baseline.
 
 ## Milestone Delta — **Upcoming**
 **Theme:** Domain Events & Policies.
