@@ -44,7 +44,16 @@
    INVARIANTS (enforced by the verifier): the Transport is business-blind,
    stateless, deterministic (generates no ids/timestamps/randomness), and
    delegates SOLELY to ApplicationGateway — never to the Domain facade, an
-   Aggregate, a Handler, or a Command/Query registry.
+   Aggregate, a Handler, or a Command/Query registry. The dependency is strictly
+   one-way (Transport → Application Gateway → Domain); the Platform Layer never
+   references the Transport Layer.
+
+   DESIGN NOTE (FAA-PR7A): the Transport Layer INTENTIONALLY establishes the
+   canonical transport boundary BEFORE any concrete transport implementation
+   (REST, CLI, worker, AI/MCP, mobile) exists. This is a deliberate architectural
+   design decision — the boundary is defined first so every future transport has a
+   single, stable seam to delegate through — NOT dead code. It stays inert until a
+   concrete transport is separately authorized to consume it.
    ============================================================ */
 
 const TransportAdapter = (function () {

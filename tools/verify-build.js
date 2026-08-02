@@ -970,6 +970,10 @@ check(!/Math\.random|Date\.now|new Date\(|crypto\./.test(txCode), 'transport is 
 check(!/TransportAdapter|transport-adapter|transport\//.test(facSrc), 'domain-layer.js has no dependency on the transport layer (one-way)');
 // (test the comment-stripped gateway code: its comments legitimately mention "a transport-adapter concern")
 check(!/TransportAdapter|transport-adapter|transport\//.test(gwCode), 'application-gateway.js has no dependency on the transport layer (one-way; the Gateway stays the boundary below)');
+// EXPLICIT ONE-WAY INVARIANT (FAA-PR7A) — the Application Gateway must NEVER reference
+// TransportAdapter. Preserves Transport -> Application Gateway -> Domain; the Platform
+// Layer stays independent of the Transport Layer (no reverse dependency permitted).
+check(!/\bTransportAdapter\b/.test(gwCode), 'one-way invariant: Application Gateway never references TransportAdapter (Platform independent of Transport)');
 // Operational surface is UNCHANGED by PR-7A (infrastructure only).
 check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1, 'operational surface unchanged by the transport (7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query)');
 // Registered executable surface (full registry, incl. multi-segment ids) is 13 commands / 4 queries.
