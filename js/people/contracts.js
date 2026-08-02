@@ -182,8 +182,14 @@ async function transitionContractStatus(id, transition){
   c.status = to;
   c.updatedAt = new Date().toISOString();
   (c.history=c.history||[]).push({event:to.toLowerCase(), ts:c.updatedAt, note:`Status set to ${to}`});
-  const ok = await persistContracts();
-  if(ok !== true){
+  // PR-10B "The Contract Status Slice" — persistence mechanics now go through the
+  // Repository boundary (ContractRepository.save() -> persistContracts() ->
+  // StorageAdapter), completing Repository adoption for the Contract aggregate. The
+  // handler still owns transition validation, mutation, updatedAt, history, the
+  // single persistence invocation, and rollback; the Repository only normalizes the
+  // write result. Strict persisted.ok handling — no truthy/falsy ambiguity.
+  const persisted = await ContractRepository.save();
+  if(persisted.ok !== true){
     // Atomic rollback — restore status, timestamp, and drop the history entry.
     c.status = prevStatus;
     c.history.pop();
