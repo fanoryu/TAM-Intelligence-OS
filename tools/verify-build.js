@@ -349,7 +349,11 @@ const ucNext = ucRest.search(/\n(async function|function) /);
 const ucBody = ucNext>=0 ? ucRest.slice(0, ucNext) : ucRest;
 ['monthlyBaseSalary','employmentStatus','contractType','jobTitle','department','bankName','bankAccount','bankAccountNumber','monthlySalary','joinDate','active'].forEach((f)=>
   check(!ucBody.includes(f), 'contact handler does not touch forbidden field: '+f));
-check(ucBody.includes('persistEmployees(') && (ucBody.match(/persistEmployees\(/g)||[]).length === 1, 'contact handler persists exactly once (persistEmployees)');
+// PR-8A — the contact handler's persistence now goes through the Repository boundary.
+// (comment-stripped: comments legitimately mention both symbols to describe the path.)
+const ucCode = stripComments(ucBody);
+check((ucCode.match(/EmployeeRepository\.save\(\)/g)||[]).length === 1, 'contact handler persists exactly once (via EmployeeRepository.save())');
+check(!/persistEmployees\(/.test(ucCode), 'contact handler no longer calls persistEmployees() directly (routed through the Repository)');
 check(!/logActivity\(/.test(ucBody), 'contact handler adds no duplicate audit call (history-only, matching the edit path)');
 check(/success:\s*true/.test(ucBody) && /success:\s*false/.test(ucBody), 'contact handler returns a typed success/failure outcome');
 // The full employee save path is unchanged and still direct (not routed):
@@ -394,7 +398,7 @@ const aggCode = aggSrc2.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,
 check(/return \{ ok: true, patch:/.test(aggSrc2), 'aggregate returns only a sanitized patch on success');
 check(/return \{ ok: false, error: 'EmployeeNotFound' \}/.test(aggSrc2) && /error: 'NoContactFieldsProvided'/.test(aggSrc2), 'aggregate returns typed business failures (EmployeeNotFound / NoContactFieldsProvided)');
 // Handler separation: mutation/persistence/history remain in the handler, NOT the aggregate.
-check(ucBody.includes('persistEmployees('), 'handler still performs persistence (persistEmployees)');
+check(ucBody.includes('EmployeeRepository.save('), 'handler still performs persistence (via EmployeeRepository.save())');
 check(/e\.history/.test(ucBody) || /history/.test(ucBody), 'handler still performs history/audit');
 check(/e\[k\] = applied\[k\]|e\[k\]=applied\[k\]/.test(ucBody), 'handler still performs the field mutation');
 
@@ -1034,6 +1038,54 @@ check(!/uiExecute/.test(gwCode), 'Application Gateway is independent of the UI s
 check(!/uiExecute|TransportAdapter/.test(facSrc), 'Domain is independent of the Transport/UI seam (never references uiExecute/TransportAdapter)');
 // Operational surface is UNCHANGED by PR-7B (consumption paths only; no Domain op added/removed).
 check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational surface unchanged by the conduit (7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query; 13 registered commands / 4 registered queries)');
+
+// PR-8A "The Repository" — the first persistence-MECHANICS boundary, proven on one
+// bounded reference slice (Employee Identity / employee.contact.update). It isolates
+// HOW an entity collection is persisted from the handler that decides WHAT to persist.
+// It owns NO business behavior; the handler keeps mutation/updatedAt/history/rollback.
+console.log('== EMPLOYEE REPOSITORY (PR-8A — persistence-mechanics boundary) ==');
+const repoPath = path.join(root,'js','repository','employee-repository.js');
+check(fs.existsSync(repoPath), 'repository module present: js/repository/employee-repository.js');
+check(jsFiles.indexOf('repository/employee-repository.js') !== -1, 'module-order.js includes repository/employee-repository.js');
+check(indexHtml.includes('<script src="js/repository/employee-repository.js"></script>'), 'index.html includes repository/employee-repository.js');
+// Load order: AFTER the persist infrastructure it delegates to, and BEFORE the migrated handler.
+check(jsFiles.indexOf('core/hr-persistence-portability.js') < jsFiles.indexOf('repository/employee-repository.js') &&
+      jsFiles.indexOf('repository/employee-repository.js') < jsFiles.indexOf('people/employees.js'), 'repository loads after hr-persistence-portability.js and before people/employees.js');
+const repoSrc = read(repoPath);
+const repoCode = stripComments(repoSrc);
+check(/const EmployeeRepository = Object\.freeze\(\{/.test(repoSrc), 'EmployeeRepository is a frozen object');
+check(/async save\(\)/.test(repoSrc), 'repository exposes async save()');
+check(dist.includes('const EmployeeRepository') && dist.includes('window.EmployeeRepository = EmployeeRepository'), 'repository present and exposed in dist');
+// DELEGATION — the repository delegates persistence to the EXISTING persist function only (code, not comments).
+check(/await persistEmployees\(\)/.test(repoCode) && (repoCode.match(/persistEmployees\(/g)||[]).length === 1, 'repository delegates persistence to the existing persistEmployees() exactly once');
+// RESULT CONTRACT — strict { ok:true } / { ok:false, error:'PersistFailed' }; no truthy/falsy ambiguity.
+check(/ok:\s*true/.test(repoCode) && /ok:\s*false,\s*error:\s*'PersistFailed'/.test(repoCode) && /ok === true/.test(repoCode), 'repository normalizes the strict boolean into { ok:true } / { ok:false, error:"PersistFailed" }');
+// REPOSITORY PURITY — persistence mechanics ONLY (comments stripped).
+[['State access', /State\s*[.[]/],
+ ['field mutation', /\be\[[^\]]+\]\s*=|\.updatedAt\s*=/],
+ ['history creation', /\.history\b|\.push\(/],
+ ['rollback', /rollback|\.pop\(/],
+ ['UI render', /\brender\s*\(|innerHTML/],
+ ['toast/alert', /\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(/],
+ ['navigation', /State\.view\s*=|hrNavTo\s*\(/],
+ ['audit logging', /logActivity\s*\(/],
+ ['Domain call', /\bDomain\s*[.[]/],
+ ['aggregate call', /\w+Aggregate\s*[.[]/],
+ ['direct storage bypass', /localStorage|window\.storage|StorageAdapter\s*[.[]/]
+].forEach(([label,re])=>check(!re.test(repoCode), 'repository never performs '+label));
+// The migrated handler still OWNS rollback (the repository does not roll back).
+check(/e\.history\.pop\(\)/.test(ucBody) && /e\.updatedAt = prevUpdatedAt/.test(ucBody) && /Object\.keys\(before\)\.forEach/.test(ucBody), 'contact handler still owns full rollback (fields + history.pop + updatedAt) on persistence failure');
+check(/error:'PersistFailed'/.test(ucBody), 'contact handler returns the typed PersistFailed on repository failure');
+// StorageAdapter remains the untouched storage-backend boundary (repository goes through persistEmployees).
+const storageSrc = read(path.join(root,'js','core','storage-adapter.js'));
+check(/const StorageAdapter = \{/.test(storageSrc) && /async set\(key, value\)/.test(storageSrc) && /async get\(key\)/.test(storageSrc), 'StorageAdapter remains the unchanged storage-backend boundary (get/set present)');
+check(!/EmployeeRepository|repository\//.test(storageSrc), 'StorageAdapter has no dependency on the Repository (one-way)');
+// Unrelated employee handlers are UNCHANGED — they still persist directly (only contact migrated).
+check((ueBody.match(/persistEmployees\(/g)||[]).length === 1 && (tlBody.match(/persistEmployees\(/g)||[]).length === 1 && (ucoBody.match(/persistEmployees\(/g)||[]).length === 1, 'unrelated employee handlers (employment/lifecycle/compensation) still persist directly — only the contact slice is migrated');
+// The Domain facade has no dependency on the Repository (one-way).
+check(!/EmployeeRepository|repository\//.test(facSrc), 'domain-layer.js has no dependency on the repository layer (one-way)');
+// Operational surface is UNCHANGED by PR-8A (persistence infrastructure only).
+check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational surface unchanged by the repository (7 aggregates / 7 aggregate-backed commands / 1 query; 13 registered / 4 registered)');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

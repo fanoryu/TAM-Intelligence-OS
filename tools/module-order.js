@@ -27,6 +27,11 @@ module.exports = [
   'finance/add-upload.js',
   // --- HR persistence + portability (10) ---
   'core/hr-persistence-portability.js',
+  // --- repository layer (Milestone Delta, PR-8A): the first persistence-mechanics
+  //     boundary between handler mutation and the existing collection persistence.
+  //     Loads AFTER the persist functions (persistEmployees) it delegates to and
+  //     BEFORE the migrated handler (people/employees.js). Owns no business behavior. ---
+  'repository/employee-repository.js',
   // --- import UI + analytics + settings + reports (from 11) ---
   'import/import-preview.js',
   'analytics/plan-vs-actual.js',

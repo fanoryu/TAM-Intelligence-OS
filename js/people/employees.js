@@ -247,8 +247,12 @@ async function updateEmployeeContact(id, patch){
   Object.keys(applied).forEach(k=> e[k] = applied[k]);
   e.updatedAt = new Date().toISOString();
   (e.history = e.history || []).push({ event:'contact-edited', ts:e.updatedAt, note:'Contact details updated ('+Object.keys(applied).join(', ')+')' });
-  const ok = await persistEmployees();
-  if(ok !== true){
+  // PR-8A "The Repository" — persistence mechanics now go through the Repository
+  // boundary (EmployeeRepository.save() -> persistEmployees() -> StorageAdapter).
+  // The handler still owns mutation, updatedAt, history, the single persistence
+  // invocation, and rollback; the Repository only normalizes the write result.
+  const persisted = await EmployeeRepository.save();
+  if(persisted.ok !== true){
     // Atomic rollback — no partial field update, no audit-success entry retained.
     Object.keys(before).forEach(k=> e[k] = before[k]);
     e.history.pop();
