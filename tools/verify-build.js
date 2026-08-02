@@ -1087,6 +1087,46 @@ check(!/EmployeeRepository|repository\//.test(facSrc), 'domain-layer.js has no d
 // Operational surface is UNCHANGED by PR-8A (persistence infrastructure only).
 check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational surface unchanged by the repository (7 aggregates / 7 aggregate-backed commands / 1 query; 13 registered / 4 registered)');
 
+// PR-8B "The CLI" — the first NON-BROWSER ingress. It proves the canonical Platform
+// contract is transport-agnostic: a CLI reaches the Domain through TransportAdapter
+// with NO change to Domain/Aggregates/Handlers/Repository/Platform/StorageAdapter.
+// Read-only this sprint (employee.filtered only); it delegates SOLELY to the Transport.
+console.log('== CLI TRANSPORT (PR-8B — first non-browser ingress, read-only) ==');
+const cliPath = path.join(root,'js','cli','cli.js');
+check(fs.existsSync(cliPath), 'CLI module present: js/cli/cli.js');
+const cliSrc = read(cliPath);
+const cliCode = stripComments(cliSrc);
+// The CLI is a Node ingress — it is NOT part of the browser build (module-order / dist).
+check(jsFiles.indexOf('cli/cli.js') === -1, 'CLI is not in the browser module-order (Node-only ingress)');
+check(!dist.includes('js/cli/cli.js') && !indexHtml.includes('js/cli/cli.js'), 'CLI is not loaded by index.html / dist (does not touch the browser build)');
+// DELEGATION — the CLI delegates ONLY through the Transport Adapter.
+check(/TransportAdapter\.execute\(/.test(cliCode), 'CLI delegates through TransportAdapter.execute()');
+check(!/ApplicationGateway/.test(cliCode), 'CLI performs no direct Application Gateway access');
+check(!/\bDomain\s*[.[]|domain\.(command|query)/.test(cliCode), 'CLI performs no direct Domain access');
+check(!/\w+Aggregate\s*[.[]/.test(cliCode), 'CLI performs no direct Aggregate access');
+check(!/updateEmployeeContact\(|employeesFiltered\(|transitionContractStatus\(/.test(cliCode), 'CLI performs no direct Handler access');
+check(!/EmployeeRepository|repository\//.test(cliCode), 'CLI performs no direct Repository access');
+// NO PERSISTENCE — the CLI never calls a persist function or the storage backend.
+check(!/persistEmployees\(|persistHR\(|persist\(\)|StorageAdapter\.(set|remove)\(/.test(cliCode), 'CLI performs no persistence (no persist*/StorageAdapter writes)');
+// READ-ONLY SCOPE — only the aggregate-backed query employee.filtered is permitted; commands are rejected.
+check(/CLI_ALLOWED_QUERIES\s*=\s*\['employee\.filtered'\]/.test(cliCode), 'CLI read-only allowlist is exactly [employee.filtered]');
+check(/kind !== 'query'/.test(cliCode), 'CLI rejects any non-query kind (no command / no write execution)');
+// It reproduces the browser load order but EXCLUDES the only DOM-executing load-time module.
+check(/!==\s*'core\/app-bootstrap\.js'/.test(cliCode), 'CLI runtime excludes core/app-bootstrap.js (the only DOM-executing load-time module)');
+// The CLI classifies ONLY its own two failure modes (source:'cli'); Platform responses pass through.
+check(/source:\s*'cli'/.test(cliCode) && /INVALID_CLI_INVOCATION/.test(cliCode) && /INVALID_CLI_ARGUMENTS/.test(cliCode), 'CLI classifies only INVALID_CLI_INVOCATION / INVALID_CLI_ARGUMENTS under { source:"cli" }');
+check(!/DOMAIN_FAULT|source:\s*'gateway'|source:\s*'domain'|source:\s*'transport'/.test(cliCode), 'CLI does not mint Platform error sources (Platform responses are returned verbatim)');
+// CLI ⇏ Browser UI (FAA-PR8B) — the CLI must NEVER evolve into a second UI layer.
+// It performs no rendering and invokes no browser UI entry point. The loadRuntime()
+// inert stubs name `window`/`document` only as loader plumbing for the classic
+// shared-global scripts (see the FAA-PR8B design note in cli.js); those identifiers
+// are never USED to render or to reach a real DOM — so the invariant is usage-based.
+check(!/\brender\w*\s*\(|\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(|openModal\w*\s*\(|closeModal\s*\(/.test(cliCode), 'CLI invokes no browser UI / rendering entry point (render/toast/modal)');
+check(!/\bshell\b|renderShell|hrNavTo\s*\(|State\.view\s*=|\.innerHTML/.test(cliCode), 'CLI performs no shell/navigation/DOM rendering (CLI is not a UI layer)');
+check(!/document\.(getElementById|querySelector|querySelectorAll|createElement|write)\s*\(|window\.(location|open)\b/.test(cliCode), 'CLI makes no real DOM/browser-UI calls (inert loader stubs only, never used to render)');
+// Operational surface is UNCHANGED by PR-8B (a new ingress adds no Domain operation).
+check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational surface unchanged by the CLI (7 aggregates / 7 aggregate-backed commands / 1 query; 13 registered / 4 registered)');
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');
