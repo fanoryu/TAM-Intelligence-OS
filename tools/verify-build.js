@@ -1116,6 +1116,14 @@ check(/!==\s*'core\/app-bootstrap\.js'/.test(cliCode), 'CLI runtime excludes cor
 // The CLI classifies ONLY its own two failure modes (source:'cli'); Platform responses pass through.
 check(/source:\s*'cli'/.test(cliCode) && /INVALID_CLI_INVOCATION/.test(cliCode) && /INVALID_CLI_ARGUMENTS/.test(cliCode), 'CLI classifies only INVALID_CLI_INVOCATION / INVALID_CLI_ARGUMENTS under { source:"cli" }');
 check(!/DOMAIN_FAULT|source:\s*'gateway'|source:\s*'domain'|source:\s*'transport'/.test(cliCode), 'CLI does not mint Platform error sources (Platform responses are returned verbatim)');
+// CLI ⇏ Browser UI (FAA-PR8B) — the CLI must NEVER evolve into a second UI layer.
+// It performs no rendering and invokes no browser UI entry point. The loadRuntime()
+// inert stubs name `window`/`document` only as loader plumbing for the classic
+// shared-global scripts (see the FAA-PR8B design note in cli.js); those identifiers
+// are never USED to render or to reach a real DOM — so the invariant is usage-based.
+check(!/\brender\w*\s*\(|\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(|openModal\w*\s*\(|closeModal\s*\(/.test(cliCode), 'CLI invokes no browser UI / rendering entry point (render/toast/modal)');
+check(!/\bshell\b|renderShell|hrNavTo\s*\(|State\.view\s*=|\.innerHTML/.test(cliCode), 'CLI performs no shell/navigation/DOM rendering (CLI is not a UI layer)');
+check(!/document\.(getElementById|querySelector|querySelectorAll|createElement|write)\s*\(|window\.(location|open)\b/.test(cliCode), 'CLI makes no real DOM/browser-UI calls (inert loader stubs only, never used to render)');
 // Operational surface is UNCHANGED by PR-8B (a new ingress adds no Domain operation).
 check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational surface unchanged by the CLI (7 aggregates / 7 aggregate-backed commands / 1 query; 13 registered / 4 registered)');
 

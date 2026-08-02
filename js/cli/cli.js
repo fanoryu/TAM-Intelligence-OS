@@ -30,6 +30,22 @@
    tools/module-order.js files — EXCLUDING core/app-bootstrap.js, the only module
    that executes the DOM path at load — and running them once in a Node `vm`
    context, then delegating through the resulting TransportAdapter.
+
+   DESIGN NOTE (FAA-PR8B) — THE LOADER IS AN IMPLEMENTATION DETAIL, NOT ARCHITECTURE:
+   - The Node `vm` loader and the inert browser stubs (`window`/`document`/
+     `localStorage` no-ops) below are implementation details of the CURRENT classic
+     shared-global module architecture. They exist SOLELY because the browser
+     modules use a classic shared-global `<script>` model with no explicit exports,
+     so the CLI must recreate that single scope and satisfy a few defensive
+     load-time DOM references.
+   - They are NOT part of the Platform architecture and NOT part of the Transport
+     contract. The stubs are never USED to render or to reach a real DOM — they are
+     inert plumbing that lets the modules load in Node.
+   - A future migration to an explicit module system (ESM/CommonJS or equivalent)
+     removes this loader concern entirely — without changing Platform, Transport,
+     Gateway, Domain, Repository, or business semantics. The canonical contract the
+     CLI consumes (`TransportAdapter.execute`) is unaffected by how the runtime is
+     loaded.
    ============================================================ */
 
 const fs = require('fs');
