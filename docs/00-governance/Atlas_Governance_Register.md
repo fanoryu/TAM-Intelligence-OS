@@ -24,10 +24,11 @@ fabricated.
 
 ## Pending repository publication
 
-The authoritative text for the following artifacts is maintained in the external Atlas governance system
-and has not been supplied to the repository. They are **reserved and referenced** here; their bodies are
-**not** authored locally to avoid fabricating governance history (`CLAUDE.md` §16.4). Each will be
-published verbatim into the appropriate home once its source text is provided.
+The following **7 Atlas governance artifacts remain external to the repository pending authoritative
+publication** — their authoritative text currently exists in the Atlas governance system and has not yet
+been supplied to the repository. They are **reserved and referenced** here; their bodies are **not**
+authored locally to avoid fabricating governance history (`CLAUDE.md` §16.4). Each will be published
+verbatim into the appropriate home once its source text is provided.
 
 | Artifact | Title (as referenced) | Intended home | Status |
 |---|---|---|---|
