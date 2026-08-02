@@ -53,7 +53,7 @@ own — those remain entirely with the handler.
 
 Two distinct figures describe the surface, and they answer two different questions. Neither replaces the
 other; both are accurate. The authoritative snapshot is
-[RDR-003 §2](../RDR/RDR-003-delta-repository-snapshot.md#2-operational-surface).
+[RDR-007 §2](../RDR/RDR-007-delta-repository-snapshot.md#2-operational-surface-unchanged-since-rdr-003).
 
 ### Aggregate-backed operational surface — migrated Domain authority
 
