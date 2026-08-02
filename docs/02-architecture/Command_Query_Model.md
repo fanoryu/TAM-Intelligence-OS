@@ -51,14 +51,39 @@ own — those remain entirely with the handler.
 
 ## Operational surface today
 
+Two distinct figures describe the surface, and they answer two different questions. Neither replaces the
+other; both are accurate. The authoritative snapshot is
+[RDR-003 §2](../RDR/RDR-003-delta-repository-snapshot.md#2-operational-surface).
+
+### Aggregate-backed operational surface — migrated Domain authority
+
+The operations whose write authority has migrated behind an explicit aggregate **boundary**. This is the
+"how much authority has the Domain layer taken over?" figure: **7 aggregates, 7 aggregate-backed
+commands, 1 aggregate-backed query.** These counts are **verifier-enforced**.
+
 | Kind | Id | Boundary | Handler |
 |---|---|---|---|
-| Query | `employee.filtered` | — | `employeesFiltered` |
-| Command | `employee.contact.update` | `EmployeeContactAggregate` | `updateEmployeeContact` |
-| Command | `employee.employment.update` | `EmployeeEmploymentAggregate` | `updateEmployeeEmployment` |
+| Query   | `employee.filtered`             | —                              | `employeesFiltered` |
+| Command | `employee.contact.update`       | `EmployeeContactAggregate`     | `updateEmployeeContact` |
+| Command | `employee.employment.update`    | `EmployeeEmploymentAggregate`  | `updateEmployeeEmployment` |
+| Command | `employee.lifecycle.transition` | `EmployeeLifecycleAggregate`   | `transitionEmployeeLifecycle` |
+| Command | `employee.compensation.update`  | `EmployeeCompensationAggregate`| `updateEmployeeCompensation` |
+| Command | `contract.dates.update`         | `ContractDateAggregate`        | `updateContractDates` |
+| Command | `payroll.lifecycle.transition`  | `PayrollLifecycleAggregate`    | `transitionPayrollLifecycle` |
+| Command | `contract.status.transition`    | `ContractStatusAggregate`      | `transitionContractStatus` |
 
-Counts are invariant and verifier-enforced: **two** operational aggregates, **two** operational
-commands, **one** operational query. Changing these counts is a deliberate, Sprint-authorized step.
+### Total registered executable surface — full registry
+
+Every registered id is executable through the facade. This is the "what is the full Domain contract?"
+figure: **13 registered commands, 4 registered queries.** The extra 6 commands (`payroll.commit`,
+`finance.execute`, `supplemental.generate`, `supplemental.transition`, `supplemental.post`, `audit.log`)
+and 3 queries (`payroll.totalCompensation`, `payroll.historicalSnapshot`, `audit.events`) are
+**descriptive / handler-only** — routed through the facade without an aggregate gate. They are not
+aggregate-backed authority; write paths that remain outside a boundary are recorded as residual authority
+(RDR-003 §5, Architecture Evolution Backlog ARCH-003/004/006/007).
+
+Changing the **aggregate-backed** counts is a deliberate, Sprint-authorized step; they are the
+verifier-enforced invariant. The registered totals move whenever a descriptive id is added or removed.
 
 ## Design rules
 
