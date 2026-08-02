@@ -6074,8 +6074,13 @@ async function updateEmployeeCompensation(id, patch){
   e.monthlyBaseSalary = value;
   e.updatedAt = new Date().toISOString();
   (e.history = e.history || []).push({ event:'compensation-edited', ts:e.updatedAt, note:'Monthly base salary updated' });
-  const ok = await persistEmployees();
-  if(ok !== true){
+  // PR-9C "The Adoption" — persistence mechanics now go through the Repository
+  // boundary (EmployeeRepository.save() -> persistEmployees() -> StorageAdapter),
+  // completing Employee-aggregate adoption (contact/employment/lifecycle/compensation).
+  // The handler still owns the compensation mutation, updatedAt, history, the single
+  // persistence invocation, and rollback; the Repository only normalizes the result.
+  const persisted = await EmployeeRepository.save();
+  if(persisted.ok !== true){
     // Atomic rollback — restore the salary, timestamp, and drop the audit entry.
     e.monthlyBaseSalary = before;
     e.history.pop();
