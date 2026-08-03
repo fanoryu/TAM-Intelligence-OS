@@ -806,7 +806,10 @@ const tcBody = tcNext>=0 ? tcRest.slice(0, tcNext) : tcRest;
 // Status changes ONLY c.status (+ updatedAt/history); dates/salary/renewal/links are forbidden.
 ['startDate','durationMonths','monthlySalary','renewedToId','renewedFromId','employeeId','contractNumber','notes','endDate'].forEach((f)=>
   check(!tcBody.includes(f), 'contract status handler does not touch forbidden field: '+f));
-check((tcBody.match(/persistContracts\(/g)||[]).length === 1, 'handler persists exactly once (persistContracts)');
+// PR-10B — the contract-status handler's persistence now goes through the Repository (comment-stripped).
+const tcCode = stripComments(tcBody);
+check((tcCode.match(/ContractRepository\.save\(\)/g)||[]).length === 1, 'handler persists exactly once (via ContractRepository.save())');
+check(!/persistContracts\(/.test(tcCode), 'contract-status handler no longer calls persistContracts() directly (routed through the Repository)');
 check(!/persistEmployees\(|persistHR\(|persist\(\)/.test(tcBody), 'handler uses only the Contract persistence path');
 check(/c\.status = to/.test(tcBody), 'handler performs the status mutation (only Contract.status)');
 check(/c\.updatedAt = new Date/.test(tcBody), 'handler updates updatedAt');
@@ -1139,10 +1142,8 @@ check(/ok:\s*true/.test(contractRepoCode) && /ok:\s*false,\s*error:\s*'PersistFa
 ].forEach(([label,re])=>check(!re.test(contractRepoCode), 'ContractRepository never performs '+label));
 // The migrated handler still OWNS rollback (the repository does not roll back).
 check(/c\[k\] = before\[k\]/.test(udCode) && /c\.history\.pop\(\)/.test(udCode) && /c\.updatedAt = prevUpdatedAt/.test(udCode), 'contract-date handler still owns full rollback (fields + history.pop + updatedAt) on persistence failure');
-// Exactly one ContractRepository call site across contracts.js (only the dates slice migrated).
-check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 1, 'exactly one ContractRepository.save() call site in contracts.js (contract.dates.update only)');
-// contract.status.transition remains DIRECT (persistContracts, not the Repository).
-check((stripComments(tcBody).match(/persistContracts\(/g)||[]).length === 1 && !/ContractRepository\.save\(/.test(stripComments(tcBody)), 'contract.status.transition remains direct (persistContracts, not the Repository)');
+// PR-10B — exactly two ContractRepository call sites across contracts.js (dates + status).
+check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 2, 'exactly two ContractRepository.save() call sites in contracts.js (contract.dates.update + contract.status.transition)');
 // Renewal (compound create-successor persistence, ARCH-006) remains DIRECT and out of scope.
 check(/State\.contracts\.push\(nc\);\s*\n\s*await persistContracts\(\)/.test(ctSrc) || /c\.status='Renewed'[\s\S]{0,400}await persistContracts\(\)/.test(ctSrc), 'renewal remains direct persistContracts (compound create-successor, not migrated)');
 // EmployeeRepository is unchanged and independent of the Contract repository.
@@ -1151,6 +1152,43 @@ check(!/ContractRepository|contract-repository/.test(facSrc), 'domain-layer.js h
 check(!/ContractRepository|contract-repository/.test(storageSrc), 'StorageAdapter has no dependency on the contract repository (one-way)');
 // Operational surface is UNCHANGED by PR-10A.
 check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational surface unchanged by the contract repository (7 aggregates / 7 aggregate-backed commands / 1 query; 13 registered / 4 registered)');
+
+// PR-10B "The Contract Status Slice" — the SECOND Contract handler adopts the existing
+// ContractRepository, completing Repository adoption for the Contract aggregate
+// (5 of 7 -> 6 of 7 aggregate-backed handlers). Repository contract UNCHANGED; no new
+// Repository module; handler keeps validation/mutation/updatedAt/history/rollback.
+console.log('== CONTRACT STATUS REPOSITORY SLICE (PR-10B — Contract aggregate complete) ==');
+// The migrated handler delegates persistence exactly once and never persists directly.
+check((tcCode.match(/ContractRepository\.save\(\)/g)||[]).length === 1, 'transitionContractStatus() uses exactly one ContractRepository.save()');
+check(!/persistContracts\(/.test(tcCode), 'transitionContractStatus() contains no direct persistContracts()');
+// Strict result handling — no truthy/falsy ambiguity at either Repository call site.
+check(/persisted\.ok !== true/.test(tcCode), 'contract-status handler uses strict persisted.ok handling (no truthy/falsy ambiguity)');
+check(/persisted\.ok !== true/.test(udCode), 'contract-date handler still uses strict persisted.ok handling');
+// The first slice remains Repository-mediated (no regression of PR-10A).
+check((udCode.match(/ContractRepository\.save\(\)/g)||[]).length === 1 && !/persistContracts\(/.test(udCode), 'updateContractDates() remains Repository-mediated');
+// Exactly two aggregate-backed Contract handlers use the Repository — the Contract
+// aggregate is now FULLY Repository-mediated (contract.dates.update + contract.status.transition).
+check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 2, 'exactly two aggregate-backed Contract handlers use ContractRepository (Contract aggregate fully Repository-mediated)');
+check(migratedCmdIds.filter(id=>/^contract\./.test(id)).length === 2, 'both registered aggregate-backed Contract commands are Repository-mediated');
+// Rollback remains HANDLER-owned (the Repository does not roll back).
+check(/c\.status = prevStatus/.test(tcCode) && /c\.history\.pop\(\)/.test(tcCode) && /c\.updatedAt = prevUpdatedAt/.test(tcCode), 'contract-status handler still owns full rollback (status + history.pop + updatedAt) on persistence failure');
+check(/error:'PersistFailed'/.test(tcCode), 'contract-status handler preserves the typed PersistFailed result');
+// Non-aggregate Contract persistence pathways remain DIRECT and unmigrated.
+check(/c\.status='Renewed'[\s\S]{0,400}await persistContracts\(\)/.test(ctSrc), 'renewal remains direct and compound (not migrated)');
+check(/rec\.status = fd\.get\('status'\)[\s\S]{0,400}await persistContracts\(\)/.test(ctSrc), 'full Contract editor remains direct (not migrated)');
+check(/State\.contracts = State\.contracts\.filter\(x=>x\.id!==id\);\s*\n\s*await persistContracts\(\)/.test(ctSrc), 'delete Contract path remains direct (not migrated)');
+// Committed-payroll confirmation stays in the UI seam — never inside the Repository.
+check(/payrollPlansForContract\(id\)\.some\(p=>p\.status==='committed'\)/.test(ctSrc) && !/committed|confirm\s*\(|payrollPlansForContract/.test(contractRepoCode), 'committed-payroll confirmation remains outside the Repository (UI seam only)');
+check(!/confirm\s*\(|payrollPlansForContract/.test(tcCode), 'committed-payroll confirmation remains outside the handler (UI seam only)');
+// The Repository contract itself is UNCHANGED by PR-10B (no contract evolution, no new module).
+check(/async save\(\)/.test(contractRepoSrc) && (contractRepoCode.match(/async \w+\(/g)||[]).length === 1, 'ContractRepository still exposes exactly one method (save) — contract unchanged');
+check(/ok === true/.test(contractRepoCode) && /ok:\s*false,\s*error:\s*'PersistFailed'/.test(contractRepoCode), 'ContractRepository result contract remains { ok:true } / { ok:false, error:"PersistFailed" }');
+check(fs.readdirSync(path.join(root,'js','repository')).length === 2, 'no additional Repository module introduced (EmployeeRepository + ContractRepository only)');
+// No unrelated handler migration — Payroll lifecycle stays on direct persistence.
+check((tpBody.match(/persistPayrollPlans\(/g)||[]).length === 1 && !/Repository/.test(stripComments(tpBody)), 'no unrelated handler migration (payroll lifecycle remains direct persistence)');
+check(!/ContractRepository/.test(poeSrc), 'payroll ops engine has no Repository dependency (Payroll aggregate unmigrated)');
+// Operational + registered surface UNCHANGED by PR-10B.
+check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational + registered surface unchanged by the contract status slice');
 
 // PR-8B "The CLI" — the first NON-BROWSER ingress. It proves the canonical Platform
 // contract is transport-agnostic: a CLI reaches the Domain through TransportAdapter
