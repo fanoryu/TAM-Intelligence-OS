@@ -360,8 +360,15 @@ async function transitionPayrollLifecycle(id, transition){
   // the note additionally records the stored from → to status.
   const evt = to==='Reviewed'?'reviewed':to==='Ready'?'marked-ready':to==='Cancelled'?'cancelled':'edited';
   (pp.history = pp.history || []).push({ event:evt, ts:pp.updatedAt, from:from, to:to, note:'Lifecycle '+from+' → '+to });
-  const ok = await persistPayrollPlans();
-  if(ok !== true){
+  // PR-11A "The Payroll Foundation" — persistence mechanics now go through the
+  // Repository boundary (PayrollRepository.save() -> persistPayrollPlans() ->
+  // StorageAdapter), the THIRD entity Repository, completing aggregate-backed
+  // Repository adoption (7 of 7). The handler still owns the lock/immutability/
+  // transition guards, mutation, updatedAt, history, the single persistence
+  // invocation, rollback, the typed result, and the best-effort post-persistence
+  // audit below. Strict persisted.ok handling — no truthy/falsy ambiguity.
+  const persisted = await PayrollRepository.save();
+  if(persisted.ok !== true){
     // Atomic rollback — restore status, timestamp, and drop the history entry.
     pp.status = prevStatus;
     pp.history.pop();
