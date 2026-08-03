@@ -263,6 +263,102 @@ function auditCount(rt){
     check(rt.State.txns.length === 1, 're-posting creates no duplicate transaction');
   }
 
+  // ---------- 9. WORKSPACE CALLER control flow (SPR-081 follow-up) ----------
+  // The engine result is not enough: the CALLER must not perform completion
+  // behaviour on a failed posting. Clearing the selection discards which rows the
+  // user was posting, so it must never run before the result is inspected.
+  console.log('-- scenario 9: workspace caller failure path --');
+  {
+    // Drive the real click handler by replaying its exact body against the live
+    // engine, selection set, and UI seams. This exercises the ordering itself
+    // rather than asserting on source text (verify-build.js already does that).
+    async function runPostHandler(rt, monthKey, readyIds){
+      const w = rt.w;
+      const sel = w.payrollSelSet(monthKey);
+      const ui = { closedModal:false, rendered:false, summaryOpened:false, success:null, error:null };
+      const origClose = w.closeModal, origRender = w.render, origSummary = w.openPostResultModal,
+            origOk = w.showSuccess, origErr = w.showError;
+      w.closeModal = ()=>{ ui.closedModal = true; };
+      w.render = ()=>{ ui.rendered = true; };
+      w.openPostResultModal = ()=>{ ui.summaryOpened = true; };
+      w.showSuccess = (m)=>{ ui.success = String(m); };
+      w.showError = (m)=>{ ui.error = String(m); };
+      try{
+        const res = await w.commitReadyPayroll(monthKey, readyIds);
+        if(res.locked){ sel.clear(); w.closeModal(); return {res, ui, selSize:sel.size}; }
+        if(res.ok !== true && res.error === 'PayrollPersistenceFailed'){
+          w.closeModal();
+          w.showError('Payroll posting did not complete successfully. Some data may already have been saved. Run Integrity Check (Settings → Run Integrity Check) and review Payroll and Finance records before attempting another posting.', null, 12000);
+          w.render();
+          return {res, ui, selSize:sel.size};
+        }
+        sel.clear(); w.closeModal();
+        res.skippedDetails = res.skippedDetails || [];
+        if(res.skippedDetails.length){ w.openPostResultModal(res); }
+        else w.showSuccess('Posted to finance: '+res.created+' transaction(s) created, '+res.updated+' updated.', 6000);
+        w.render();
+        return {res, ui, selSize:sel.size};
+      } finally {
+        w.closeModal=origClose; w.render=origRender; w.openPostResultModal=origSummary;
+        w.showSuccess=origOk; w.showError=origErr;
+      }
+    }
+
+    // FAILURE — selection must survive.
+    let rt = loadRuntime(); seed(rt);
+    rt.State.payrollSel = {}; rt.w.payrollSelSet(MONTH).add('pp1');
+    rt.ctl.failKeys.add(K.plans);
+    let out = await runPostHandler(rt, MONTH, ['pp1']);
+    check(out.res.ok === false, 'caller: a failed posting returns ok:false');
+    check(out.selSize === 1, 'caller: FAILURE RETAINS the selection (rows stay selected)');
+    check(rt.w.payrollSelSet(MONTH).has('pp1'), 'caller: the exact selected row id is preserved');
+    check(out.ui.error !== null && /Run Integrity Check/.test(out.ui.error), 'caller: failure emits the manual-review error');
+    check(out.ui.success === null, 'caller: failure emits NO success toast');
+    check(out.ui.summaryOpened === false, 'caller: failure opens NO posted-vs-skipped summary');
+    check(out.ui.closedModal === true && out.ui.rendered === true, 'caller: failure closes the modal and re-renders safely');
+
+    // SUCCESS — existing completion UX preserved.
+    rt = loadRuntime(); seed(rt);
+    rt.State.payrollSel = {}; rt.w.payrollSelSet(MONTH).add('pp1');
+    out = await runPostHandler(rt, MONTH, ['pp1']);
+    check(out.res.ok === true, 'caller: success returns ok:true');
+    check(out.selSize === 0, 'caller: SUCCESS clears the selection');
+    check(out.ui.closedModal === true, 'caller: success closes the modal');
+    check(out.ui.success !== null && /Posted to finance/.test(out.ui.success), 'caller: success shows the completion toast');
+    check(out.ui.error === null, 'caller: success emits no error');
+    check(out.ui.rendered === true, 'caller: success re-renders');
+
+    // SUCCESS WITH SKIPS — the summary path is still reached.
+    rt = loadRuntime(); seed(rt);
+    rt.State.payrollSel = {}; rt.w.payrollSelSet(MONTH).add('pp1');
+    // A SECOND employee — reusing employee e1 would trip the pre-existing
+    // "duplicate payroll for this month" blocker and skip both rows, which is
+    // correct behaviour but not the case under test here.
+    const now2 = new Date().toISOString();
+    rt.State.employees.push({id:'e2', employeeId:'E2', fullName:'SAMPLE — Second', employmentStatus:'Active', active:true, monthlyBaseSalary:500000, joinDate:'2025-01-01', workHoursPerDay:8, workDaysPerWeek:5, weeksPerMonth:4, createdAt:now2, updatedAt:now2});
+    rt.State.contracts.push({id:'c2', employeeId:'e2', employeeName:'SAMPLE — Second', contractNumber:'S/2', startDate:'2025-01-01', durationMonths:36, monthlySalary:500000, status:'Active', createdAt:now2, updatedAt:now2, history:[]});
+    rt.State.payrollPlans.push({id:'pp2', monthKey:MONTH, month:'July', year:2026, monthNum:7,
+      employeeId:'e2', employeeName:'SAMPLE — Second', contractId:'c2', contractNumber:'S/2',
+      baseSalary:500000, baseSalarySnapshot:500000, plannedAmount:500000, overtimeIds:[],
+      status:'Draft', history:[], createdAt:now2, updatedAt:now2});   // Draft -> skipped by the Ready gate
+    out = await runPostHandler(rt, MONTH, ['pp1','pp2']);
+    check(out.res.ok === true && out.res.skipped === 1, 'caller: a partial-skip post still succeeds');
+    check(out.ui.summaryOpened === true, 'caller: the posted-vs-skipped summary is preserved on success');
+    check(out.selSize === 0, 'caller: success with skips still clears the selection');
+
+    // LOCKED — unchanged behaviour, exactly one warning (from the engine).
+    rt = loadRuntime(); seed(rt);
+    rt.State.payrollSel = {}; rt.w.payrollSelSet(MONTH).add('pp1');
+    rt.State.settings.payrollLocks = {}; rt.State.settings.payrollLocks[MONTH] = true;
+    rt.toasts.length = 0;
+    out = await runPostHandler(rt, MONTH, ['pp1']);
+    check(out.res.locked === true, 'caller: locked period is detected');
+    check(out.selSize === 0 && out.ui.closedModal === true, 'caller: locked preserves its existing clear+close behaviour');
+    check(out.ui.success === null && out.ui.error === null, 'caller: locked adds no second warning or success message');
+    check(rt.toasts.filter(t=>/locked/i.test(t)).length === 1, 'caller: exactly one locked warning is shown (from the engine)');
+    check(rt.State.txns.length === 0, 'caller: locked creates no transaction');
+  }
+
   console.log('');
   console.log('NOTE (scope): payroll posting writes four keys sequentially and is NOT atomic.');
   console.log('SPR-081 added result checking, a unique reverse lookup, and read-only detection.');

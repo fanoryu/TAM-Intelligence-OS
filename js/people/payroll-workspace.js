@@ -362,18 +362,27 @@ function openCommitPayrollModal(monthKey, main){
     {width:560, onMount:(root)=>{
       root.querySelector('#cpCancel').addEventListener('click', closeModal);
       root.querySelector('#cpGo').addEventListener('click', async ()=>{
-        const res=await commitReadyPayroll(monthKey, readyIds); sel.clear(); closeModal();
-        if(res.locked) return;
-        // SPR-081 — a persistence failure must never be presented as a completed
-        // posting: no success toast, no posted-vs-skipped summary (which reads as
-        // success), and no claim that anything was rolled back. Some datasets may
-        // already have been written, so the user is directed to Integrity Check
-        // and manual review before any further posting attempt.
+        const res=await commitReadyPayroll(monthKey, readyIds);
+        // SPR-081 — the result is inspected BEFORE any completion behaviour.
+        // Clearing the selection is completion behaviour: it discards which rows
+        // the user was posting. It must never run on a failed posting.
+        if(res.locked){ sel.clear(); closeModal(); return; }   // unchanged locked UX (engine already warned)
+        // A persistence failure must never be presented as a completed posting:
+        // no selection clear, no success toast, no posted-vs-skipped summary
+        // (which reads as success), and no claim that anything was rolled back.
+        // Some datasets may already have been written, so the user is directed to
+        // Integrity Check and manual review before any further posting attempt.
+        // The modal is closed explicitly because render() below rebuilds the
+        // workspace beneath it; the SELECTION is deliberately retained, so the
+        // same rows stay checked and the user can see exactly what was involved.
         if(res.ok !== true && res.error === 'PayrollPersistenceFailed'){
+          closeModal();
           showError('Payroll posting did not complete successfully. Some data may already have been saved. Run Integrity Check (Settings → Run Integrity Check) and review Payroll and Finance records before attempting another posting.', null, 12000);
           render();
           return;
         }
+        // Success only from here: the selection has served its purpose.
+        sel.clear(); closeModal();
         // v2.6.4/2.6.8 — report posted vs skipped. Skips are the pre-post selection skips
         // (rows not at the Approved stage) plus any commit blockers, each with its reason.
         res.skippedDetails=[...selectionSkips, ...(res.skippedDetails||[])];

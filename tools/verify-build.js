@@ -1180,6 +1180,29 @@ check(wsFail081 !== '', 'the posting caller has an explicit persistence-failure 
 [['success toast', /showSuccess\(/], ['posted-vs-skipped summary', /openPostResultModal\(/]].forEach(([label,re])=>
   check(!re.test(wsFail081), 'the payroll failure branch shows no '+label));
 check(/showError\(/.test(wsFail081) && /Run Integrity Check/.test(wsFail081), 'the payroll failure branch reports the failure and directs the user to Integrity Check');
+// SPR-081 follow-up — CONTROL-FLOW ORDERING. Clearing the selection is completion
+// behaviour and must never precede result inspection. Scope the scan to the Post
+// click handler so unrelated sel.clear() sites cannot mask a regression.
+const postHandler081 = stripComments((wsSrc081.match(/const res=await commitReadyPayroll\(monthKey, readyIds\);[\s\S]*?\n      \}\);/)||[''])[0]);
+check(postHandler081 !== '', 'the Post click handler is resolvable');
+const iCommit081 = postHandler081.indexOf('await commitReadyPayroll');
+const iFailBranch081 = postHandler081.indexOf("res.error === 'PayrollPersistenceFailed'");
+const iSuccessClear081 = postHandler081.lastIndexOf('sel.clear()');
+const iSummary081 = postHandler081.indexOf('openPostResultModal(');
+const iSuccessToast081 = postHandler081.indexOf('showSuccess(');
+check(iCommit081 > -1 && iFailBranch081 > iCommit081, 'the persistence-failure branch is evaluated after the posting call');
+check(iSuccessClear081 > iFailBranch081, 'the success-path selection clear occurs AFTER the persistence-failure branch');
+check(iSummary081 > iFailBranch081, 'the posted-vs-skipped summary occurs AFTER the persistence-failure branch');
+check(iSuccessToast081 > iFailBranch081, 'the success toast occurs AFTER the persistence-failure branch');
+// Nothing completion-shaped may sit between the call and the failure branch.
+const preFail081 = postHandler081.slice(iCommit081, iFailBranch081);
+[['selection clear', /sel\.clear\(\)/], ['success summary', /openPostResultModal\(/], ['success toast', /showSuccess\(/]
+].forEach(([label,re])=> check(!re.test(preFail081.replace(/if\(res\.locked\)\{[^}]*\}/,'')), 'no success-only '+label+' precedes the persistence-failure branch'));
+// The failure branch itself must not clear the selection.
+check(!/sel\.clear\(\)/.test(wsFail081), 'the persistence-failure branch retains the selection (no sel.clear())');
+// Locked keeps its own completion behaviour, and only warns once (from the engine).
+check(/if\(res\.locked\)\{ sel\.clear\(\); closeModal\(\); return; \}/.test(postHandler081), 'the locked branch preserves its existing clear+close behaviour and returns');
+check(!/showWarning\(|showError\(/.test((postHandler081.match(/if\(res\.locked\)\{[^}]*\}/)||[''])[0]), 'the locked branch adds no second warning');
 check(!/rolled back|reverted|nothing was saved|nothing was written/i.test(wsFail081), 'the payroll failure message claims no rollback');
 check(/Some data may already have been saved/.test(wsSrc081), 'the payroll failure message states that data may already have been saved');
 
