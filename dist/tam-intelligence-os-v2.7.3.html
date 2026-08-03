@@ -3628,6 +3628,37 @@ if (typeof window !== 'undefined') { window.ContractRepository = ContractReposit
    ContractRepository / PayrollRepository share the same mechanics; the name marks
    the collection). No generic Repository, factory, shared base class, or transaction
    abstraction is introduced.
+
+   ------------------------------------------------------------
+   DESIGN NOTE — SCOPE AND MATURITY OF THIS BOUNDARY (durable)
+   ------------------------------------------------------------
+   PayrollRepository is the THIRD entity-named Repository in the Hybrid Repository
+   architecture (ATR-008), alongside EmployeeRepository and ContractRepository.
+
+   Its contract is deliberately COLLECTION-GRAINED and CLIENT-SIDE: one save() that
+   writes one in-memory collection through the existing persist function to the
+   existing client storage boundary. It models no unit of work spanning collections
+   and no remote endpoint.
+
+   With this slice, aggregate-backed Repository adoption reaches 7 of 7. That figure
+   means EXACTLY ONE thing: every aggregate-backed handler delegates its persistence
+   through an entity-named Repository.
+
+   It does NOT mean:
+     - that all persistence operations are Repository-mediated (most collection
+       writes in the application still call their persist function directly);
+     - that compound persistence is solved;
+     - that multi-store transactions are supported (they are not expressible in this
+       contract, which normalizes a single collection write);
+     - that backend readiness is achieved (the application is client-only by
+       constitutional rule; no server, database, or API exists or is implied).
+
+   The non-aggregate Payroll persistence paths (salary-override set/clear, payroll
+   generation, payroll regeneration, the one-time schema migration) and the COMPOUND
+   posting paths (commitReadyPayroll and payroll-planning, which each write four
+   stores in one logical operation) remain INTENTIONALLY DIRECT. They are outside the
+   adoption boundary by design, not unfinished work, and are pending separate
+   architecture review and authorization. Do not migrate them opportunistically.
    ============================================================ */
 
 const PayrollRepository = Object.freeze({

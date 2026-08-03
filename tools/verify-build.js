@@ -1273,6 +1273,51 @@ check(/async save\(\)/.test(repoSrc) && (stripComments(repoSrc).match(/async \w+
 // Operational + registered surface UNCHANGED by PR-11A.
 check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational + registered surface unchanged by the payroll repository slice');
 
+// ============================================================
+// ARCHITECTURAL MILESTONE — AGGREGATE-BACKED REPOSITORY ADOPTION COMPLETE (7 of 7).
+// This section locks ONE claim: every aggregate-backed handler delegates persistence
+// through an entity-named Repository. It deliberately does NOT assert — and must never
+// be read as asserting — complete persistence abstraction, compound-persistence
+// support, multi-store transactions, or backend readiness. The paired assertions below
+// prove the boundary by ALSO pinning the non-aggregate and compound paths as DIRECT:
+// adoption completeness and persistence abstraction are different things, and the
+// second is explicitly NOT claimed. See the DESIGN NOTE in payroll-repository.js.
+// ============================================================
+console.log('== AGGREGATE-BACKED REPOSITORY ADOPTION MILESTONE (7 of 7 — bounded claim) ==');
+const empCode2 = stripComments(empSrc), ctCode2 = stripComments(ctSrc);
+const adoption = {
+  Employee: (empCode2.match(/EmployeeRepository\.save\(\)/g)||[]).length,
+  Contract: (ctCode2.match(/ContractRepository\.save\(\)/g)||[]).length,
+  Payroll:  (poeCode.match(/PayrollRepository\.save\(\)/g)||[]).length
+};
+// (a) THE MILESTONE: all seven aggregate-backed handlers are Repository-mediated.
+check(adoption.Employee === 4 && adoption.Contract === 2 && adoption.Payroll === 1 &&
+      (adoption.Employee + adoption.Contract + adoption.Payroll) === 7,
+      'MILESTONE: all seven aggregate-backed handlers are Repository-mediated through entity-named repositories (Employee 4 + Contract 2 + Payroll 1 = 7 of 7)');
+check(migratedCmdIds.length === 7, 'the milestone count matches the seven aggregate-backed commands routed through the seam');
+check(fs.readdirSync(path.join(root,'js','repository')).length === 3, 'exactly three entity-named repositories back the milestone (no generic repository)');
+// (b) THE BOUND: non-aggregate paths remain DIRECT — adoption completeness is NOT
+//     persistence abstraction. Each entity keeps direct collection writes.
+check((empCode2.match(/await persistEmployees\(\)/g)||[]).length >= 1, 'non-aggregate Employee paths remain direct (persistEmployees still called directly in employees.js)');
+check((ctCode2.match(/await persistContracts\(\)/g)||[]).length === 3, 'non-aggregate Contract paths remain direct (full editor + delete + renewal)');
+check((poeCode.match(/persistPayrollPlans\(\)/g)||[]).length === 4, 'non-aggregate Payroll paths remain direct (override set/clear, regeneration, compound posting)');
+check(/await persistPayrollPlans\(\)/.test(wsSrc) && !/PayrollRepository/.test(wsSrc), 'non-aggregate Payroll generation remains direct (payroll-workspace.js)');
+// (c) THE BOUND: compound multi-store paths remain DIRECT and unexpressible in the contract.
+check(/c\.status='Renewed'[\s\S]{0,400}await persistContracts\(\)/.test(ctSrc) && !/ContractRepository\.save\(\)[\s\S]{0,200}renewedToId/.test(ctSrc), 'compound Contract renewal remains direct (create-successor, not Repository-mediated)');
+check(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/.test(poeSrc), 'compound Payroll posting remains direct (commitReadyPayroll — four stores in one operation)');
+check(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/.test(planSrc), 'compound Payroll planning posting remains direct (payroll-planning — four stores in one operation)');
+// (d) THE DISCLAIMER, mechanically enforced: the Repository layer mediates only a
+//     MINORITY of the collection persist functions. 7 of 7 is adoption, not coverage.
+const hrPersistSrc = read(path.join(root,'js','core','hr-persistence-portability.js'));
+const persistFnCount = (hrPersistSrc.match(/^async function persist\w*\(/gm)||[]).length;
+check(persistFnCount > 3, 'persistence abstraction is NOT complete: the repository layer mediates 3 collections out of '+persistFnCount+' persist functions (adoption completeness != persistence abstraction)');
+// (e) No repository may imply a backend or a transaction boundary.
+[['employee-repository.js', repoSrc], ['contract-repository.js', contractRepoSrc], ['payroll-repository.js', payrollRepoSrc]].forEach(([name, src])=>{
+  const code = stripComments(src);
+  check(!/fetch\s*\(|XMLHttpRequest|WebSocket|axios|\bapi\b|endpoint|server|http/i.test(code), name+' implies no backend (no network/remote surface)');
+  check(!/transaction|unitOfWork|commit\s*\(|rollback\s*\(/i.test(code), name+' implies no transaction/unit-of-work abstraction');
+});
+
 // PR-8B "The CLI" — the first NON-BROWSER ingress. It proves the canonical Platform
 // contract is transport-agnostic: a CLI reaches the Domain through TransportAdapter
 // with NO change to Domain/Aggregates/Handlers/Repository/Platform/StorageAdapter.
