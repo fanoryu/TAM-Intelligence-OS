@@ -6,7 +6,7 @@ dependencies.
 
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.8.1-blue)
+![Version](https://img.shields.io/badge/version-2.8.2-blue)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
@@ -45,31 +45,37 @@ Design principles:
 
 ## Current release
 
-**v2.8.1 — Single Payroll Posting Authority** · `SCHEMA_VERSION` 6
+**v2.8.2 — Honest Persistence Results** · `SCHEMA_VERSION` 6
 
-A correctness release that gives Contract renewal a proper business boundary and reduces Payroll posting
-to exactly one authoritative path. No schema change, no new storage key, no data migration, and no
-change to persistence mechanics.
+A correctness release for operations that save several datasets at once. Those operations previously
+reported success even when the browser rejected one or more writes. They now check every write and say
+plainly when the operation did not complete. No schema change, no new storage key, no data migration,
+and **no change to how or when data is written**.
 
-- **Aggregate-owned Contract renewal** — renewal is no longer authored inside the renewal form. A
-  dedicated business boundary decides whether a contract may be renewed and defines the successor
-  contract, the predecessor's `Renewed` status, and both history entries; the handler applies them and
-  persists once through the Contract Repository.
-- **Renewal reports success only when the save succeeds** — previously a failed write still closed the
-  form, showed "Contract renewed", and navigated to the new contract while nothing had been stored. A
-  failed save now fully undoes the renewal in memory and says plainly that nothing changed.
-- **Renew offered only where it is valid** — Draft and Active contracts. Renewing an already-renewed
-  contract previously created a second successor and silently orphaned the first.
-- **One Payroll posting path** — the legacy Payroll Planning screen, unreachable since v2.5.0, and its
-  leftover posting code are retired. Payroll Workspace posting is now the single authority, so the
-  period lock, commit blockers, and the Approved gate can no longer be bypassed.
-- **Committed payroll recognised consistently** — one shared predicate is used by every screen. Payroll
-  committed through the retired path is now correctly recognised everywhere (reports, Integrity Check,
-  and the contract-cancellation warning) instead of appearing as "Draft".
-- **Contract-cancellation warning restored** — the committed-payroll warning previously checked only the
-  legacy value, so it never appeared for payroll posted through the Payroll Workspace.
+- **Multi-dataset saves report failure honestly** — the shared save routine used by Smart Import and
+  employee merge checks all 14 of its writes and reports success only when every one succeeded. It
+  previously discarded every result and always reported success.
+- **Employee merge no longer reports false success** — a failed save now shows a clear message instead
+  of "Merged…", and the pre-merge safety backup is kept.
+- **Smart Import records completion only when the save succeeds** — the import audit entry is written
+  only after every write succeeded. On failure the wizard stays on the review step with your parsed
+  file intact so you can retry, rather than jumping to the results screen.
+- **Smart Import undo stays retryable** — a failed undo no longer marks the batch as undone, which
+  previously made every further attempt report "No Smart Import batch available to undo" for the rest
+  of the session.
 
-Builds on the **v2.7.3 Supplemental-Aware Payroll History** patch. See [`CHANGELOG.md`](CHANGELOG.md)
+**What this release does not do.** It adds **no rollback and no all-or-nothing guarantee**. Saving
+several datasets is not an atomic operation in the browser, so a failure message means *the operation
+did not complete* — not *nothing was written*. Reloading reloads whatever data was successfully
+persisted. Because a multi-dataset save may partially succeed, review the data or restore the
+pre-operation backup before continuing.
+
+**Known limitation — Payroll posting.** Posting payroll still writes four datasets one after another
+(payroll plans, monthly plan, overtime, finance transactions) with no coordinated rollback. If one of
+those writes fails, the period can be left partially posted and may need manual review through
+Settings → Run Integrity Check. This is unchanged in v2.8.2 and is the subject of ongoing work.
+
+Builds on the **v2.8.1 Single Payroll Posting Authority** release. See [`CHANGELOG.md`](CHANGELOG.md)
 and [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
 
 Two supported outputs:
@@ -77,7 +83,7 @@ Two supported outputs:
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (64 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/ domain/ platform/ transport/ repository/ cli/`), one shared global scope, no ES modules | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.1.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.2.html` |
 
 ---
 
@@ -165,9 +171,9 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(1088 checks)"]
+    VERIFY["tools/verify-build.js<br/>(1136 checks)"]
   end
-  DIST["dist/tam-intelligence-os-v2.8.1.html<br/>(portable single file)"]
+  DIST["dist/tam-intelligence-os-v2.8.2.html<br/>(portable single file)"]
 
   IDX --> JS --> STATE --> LS
   CSS --> IDX
@@ -220,7 +226,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.8.1.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.8.2.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
@@ -396,6 +402,8 @@ changes. Browsing `docs/`? Start at the [`docs/` index](docs/README.md).
 Directions only — no release numbers are assigned unless already approved.
 
 **Released**
+- Honest Persistence Results — multi-dataset saves report failure instead of unconditional success;
+  no false completion, audit, or navigation after a failed write (v2.8.2)
 - Single Payroll Posting Authority — legacy Payroll Planning retired, one canonical committed-state
   predicate, contract-cancellation warning restored (v2.8.1)
 - Aggregate-Owned Contract Renewal — `ContractRenewalAggregate`, checked Repository persistence,
