@@ -42,9 +42,9 @@ At close: **6 aggregates, 6 commands, 1 query** on `main`, recorded in
 [RDR-001](../RDR/RDR-001-gamma-repository-snapshot.md).
 
 > **Since Gamma closed:** PR-5K "The Ledger" (`ContractStatusAggregate`) merged, then Milestone Delta ran
-> to completion (see below). The **current authoritative baseline is
-> [RDR-007](../RDR/RDR-007-delta-repository-snapshot.md)** at commit `55499f2`; RDR-001 and RDR-003 are
-> immutable predecessors and no longer the latest baseline.
+> to completion, followed by Milestone Epsilon's Repository adoption (both below). The **current
+> authoritative baseline is [RDR-011](../RDR/RDR-011-epsilon-repository-snapshot.md)** at commit
+> `6714beb`; RDR-001, RDR-003 and RDR-007 are immutable predecessors and no longer the latest baseline.
 
 ## Milestone Delta — **Completed**
 **Theme:** Platform & Transport.
@@ -65,11 +65,48 @@ v2.7.3, SCHEMA 6, commit `55499f2`, 824 verifier checks. The frozen state is rec
 [RDR-007](../RDR/RDR-007-delta-repository-snapshot.md); completion in
 [DPR-005](../DPR/DPR-005-delta-completion-report.md).
 
-## Milestone Epsilon — **Upcoming**
-**Theme:** Workflow.
+## Milestone Epsilon — **Repository Adoption**
 
-Model multi-step lifecycles (payroll, supplemental, finance execution) as explicit workflows over the
-existing status values, preserving derive-don't-duplicate.
+**Theme:** Repository Adoption.
+**Status:** Engineering complete · architecture adoption objective complete · governance synchronized by
+SPR-075 · **formal closure pending a final closure record.**
+
+> **Charter reconciliation.** Epsilon was originally chartered as **Workflow** — *"model multi-step
+> lifecycles (payroll, supplemental, finance execution) as explicit workflows over the existing status
+> values, preserving derive-don't-duplicate."* It was **formally re-chartered from Workflow to Repository
+> Adoption** through the accepted Atlas governance sequence beginning with **ATR-008**. The original
+> charter is recorded here as **superseded, not deleted**; the Workflow theme was **not** delivered under
+> Epsilon and remains available as a future milestone theme.
+
+Epsilon adopted the Repository boundary across every aggregate, one bounded slice at a time — each
+migrating exactly one aggregate-backed handler, with no change to the Repository contract, the Platform,
+or the operational surface:
+
+- **ATR-008** — Repository Adoption direction (Hybrid, entity-named repositories).
+- **PR-9A / PR-9B / PR-9C** — Employee employment, lifecycle, compensation — **Employee aggregate complete (4 of 4)**.
+- **RDR-009 · DPR-007** — intermediate snapshot / progress report (record-only).
+- **ATR-009** — Contract Repository readiness review.
+- **PR-10A / PR-10B** — `ContractRepository` introduced (dates), then status — **Contract aggregate complete (2 of 2)**.
+- **RDR-010 · DPR-008** — intermediate snapshot / progress report (record-only).
+- **ATR-010** — Payroll Repository readiness review.
+- **PR-11A** — `PayrollRepository` introduced (lifecycle) — **Payroll complete (1 of 1)**; adoption reaches **7 of 7**.
+- **RDR-011 · DPR-009** — published baseline and completion report.
+- **SPR-075** — governance synchronization (ADR-013, RDR-011, DPR-009, architecture and register updates).
+
+At close of the adoption objective: **three entity-named repositories** (`EmployeeRepository`,
+`ContractRepository`, `PayrollRepository`) mediating **all seven aggregate-backed handlers**; Platform,
+Transport, Gateway, Domain, Aggregates, Commands, Queries, StorageAdapter and the Repository contract
+unchanged; 7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query; 13 registered commands /
+4 registered queries; v2.7.3, SCHEMA 6, commit `6714beb`, **942 verifier checks**. The frozen state is
+recorded in [RDR-011](../RDR/RDR-011-epsilon-repository-snapshot.md); progress in
+[DPR-009](../DPR/DPR-009-epsilon-repository-adoption-completion.md); the decision in
+[ADR-013](../03-adr/ADR-013-Repository-Layer.md).
+
+> **7 of 7 is a bounded claim.** It means every aggregate-backed handler delegates persistence through an
+> entity-named Repository. It does **not** mean full persistence abstraction (3 of 11 persist functions
+> are mediated), compound-persistence support, multi-store transactions, or backend readiness — the
+> application remains client-only per [`CLAUDE.md`](../../CLAUDE.md) §4.3. **Compound persistence** is the
+> next architectural frontier.
 
 ## Milestone Zeta — **Upcoming**
 **Theme:** Intelligence Layer.

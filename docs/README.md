@@ -42,8 +42,8 @@ The AI-facing entry point that requires this reading before implementation is
 | Repository & documentation governance | [`adr/`](adr/README.md) | Architecture Decision Records (`ADR-NNNN`, four-digit) |
 | Domain architecture | [`03-adr/`](03-adr/README.md) | Domain Architecture Decision Records (`ADR-001`…, three-digit) |
 | Security | [`security/`](security/README.md) | Security Decision Records (`SDR-NNNN`) |
-| Repository snapshots | [`RDR/`](RDR/README.md) | Repository Decision Records (`RDR-NNN`) — factual state snapshots at milestone boundaries. **Current baseline: [RDR-007](RDR/RDR-007-delta-repository-snapshot.md)** (Milestone Delta complete, `55499f2`); RDR-001 (Gamma) and RDR-003 (Gateway boundary) are superseded as baseline |
-| Delta progress reports | [`DPR/`](DPR/README.md) | Delta Progress Reports (`DPR-NNN`). **Milestone Delta completion: [DPR-005](DPR/DPR-005-delta-completion-report.md)** |
+| Repository snapshots | [`RDR/`](RDR/README.md) | Repository Decision Records (`RDR-NNN`) — factual state snapshots at milestone boundaries. **Current baseline: [RDR-011](RDR/RDR-011-epsilon-repository-snapshot.md)** (aggregate-backed Repository adoption complete, 7 of 7, `6714beb`); RDR-001 (Gamma), RDR-003 (Gateway boundary) and RDR-007 (Milestone Delta) are superseded as baseline |
+| Delivery progress reports | [`DPR/`](DPR/README.md) | Delivery Progress Reports (`DPR-NNN`). **Current report: [DPR-009](DPR/DPR-009-epsilon-repository-adoption-completion.md)** (Epsilon Repository adoption complete); Milestone Delta completion remains [DPR-005](DPR/DPR-005-delta-completion-report.md) |
 | Governance artifact index | [`00-governance/Atlas_Governance_Register.md`](00-governance/Atlas_Governance_Register.md) | Discovery index of Atlas governance artifacts (published + pending source text) — points to homes, defines no new record type |
 | Point-in-time audits | [`../audit/`](../audit/) | Dated immutable audit/incident records, incl. [GHA-001](../audit/github-audit-2026-08-02/GHA-001-github-repository-comprehensive-audit.md) (2026-08-02 repository audit) |
 
@@ -52,7 +52,8 @@ decisions; `03-adr/` (`ADR-001`…) records Domain-layer architecture decisions.
 number or overlap in scope. Domain ADRs may be **Accepted** (authoritative) or **Proposed**
 (ADR-008 through ADR-012 — open questions from the PR-5G, PR-5H, and PR-5I reviews that record no
 decision and authorize no implementation); the paired non-blocking backlog items live in the
-[Architecture Evolution Backlog](02-architecture/Architecture_Evolution_Backlog.md).
+[Architecture Evolution Backlog](02-architecture/Architecture_Evolution_Backlog.md). The Repository layer
+is recorded in [ADR-013](03-adr/ADR-013-Repository-Layer.md) (Accepted).
 
 Decision records are immutable once Accepted and are **superseded**, never rewritten
 (`CLAUDE.md` §14.4, §16.2). Point-in-time audit records live under [`../audit/`](../audit/).

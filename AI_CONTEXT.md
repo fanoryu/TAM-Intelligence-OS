@@ -9,25 +9,44 @@ there rather than duplicating it.
 **As of the current release:** v2.7.3 — "Supplemental-Aware Payroll History"; `SCHEMA_VERSION` 6.
 When these change, update this document (not `CLAUDE.md`).
 
-**Current baseline (Milestone Delta complete):** [RDR-007](docs/RDR/RDR-007-delta-repository-snapshot.md)
-at commit `55499f2`; completion recorded in [DPR-005](docs/DPR/DPR-005-delta-completion-report.md).
-Milestone Delta established the canonical application **Platform** and proved it transport-agnostic. The
-current architecture has **two ingresses over one canonical contract**:
+**Current baseline (aggregate-backed Repository adoption complete):**
+[RDR-011](docs/RDR/RDR-011-epsilon-repository-snapshot.md) at commit `6714beb`; progress recorded in
+[DPR-009](docs/DPR/DPR-009-epsilon-repository-adoption-completion.md). Milestone Delta established the
+canonical application **Platform** and proved it transport-agnostic
+([RDR-007](docs/RDR/RDR-007-delta-repository-snapshot.md) / [DPR-005](docs/DPR/DPR-005-delta-completion-report.md),
+both immutable predecessors); **Milestone Epsilon** completed **Repository adoption** over it. The current
+architecture has **two ingresses over one canonical contract**:
 
 ```
 Browser ┐
-        ├→ Transport Adapter → Application Gateway → Domain → Aggregate → Handler → Repository → StorageAdapter
+        ├→ Transport Adapter → Application Gateway → Domain → Aggregate → Handler → Entity-Named Repository → StorageAdapter
 CLI    ─┘
 ```
 
 - **Application Gateway** (PR-6A) — exclusive, business-blind Platform boundary.
 - **Transport Adapter** (PR-7A) — canonical transport boundary; the browser consumes it via the
   `uiExecute` seam (PR-7B "The Conduit").
-- **Repository** (PR-8A) — first persistence-mechanics boundary, one bounded slice (handler keeps rollback).
 - **CLI** (PR-8B) — first non-browser, read-only ingress delegating solely through `TransportAdapter`.
+- **Repository** (PR-8A … PR-11A) — persistence-mechanics boundary; **three entity-named modules** in
+  `js/repository/`: `EmployeeRepository`, `ContractRepository`, `PayrollRepository`. One unevolved,
+  collection-grained, client-side contract: `save() → { ok:true } | { ok:false, error:'PersistFailed' }`.
+  Handlers keep validation, mutation, `updatedAt`, history, rollback, typed results — and, for Payroll,
+  the post-persistence best-effort audit. See [ADR-013](docs/03-adr/ADR-013-Repository-Layer.md).
+
+**Aggregate-backed Repository adoption: 7 of 7** — Employee 4/4, Contract 2/2, Payroll 1/1.
+This means *only* that every aggregate-backed handler delegates persistence through an entity-named
+Repository. It does **not** mean all persistence is mediated (the layer covers 3 of 11 persist
+functions), that compound persistence is solved, that multi-store transactions are supported, or that
+backend readiness is achieved. Non-aggregate and compound writes remain direct by design and are
+verifier-fenced. **Backend remains prohibited** by [`CLAUDE.md`](CLAUDE.md) §4.3 (client-only MUST).
+
+**Next architecture frontier: compound persistence** — `commitReadyPayroll` and payroll-planning posting
+(four stores each) and Contract renewal (predecessor + successor) write multiple stores in one logical
+unit, which the collection-grained contract cannot express. This is the open question, not backend work.
 
 Operational surface: 7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query; 13 registered
-commands / 4 registered queries. Business authority remains exclusively in the Domain.
+commands / 4 registered queries — unchanged by every Repository slice. Business authority remains
+exclusively in the Domain.
 
 **v2.7.1 note.** Posted/Executed payroll and supplemental display now derive from a single stage-aware
 historical source-of-truth helper (`payrollHistoricalSnapshot`) backed by immutable snapshots frozen
