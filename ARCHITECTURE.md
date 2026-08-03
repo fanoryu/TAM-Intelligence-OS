@@ -1,25 +1,37 @@
 # TAM Intelligence OS — Architecture
 
-**Current release:** v2.7.0 — Supplemental Payroll Engine
+**Current release:** v2.8.3 — Payroll Posting Integrity (published, marked Latest)
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
 CSS/data-safety invariants)
-**Shape today:** a modular source of **45 classic-script JS modules** (in `core/ ui/ finance/
-people/ import/ analytics/`) + 5 CSS files, assembled into one portable
-`dist/tam-intelligence-os-v${APP_VERSION}.html`. Still one shared global scope — no ES modules,
+**Shape today:** a modular source of **65 classic-script JS modules** (in `core/ ui/ finance/ people/
+import/ analytics/ domain/ platform/ transport/ repository/ cli/`) + 5 CSS files, assembled into one
+portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **64 of the 65 are browser-loaded** — the
+load-order manifest and `index.html` agree on all 64 — and `js/cli/cli.js` is the CLI-only ingress,
+deliberately outside the browser load order. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
+**Verification:** `tools/verify-build.js` — **1212** checks; four Node runtime harnesses — **306**
+checks (payroll posting 106, `saveAllData` 61, contract renewal 67, payroll committed state 72).
 
-> **How to read this document.** Sections 1 and 3–6 describe the founding **Phase 0** split
-> (v2.6.0) and are preserved as historical provenance — the line ranges are the authority for
-> how the original cut was derived. Section 2 is the original 20-file map (historical). The
-> project as it stands today is described by the release sections: **§8** (v2.6.1 incremental
-> render), **§9** (v2.6.2 decomposition into the feature-folder tree — the current 44-module
-> layout), **§10** (v2.6.3 Payroll workspace), **§11** (v2.6.4 release automation + audit
-> visibility), **§12** (v2.6.5 Smart Import scroll preservation), **§13** (v2.6.6 company
-> settings checklist fix), **§14** (v2.6.7 repository governance & delivery — no runtime
+> **How to read this document.** The header block above and **§18** (Repository layer) describe the
+> architecture **as it stands today**; start there. Everything below §18 is a dated release record,
+> ordered newest-first, and each section is accurate **for the release it names** — read those as
+> historical provenance, not as current state.
+>
+> Sections 1 and 3–6 describe the founding **Phase 0** split (v2.6.0); the line ranges are the
+> authority for how the original cut was derived. Section 2 is the original 20-file map. Then:
+> **§8** (v2.6.1 incremental render), **§9** (v2.6.2 decomposition into the feature-folder tree — the
+> 44-module layout *at that time*), **§10** (v2.6.3 Payroll workspace), **§11** (v2.6.4 release
+> automation + audit visibility), **§12** (v2.6.5 Smart Import scroll preservation), **§13** (v2.6.6
+> company settings checklist fix), **§14** (v2.6.7 repository governance & delivery — no runtime
 > change), **§15** (v2.6.8 generic payroll bulk-selection model + immediate overtime-drift
-> visibility), **§16** (v2.6.9 Enterprise Banking Foundation — Bank Master, Company Bank
-> Accounts, employee banking) and **§17** (v2.7.0 Supplemental Payroll Engine). Where an early
-> section says "20 files", read §9 for the current structure.
+> visibility), **§16** (v2.6.9 Enterprise Banking Foundation) and **§17** (v2.7.0 Supplemental Payroll
+> Engine). Where an early section says "20 files" or "44 modules", the header block above is the
+> current count.
+>
+> **Releases after v2.7.0 (v2.7.1 → v2.8.3) have no dedicated section here.** Their architectural
+> substance is folded into the header block and §18; their per-release detail lives in
+> [`CHANGELOG.md`](CHANGELOG.md) and [`RELEASE_NOTES.md`](RELEASE_NOTES.md), which are the source of
+> truth for release-by-release history.
 
 ---
 
@@ -35,7 +47,7 @@ flowchart TD
   subgraph SRC["Modular source (edited by hand)"]
     IDX["index.html<br/>ordered CSS link + JS script tags, mount points"]
     CSS["css/ — tokens, base, shell, components, charts"]
-    subgraph JSMOD["js/ — 63 classic-script modules (one global scope)"]
+    subgraph JSMOD["js/ — 65 modules: 64 browser-loaded (one global scope) + 1 CLI-only"]
       CORE["core/ — constants, state, storage-adapter,<br/>state-load-migrations, domain-services, bootstrap"]
       DOM["domain/ — aggregates, aggregate-helpers,<br/>commands, queries, domain-layer"]
       PLAT["platform/ + transport/ — application-gateway,<br/>transport-adapter"]
@@ -57,7 +69,7 @@ flowchart TD
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>invariant checks"]
+  VERIFY["tools/verify-build.js<br/>1212 invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX
@@ -185,6 +197,8 @@ best-effort audit also stays with the handler: after successful persistence, suc
 - **Compound persistence remains outside this contract.** `commitReadyPayroll` writes four stores in one
   logical unit and stays direct by design. Non-aggregate writes (whole-record editors, deletes,
   generation, regeneration, salary overrides, onboarding reset, the v2.5 migration) also stay direct.
+  SPR-079 and SPR-081 changed how compound writes are **reported and detected**, not how they are
+  performed — see *Compound persistence: current state* below.
 - **Two operations previously listed here are no longer compound.** Contract renewal is single-collection
   (predecessor and successor both live in `contracts`, so one write covers both) and is Repository-mediated
   since SPR-077. Payroll-planning posting was **retired in SPR-078**: its screen had been unreachable since
@@ -218,6 +232,123 @@ abstraction"*.
 
 The operational surface (8 aggregates / 8 aggregate-backed commands / 1 aggregate-backed query) and
 registered surface (14 commands / 4 queries) were unchanged by every Repository slice.
+
+No generic Repository, factory, or base class exists; no Repository coordinates another Repository; and
+there is **no Unit of Work and no Transaction Coordinator**. The verifier asserts each of these.
+
+### Contract authority (SPR-077)
+
+Contract status transitions are aggregate-backed, and renewal is **aggregate-authored**.
+`ContractRenewalAggregate` is a pure decision boundary: it decides renewal eligibility and authors the
+successor's business shape, the predecessor's canonical `Renewed` status, and both history note texts. It
+never mutates, generates ids or timestamps, or persists. The `renewContract` handler owns the id,
+timestamps, the history append, **one** `ContractRepository.save()`, strict result inspection, in-memory
+rollback when that write fails, and the typed result. Renewal is therefore **single-collection, not
+compound** — predecessor and successor both live in `contracts`, so one write covers both.
+
+Renewability is evaluated against **stored** statuses (`Draft`, `Active`), never derived display states.
+A contract displayed as *Expired* or *Expiring Soon* remains renewable while its stored status is still
+`Active`; terminal statuses (`Renewed`, `Cancelled`) are never renewable. The UI eligibility mirror
+(`contractIsRenewable`) is verifier-checked against the same rule.
+
+### Payroll posting authority (SPR-078, SPR-081)
+
+`commitReadyPayroll` is the **sole live Payroll posting path**; the retired Payroll Planning posting
+surface remains absent. The canonical committed status is `'Committed'`; the legacy lowercase
+`'committed'` is **read-compatible only**, accepted by `isPayrollCommitted()` and written by no live
+writer.
+
+Since SPR-081 the posting path:
+
+- **captures and strictly inspects all four persistence results** — payroll plans, monthly plan,
+  overtime, finance transactions. Success requires all four; failure returns a typed outcome naming the
+  first failed step in the fixed write order, the completed steps, and that partial persistence occurred;
+- **gates the success audit entry and the success UI on full persistence success** — the toast, the
+  posted-vs-skipped summary and the selection clear sit on the success path only. The persistence-failure
+  branch retains the row selection so the user can see exactly which rows were involved, and closes the
+  modal explicitly because `render()` rebuilds the workspace beneath it;
+- **resolves the finance transaction before mutating**, via a forward lookup plus a narrow reverse
+  fallback (payroll-sourced only, exact `payrollPlanId`, exact period). The reverse fallback resolves
+  **only when exactly one candidate exists**; a reverse-matched transaction has its forward linkage
+  restored — with a `transaction-relinked` history entry — instead of being duplicated. This closes a
+  runtime-proven duplicate-on-retry path that previously doubled a payroll;
+- **never guesses an ambiguous match.** More than one candidate yields a typed
+  `PayrollTransactionAmbiguous` skip listing every candidate; the row stays uncommitted and no third
+  transaction is created.
+
+**None of this introduced atomicity or rollback.** The four writes are still sequential.
+
+### Multi-dataset persistence (SPR-079)
+
+`saveAllData()` inspects every one of its 14 writes and returns `true` **only when all succeed**. Employee
+Merge and Smart Import no longer report false success: a failed save shows a message stating the operation
+did not complete, records no success audit entry, and preserves the pre-operation safety backup. Multi-key
+saves remain **non-atomic** — a failure means the operation did not complete, **not** that nothing was
+written — and reload reads whatever successfully persisted.
+
+### Integrity checker
+
+`runIntegrityCheck` (`js/core/stabilization.js`) is **read-only detection**. Two rules were added in
+SPR-081, both **Critical**:
+
+| Rule | Detects |
+|---|---|
+| `payroll-orphan-transaction` | a payroll-sourced Finance transaction whose linked payroll plan is not committed — the residue of a partial posting |
+| `payroll-overtime-uncommitted` | committed payroll whose linked Overtime is still `Approved`, which was runtime-proven to be re-included in the next month's generated payroll |
+
+Both **detect only and repair nothing.** They report that a partial state exists and where it is.
+
+### Compound persistence: current state
+
+| Property | Status |
+|---|---|
+| Payroll posting write count | **four storage keys, written sequentially** |
+| Atomicity | **none** — the browser is atomic per key only |
+| Attempt-all behaviour | **retained** — a failing write does not abort the remaining writes |
+| Result inspection | **complete** — all four results checked (SPR-081) |
+| Coordinated rollback | **none** |
+| Compensating action | **none** |
+| Detection of partial states | two Critical Integrity Check rules |
+| Repair of partial states | **none** — manual review may still be required |
+
+Not every possible partial Payroll state is automatically detectable or repairable. The two failure modes
+closed in SPR-081 are the two proven by SPR-080 runtime discovery.
+
+**Known residuals.**
+
+- `commitMonthlyPlan` (`js/people/monthly-plan.js`) still awaits `persist()` and `persistMonthlyPlans()`
+  **without inspecting either result** — the same class of defect SPR-079 fixed elsewhere. Unaddressed.
+- **Smart Import undo** leaves in-memory state ahead of storage on a failed save. The completion marker is
+  cleared so an immediate retry works, but the record removals stay applied in memory while storage holds
+  whatever was written. Explicitly **not** a rollback; reloading returns to the last persisted state.
+- There is **no backend, server-side transaction, or multi-user synchronisation**, so cross-key atomicity
+  cannot be delegated to a server. Backend remains prohibited by [`CLAUDE.md`](CLAUDE.md) §4.3.
+
+### Architecture frontier — what is and is not authorised
+
+Compound persistence is the open architectural question. It is **not** an approved design direction, and
+nothing below should be read as scheduled work.
+
+- **Deferred, evidence-gated:** operation-specific compensation, only where a concrete failure mode
+  justifies it; a persisted recovery marker, only if runtime evidence requires one; a generic
+  coordination mechanism, only after a **second** convergent operation demonstrates the need.
+- **Not authorised:** a Unit of Work; a Transaction Coordinator; a `StorageAdapter` journal; a single-key
+  envelope; any backend assumption.
+
+Generic compound-persistence coordination has **not** been approved. The verifier actively asserts that
+SPR-077, SPR-078, SPR-079 and SPR-081 each introduced no transaction abstraction.
+
+### Release engineering
+
+`release.yml` is **tag-triggered**: it rebuilds, verifies, re-derives the version from `APP_VERSION`,
+refuses to publish unless the tag equals that version and the portable HTML exists, then creates or
+refreshes the GitHub Release idempotently and uploads the portable asset. The portable build is
+**reproducible** — the same source yields a byte-identical artifact, so the published SHA-256 verifies any
+downloaded copy. Shipped releases are never rewritten. The workflow titles a Release
+`TAM Intelligence OS <tag>` — the short convention — which is why the published v2.8.3 Release is titled
+`TAM Intelligence OS v2.8.3` rather than carrying the release name. `ci.yml` builds and verifies every
+push/PR to `main`; `codeql.yml` runs code scanning with two Analyze jobs (`javascript-typescript`,
+`actions`).
 
 ---
 
