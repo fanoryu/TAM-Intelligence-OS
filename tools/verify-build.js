@@ -718,7 +718,10 @@ const tpBody = tpNext>=0 ? tpRest.slice(0, tpNext) : tpRest;
 // Lifecycle changes ONLY status (+ updatedAt/history); calculation/committed fields are forbidden.
 ['baseSalary','salaryOverride','overtimeAmount','overtimeHours','allowance','bonus','benefits','otherAddition','deduction','plannedAmount','committedSnapshot','committedTxnId','transactionId'].forEach((f)=>
   check(!tpBody.includes(f), 'payroll lifecycle handler does not touch forbidden field: '+f));
-check((tpBody.match(/persistPayrollPlans\(/g)||[]).length === 1, 'handler persists exactly once (persistPayrollPlans)');
+// PR-11A — the payroll-lifecycle handler's persistence now goes through the Repository (comment-stripped).
+const tpCode = stripComments(tpBody);
+check((tpCode.match(/PayrollRepository\.save\(\)/g)||[]).length === 1, 'handler persists exactly once (via PayrollRepository.save())');
+check(!/persistPayrollPlans\(/.test(tpCode), 'payroll-lifecycle handler no longer calls persistPayrollPlans() directly (routed through the Repository)');
 check(!/persist\(\)|persistOvertime\(|persistMonthlyPlans\(|persistSupplementalPayments\(/.test(tpBody), 'handler uses only the PayrollPlan persistence path (no other store written)');
 check(/pp\.status = to/.test(tpBody), 'handler performs the status mutation (only PayrollPlan.status)');
 check(/pp\.updatedAt = new Date/.test(tpBody), 'handler updates updatedAt');
@@ -727,7 +730,7 @@ check(/pp\.status = prevStatus/.test(tpBody) && /pp\.history\.pop\(\)/.test(tpBo
 check(/error:'PersistFailed'/.test(tpBody), 'handler returns PersistFailed on persistence failure');
 check(/error:'IllegalPayrollLifecycleTransition'/.test(tpBody) && /error:'PayrollPeriodLocked'/.test(tpBody) && /error:'PayrollCommittedImmutable'/.test(tpBody), 'handler performs defense-in-depth lock/immutable/transition validation');
 // Audit runs ONLY after a successful persist (never before, never on the failure path).
-check(/persistPayrollPlans\(\)[\s\S]*?ok !== true[\s\S]*?return \{ success:false, error:'PersistFailed' \}[\s\S]*?logActivity\(/.test(tpBody), 'handler audits only after persistence succeeds (after the PersistFailed return)');
+check(/PayrollRepository\.save\(\)[\s\S]*?persisted\.ok !== true[\s\S]*?return \{ success:false, error:'PersistFailed' \}[\s\S]*?logActivity\(/.test(tpBody), 'handler audits only after persistence succeeds (after the PersistFailed return)');
 check(!/showWarning|showSuccess|\btoast\(|\brender\(/.test(tpBody), 'handler performs no UI (no toast/warning/render) — it is the implementation authority, not the UI');
 check(!/commitReadyPayroll\(|generatePayrollForMonth\(|payrollCommitTxn\(|buildPayrollCommittedSnapshot\(/.test(tpBody), 'handler never posts, generates, or freezes a committed snapshot');
 check(/success:\s*true/.test(tpBody) && /success:\s*false/.test(tpBody), 'handler returns a typed success/failure outcome');
@@ -1183,12 +1186,92 @@ check(!/confirm\s*\(|payrollPlansForContract/.test(tcCode), 'committed-payroll c
 // The Repository contract itself is UNCHANGED by PR-10B (no contract evolution, no new module).
 check(/async save\(\)/.test(contractRepoSrc) && (contractRepoCode.match(/async \w+\(/g)||[]).length === 1, 'ContractRepository still exposes exactly one method (save) — contract unchanged');
 check(/ok === true/.test(contractRepoCode) && /ok:\s*false,\s*error:\s*'PersistFailed'/.test(contractRepoCode), 'ContractRepository result contract remains { ok:true } / { ok:false, error:"PersistFailed" }');
-check(fs.readdirSync(path.join(root,'js','repository')).length === 2, 'no additional Repository module introduced (EmployeeRepository + ContractRepository only)');
-// No unrelated handler migration — Payroll lifecycle stays on direct persistence.
-check((tpBody.match(/persistPayrollPlans\(/g)||[]).length === 1 && !/Repository/.test(stripComments(tpBody)), 'no unrelated handler migration (payroll lifecycle remains direct persistence)');
-check(!/ContractRepository/.test(poeSrc), 'payroll ops engine has no Repository dependency (Payroll aggregate unmigrated)');
+check(!/ContractRepository/.test(poeSrc), 'payroll ops engine has no ContractRepository dependency (repositories stay independent)');
 // Operational + registered surface UNCHANGED by PR-10B.
 check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational + registered surface unchanged by the contract status slice');
+
+// PR-11A "The Payroll Foundation" — the THIRD entity Repository (PayrollRepository),
+// completing aggregate-backed Repository adoption (7 of 7) across Employee, Contract,
+// and Payroll. Introduced on one bounded slice (payroll.lifecycle.transition).
+// Persistence mechanics only; the handler keeps validation/mutation/updatedAt/history/
+// rollback AND the Payroll-specific best-effort post-persistence audit.
+console.log('== PAYROLL REPOSITORY (PR-11A — third entity repository, adoption complete) ==');
+const payrollRepoPath = path.join(root,'js','repository','payroll-repository.js');
+check(fs.existsSync(payrollRepoPath), 'repository module present: js/repository/payroll-repository.js');
+check(jsFiles.indexOf('repository/payroll-repository.js') !== -1, 'module-order.js includes repository/payroll-repository.js');
+check(indexHtml.includes('<script src="js/repository/payroll-repository.js"></script>'), 'index.html includes repository/payroll-repository.js');
+// Load order: AFTER the persist infrastructure it delegates to, and BEFORE the migrated handler.
+check(jsFiles.indexOf('core/hr-persistence-portability.js') < jsFiles.indexOf('repository/payroll-repository.js') &&
+      jsFiles.indexOf('repository/payroll-repository.js') < jsFiles.indexOf('people/payroll-ops-engine.js'), 'payroll repository loads after hr-persistence-portability.js and before people/payroll-ops-engine.js');
+const payrollRepoSrc = read(payrollRepoPath);
+const payrollRepoCode = stripComments(payrollRepoSrc);
+check(/const PayrollRepository = Object\.freeze\(\{/.test(payrollRepoSrc), 'PayrollRepository is a frozen object');
+check(/async save\(\)/.test(payrollRepoSrc) && (payrollRepoCode.match(/async \w+\(/g)||[]).length === 1, 'PayrollRepository exposes exactly one method (async save)');
+check(dist.includes('const PayrollRepository') && dist.includes('window.PayrollRepository = PayrollRepository'), 'PayrollRepository present and exposed in dist');
+// DELEGATION — the repository delegates persistence to the EXISTING persistPayrollPlans() only.
+check(/await persistPayrollPlans\(\)/.test(payrollRepoCode) && (payrollRepoCode.match(/persistPayrollPlans\(/g)||[]).length === 1, 'PayrollRepository delegates persistence to the existing persistPayrollPlans() exactly once');
+check(!/persistEmployees\(|persistContracts\(|persistMonthlyPlans\(|persistOvertime\(|persist\(\)/.test(payrollRepoCode), 'PayrollRepository writes no other store (no compound persistence)');
+// RESULT CONTRACT — strict, identical to the two existing repositories (no contract evolution).
+check(/ok:\s*true/.test(payrollRepoCode) && /ok:\s*false,\s*error:\s*'PersistFailed'/.test(payrollRepoCode) && /ok === true/.test(payrollRepoCode), 'PayrollRepository normalizes the strict boolean into { ok:true } / { ok:false, error:"PersistFailed" }');
+// REPOSITORY PURITY — persistence mechanics ONLY (audit explicitly included).
+[['State access', /State\s*[.[]/],
+ ['field mutation', /\bpp\.\w+\s*=|\.updatedAt\s*=|\.status\s*=/],
+ ['history creation', /\.history\b|\.push\(/],
+ ['rollback', /rollback|\.pop\(/],
+ ['validation', /Invalid|isPayrollLocked|Locked|Immutable|TRANSITIONS/],
+ ['audit', /logActivity\s*\(|payrollAuditType\s*\(/],
+ ['UI render', /\brender\s*\(|innerHTML|toast\s*\(|showSuccess\s*\(|showWarning\s*\(/],
+ ['Domain call', /\bDomain\s*[.[]/],
+ ['aggregate call', /\w+Aggregate\s*[.[]/],
+ ['direct storage bypass', /localStorage|window\.storage|StorageAdapter\s*[.[]/],
+ ['other-entity persistence', /persistEmployees\(|persistContracts\(/]
+].forEach(([label,re])=>check(!re.test(payrollRepoCode), 'PayrollRepository never performs '+label));
+// No generic Repository / factory / base class / transaction abstraction.
+check(!/class\s+\w*Repository|createRepository|RepositoryFactory|extends\s+\w+|transaction/i.test(payrollRepoCode), 'PayrollRepository introduces no generic repository, factory, base class, or transaction abstraction');
+// HANDLER MIGRATION — exactly one Repository call, no direct persist, strict handling.
+check((tpCode.match(/PayrollRepository\.save\(\)/g)||[]).length === 1, 'transitionPayrollLifecycle() uses exactly one PayrollRepository.save()');
+check(!/persistPayrollPlans\(/.test(tpCode), 'transitionPayrollLifecycle() contains no direct persistPayrollPlans()');
+check(/persisted\.ok !== true/.test(tpCode), 'payroll-lifecycle handler uses strict persisted.ok handling (no truthy/falsy ambiguity)');
+// ROLLBACK remains HANDLER-owned (the repository does not roll back).
+check(/pp\.status = prevStatus/.test(tpCode) && /pp\.history\.pop\(\)/.test(tpCode) && /pp\.updatedAt = prevUpdatedAt/.test(tpCode), 'payroll-lifecycle handler still owns full rollback (status + history.pop + updatedAt)');
+check(/error:'PersistFailed'/.test(tpCode), 'payroll-lifecycle handler preserves the typed PersistFailed result');
+// AUDIT INVARIANT (Payroll-specific — deliberately NOT the Contract "no audit" rule).
+check(/logActivity\(/.test(tpCode), 'the best-effort audit remains inside transitionPayrollLifecycle()');
+check((tpCode.match(/logActivity\(/g)||[]).length === 1, 'exactly one audit call in the payroll-lifecycle handler (no duplicate audit)');
+check(/PayrollRepository\.save\(\)[\s\S]*?return \{ success:false, error:'PersistFailed' \}[\s\S]*?logActivity\(/.test(tpCode), 'the audit occurs AFTER successful Repository persistence (below the PersistFailed return)');
+check(/try \{[\s\S]*?logActivity\([\s\S]*?\} catch/.test(tpCode), 'the audit remains try/catch-wrapped (best-effort; never alters the result)');
+// The failure path spans the rollback through the PersistFailed return; no audit may appear inside it.
+const tpFailStart = tpCode.indexOf('persisted.ok !== true');
+const tpFailEnd = tpCode.indexOf("return { success:false, error:'PersistFailed' }");
+const tpFailPath = (tpFailStart !== -1 && tpFailEnd > tpFailStart) ? tpCode.slice(tpFailStart, tpFailEnd) : '';
+check(tpFailPath !== '' && !/logActivity\(/.test(tpFailPath), 'the audit is absent from the rollback/failure path (no audit between the failure branch and the PersistFailed return)');
+check(!/logActivity\(/.test(payrollRepoCode), 'the audit stays OUTSIDE PayrollRepository');
+// FENCED — every other persistPayrollPlans() call site remains DIRECT and unchanged.
+const poeCode = stripComments(poeSrc);
+check((poeCode.match(/persistPayrollPlans\(\)/g)||[]).length === 4, 'the four non-aggregate payroll-ops persistence sites remain direct (override clear/set, regeneration, compound posting)');
+check(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/.test(poeSrc), 'commitReadyPayroll compound posting remains direct and compound (4 stores, unchanged)');
+const planSrc = read(path.join(root,'js','people','payroll-planning.js'));
+check(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/.test(planSrc) && !/PayrollRepository/.test(planSrc), 'payroll-planning compound posting remains direct and compound (not migrated)');
+const wsSrc = read(path.join(root,'js','people','payroll-workspace.js'));
+check(/await persistPayrollPlans\(\)/.test(wsSrc) && !/PayrollRepository/.test(wsSrc), 'payroll generation (payroll-workspace) remains direct (not migrated)');
+check(/if\(touched\) await persistPayrollPlans\(\)/.test(read(path.join(root,'js','core','hr-persistence-portability.js'))), 'the v2.5 schema migration persistence remains direct (not migrated)');
+// Repositories stay INDEPENDENT and one-way.
+check(!/PayrollRepository/.test(repoSrc) && !/PayrollRepository/.test(contractRepoSrc), 'Employee/Contract repositories have no dependency on PayrollRepository (independent)');
+check(!/PayrollRepository|payroll-repository/.test(facSrc), 'domain-layer.js has no dependency on the payroll repository (one-way)');
+check(!/PayrollRepository|payroll-repository/.test(storageSrc), 'StorageAdapter has no dependency on the payroll repository (one-way)');
+// ADOPTION — 4 (Employee) + 2 (Contract) + 1 (Payroll) = 7 of 7 aggregate-backed handlers.
+check((stripComments(empSrc).match(/EmployeeRepository\.save\(\)/g)||[]).length === 4, 'Employee Repository adoption remains 4 of 4');
+check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 2, 'Contract Repository adoption remains 2 of 2');
+check((poeCode.match(/PayrollRepository\.save\(\)/g)||[]).length === 1, 'Payroll Repository adoption becomes 1 of 1');
+check(((stripComments(empSrc).match(/EmployeeRepository\.save\(\)/g)||[]).length +
+       (stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length +
+       (poeCode.match(/PayrollRepository\.save\(\)/g)||[]).length) === 7, 'overall aggregate-backed Repository adoption is 7 of 7 (aggregate-backed handlers only — NOT all persistence, NOT compound, NOT backend readiness)');
+check(fs.readdirSync(path.join(root,'js','repository')).length === 3, 'exactly three Repository modules (Employee + Contract + Payroll); no generic repository added');
+// Existing Repository contracts are UNCHANGED by PR-11A.
+check(/async save\(\)/.test(contractRepoSrc) && (contractRepoCode.match(/async \w+\(/g)||[]).length === 1, 'ContractRepository contract unchanged by PR-11A');
+check(/async save\(\)/.test(repoSrc) && (stripComments(repoSrc).match(/async \w+\(/g)||[]).length === 1, 'EmployeeRepository contract unchanged by PR-11A');
+// Operational + registered surface UNCHANGED by PR-11A.
+check(aggregateDefs === 7 && migratedCmdIds.length === 7 && migratedQueryIds.length === 1 && allCmdIds.length === 13 && allQryIds.length === 4, 'operational + registered surface unchanged by the payroll repository slice');
 
 // PR-8B "The CLI" — the first NON-BROWSER ingress. It proves the canonical Platform
 // contract is transport-agnostic: a CLI reaches the Domain through TransportAdapter
