@@ -210,7 +210,7 @@ function payrollDashboardAlerts(monthKey){
     if(payrollBaseSalary(p)<=0) alerts.push({type:'warn', text:`${escapeHtml(p.employeeName)} has missing salary in ${escapeHtml(mo.month)} payroll.`});
     if(p.workScheduleSnapshot && p.workScheduleSnapshot.valid===false) alerts.push({type:'warn', text:`${escapeHtml(p.employeeName)} has no valid work schedule.`});
     if(p.salaryOverride) alerts.push({type:'info', text:`Salary override used for ${escapeHtml(p.employeeName)} (${escapeHtml(p.salaryOverride.reason)}).`});
-    if(p.otChanged && p.status==='Committed') alerts.push({type:'warn', text:`Approved overtime changed after commit for ${escapeHtml(p.employeeName)} — review the adjustment.`});
+    if(p.otChanged && isPayrollCommitted(p)) alerts.push({type:'warn', text:`Approved overtime changed after commit for ${escapeHtml(p.employeeName)} — review the adjustment.`});
     else if(p.otChanged) alerts.push({type:'info', text:`Payroll for ${escapeHtml(p.employeeName)} changed (overtime updated) — re-review.`});
     const txn=payrollTxnOf(p);
     if(txn && statusOf(txn)==='partial') alerts.push({type:'info', text:`Partial payroll payment for ${escapeHtml(p.employeeName)}.`});

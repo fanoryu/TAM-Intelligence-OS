@@ -249,9 +249,12 @@ descriptive (handler-only) registry entries (see [RDR-007 §2](../RDR/RDR-007-de
 - **Supplemental lifecycle** — `js/people/supplemental-engine.js` (e.g. `:236` `Posted`, `:273`
   `Executed`, `:310` rollback to `Approved`). Registered descriptive commands (`supplemental.generate` /
   `.transition` / `.post`) exist, but the engine still writes status directly.
-- **Payroll & Overtime** — `js/people/payroll-ops-engine.js` (`:446`/`:452`/`:458`) and
-  `js/people/payroll-planning.js` (`:106`/`:109`) set `Committed` / `Committed to Payroll`;
-  `js/people/overtime.js` (`:142`/`:423`) sets overtime status.
+- **Payroll & Overtime** — `js/people/payroll-ops-engine.js` (`:446`/`:452`/`:458`) sets `Committed` /
+  `Committed to Payroll`; `js/people/overtime.js` (`:142`/`:423`) sets overtime status.
+  *(Corrected, SPR-078: the former `js/people/payroll-planning.js` entry is withdrawn. That path was
+  unreachable dead code and was retired; it additionally wrote a non-canonical lowercase `'committed'`
+  payroll status, which this entry never recorded. `commitReadyPayroll` is now the sole live Payroll
+  posting path.)*
 - **Monthly plan** — `js/people/monthly-plan.js` (`:74` `Committed`, `:136` `Reviewed`).
 
 ### Objective

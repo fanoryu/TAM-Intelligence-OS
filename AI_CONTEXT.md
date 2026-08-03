@@ -40,11 +40,20 @@ functions), that compound persistence is solved, that multi-store transactions a
 backend readiness is achieved. Non-aggregate and compound writes remain direct by design and are
 verifier-fenced. **Backend remains prohibited** by [`CLAUDE.md`](CLAUDE.md) §4.3 (client-only MUST).
 
-**Next architecture frontier: compound persistence** — `commitReadyPayroll` and payroll-planning posting
-(four stores each) and Contract renewal (predecessor + successor) write multiple stores in one logical
-unit, which the collection-grained contract cannot express. This is the open question, not backend work.
+**Next architecture frontier: compound persistence** — `commitReadyPayroll` writes four stores in one
+logical unit, which the collection-grained contract cannot express. This is the open question, not backend
+work. It is now the **only** compound operation in the Payroll domain: Contract renewal was shown to be
+single-collection (SPR-077, ATR-011 §4) and payroll-planning posting was retired as dead code (SPR-078).
 
-Operational surface: 7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query; 13 registered
+`commitReadyPayroll` is the **sole live Payroll posting path**. The legacy Payroll Planning screen and its
+`commitPayroll` function were removed in SPR-078: the screen had been unreachable since v2.5.0 (no route,
+no navigation entry, no external caller) and its posting path was a second, divergent authority that
+bypassed the period lock, commit blockers, and the `Ready` gate, and wrote a non-canonical lowercase
+`'committed'` status. Committed-state reads now go through one shared predicate, `isPayrollCommitted()`
+(`js/people/people-core.js`), which accepts the canonical `'Committed'` and — for reads only — the legacy
+lowercase value that retired path may have persisted.
+
+Operational surface: 8 aggregates / 8 aggregate-backed commands / 1 aggregate-backed query; 14 registered
 commands / 4 registered queries — unchanged by every Repository slice. Business authority remains
 exclusively in the Domain.
 

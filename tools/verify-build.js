@@ -203,7 +203,12 @@ check(dist.includes('Base Payroll Snapshot'), 'Payroll Detail renders a committe
 check(dist.includes('function payrollHoursDisplay(') && dist.includes('(unavailable)'), 'unknown legacy overtime hours render as unavailable (not zero)');
 // Immutable overtime snapshots frozen at posting (both commit pipelines).
 check(dist.includes('function buildPayrollOvertimeSnapshot(') && dist.includes('function buildPayrollCommittedSnapshot('), 'immutable overtime + committed snapshot builders present');
-check((dist.match(/overtimeSnapshot:\s*otSnapshot\b/g)||[]).length >= 2 && (dist.match(/=\s*buildPayrollOvertimeSnapshot\(pp\.overtimeIds/g)||[]).length >= 2, 'both payroll commit pipelines freeze an overtimeSnapshot');
+// SPR-078 — exactly ONE payroll commit pipeline remains (payroll-planning's was retired).
+// The transaction-side freeze happens once; buildPayrollOvertimeSnapshot(pp.overtimeIds) is
+// called twice by design — once by that pipeline and once by buildPayrollCommittedSnapshot,
+// the historical read model. Both live in payroll-ops-engine.js.
+check((dist.match(/overtimeSnapshot:\s*otSnapshot\b/g)||[]).length === 1, 'the ONE remaining payroll commit pipeline freezes an overtimeSnapshot (SPR-078 retired the second)');
+check((dist.match(/=\s*buildPayrollOvertimeSnapshot\(pp\.overtimeIds/g)||[]).length === 2, 'overtime snapshots are built in exactly two places (the one commit pipeline + the committed-snapshot read model)');
 check(dist.includes('pp.committedSnapshot = buildPayrollCommittedSnapshot(pp)'), 'committed snapshot frozen on the plan at post time');
 // Company-settings onboarding completion marker (Section 4).
 check(dist.includes('companySettingsConfiguredAt') && dist.includes('function legacyMeaningfulCompanyProfile('), 'company-settings completion marker + legacy fallback present');
@@ -236,10 +241,10 @@ if (fs.existsSync(prevDist)) {
 // dist/ holds exactly one release artifact — the current version (release dist-swap invariant).
 const distArtifacts = fs.readdirSync(path.join(root, 'dist')).filter((f)=>/^tam-intelligence-os-v[\d.]+\.html$/.test(f));
 check(distArtifacts.length === 1 && distArtifacts[0] === 'tam-intelligence-os-v' + meta.version + '.html', 'dist/ holds exactly one release artifact — the current v' + meta.version);
-check(meta.version === '2.8.0', 'APP_VERSION is 2.8.0 (this development release)');
+check(meta.version === '2.8.1', 'APP_VERSION is 2.8.1 (this development release)');
 // v2.7.1 polishing pass — snapshot metadata, single historical API, compact integrity badge.
 check(dist.includes('function overtimeSnapshotMeta('), 'overtime snapshot audit metadata helper present');
-check((dist.match(/overtimeSnapshotMeta:\s*overtimeSnapshotMeta\(/g)||[]).length >= 2, 'both commit pipelines store overtimeSnapshotMeta {recordCount,totalHours}');
+check((dist.match(/overtimeSnapshotMeta:\s*overtimeSnapshotMeta\(/g)||[]).length === 1, 'the ONE remaining commit pipeline stores overtimeSnapshotMeta {recordCount,totalHours}');
 check(dist.includes('if(txn.overtimeSnapshotMeta){') , 'historical snapshot reads frozen metadata (no recompute)');
 check(dist.includes('function payrollIntegrityBadge(') && dist.includes('Integrity Verified') && dist.includes('Snapshot Mismatch'), 'compact Payroll Detail integrity badge present');
 check(dist.includes('${payrollIntegrityBadge(p)}'), 'integrity badge rendered in Payroll Detail');
@@ -832,7 +837,7 @@ check(/'ct-activate'\) requestContractStatusTransition\(id, 'Active'\)/.test(emp
 check(!/transitionContractStatus\(/.test(empSrc), 'no UI file calls the handler transitionContractStatus() directly (employees.js)');
 check((ctSrc.match(/transitionContractStatus\(/g)||[]).length === 1, 'transitionContractStatus appears only as its definition (never invoked outside the Domain command)');
 // The committed-payroll cancellation confirmation is preserved (moved into the UI seam, quirk unchanged).
-check(/payrollPlansForContract\(id\)\.some\(p=>p\.status==='committed'\)/.test(ctSrc), 'committed-payroll cancellation confirmation preserved with its existing comparison quirk');
+check(/payrollPlansForContract\(id\)\.some\(isPayrollCommitted\)/.test(ctSrc), 'committed-payroll cancellation confirmation uses the shared canonical predicate (SPR-078 — the lowercase-only quirk is gone)');
 // Transitions-only scope: creation (full editor) status writes intentionally remain (documented residual authority).
 check(/rec\.status = fd\.get\('status'\)/.test(ctSrc), 'full-editor status assignment remains (creation — out of scope, documented residual authority)');
 // SPR-077 supersedes the former PR-5K residual: the renewal status write is no longer
@@ -967,6 +972,85 @@ check(/async save\(\)\{[\s\S]*?await persistContracts\(\);[\s\S]*?\}/.test(read(
 // proves SHAPE; tools/verify-renewal-runtime.js proves BEHAVIOR by executing the
 // command through the Platform path against a failable in-memory storage shim.
 check(fs.existsSync(path.join(root,'tools','verify-renewal-runtime.js')), 'SPR-077 runtime verification harness present: tools/verify-renewal-runtime.js');
+
+// SPR-078 — LEGACY PAYROLL PLANNING RETIRED + CANONICAL COMMITTED-STATE PREDICATE.
+console.log('== SPR-078 PAYROLL POSTING AUTHORITY (single path + one committed predicate) ==');
+const planSrc078 = read(path.join(root,'js','people','payroll-planning.js'));
+const planCode078 = stripComments(planSrc078);
+const coreSrc078 = read(path.join(root,'js','people','people-core.js'));
+const shellSrc078 = read(path.join(root,'js','ui','shell-render.js'));
+
+// (a) THE DEAD SURFACE IS GONE. None of these had an external consumer.
+['commitPayroll','renderPayrollPlanning','renderPayrollDraft','payrollRowHTML','generatePayrollRows','buildPayrollTxn','payrollAmount','samePayrollComponents'].forEach((fname)=>
+  check(!new RegExp('function\\s+'+fname+'\\s*\\(').test(planCode078), 'retired dead payroll-planning surface: '+fname+'() is removed'));
+check(!/commitPayroll\s*\(/.test(stripComments(srcJs)), 'no caller of the retired commitPayroll() remains anywhere');
+check(!/renderPayrollPlanning\s*\(/.test(stripComments(srcJs)), 'no caller of the retired renderPayrollPlanning() remains anywhere');
+// The retired screen must NOT be re-routed (Atlas: the missing route is not a bug).
+check(!/State\.view===['"]payrollPlanning['"]/.test(srcJs), 'the retired planning screen is not re-routed');
+// (b) THE SHARED UTILITIES SURVIVE — they are defined nowhere else and have real consumers.
+check(/function num\(x\)/.test(planSrc078), 'shared utility num() is preserved in payroll-planning.js');
+check(/function ensureMonthlyPlan\(monthKey\)/.test(planSrc078), 'shared utility ensureMonthlyPlan() is preserved in payroll-planning.js');
+check((srcJs.match(/^function num\(/gm)||[]).length === 1, 'num() has exactly one definition repository-wide');
+check((srcJs.match(/^function ensureMonthlyPlan\(/gm)||[]).length === 1, 'ensureMonthlyPlan() has exactly one definition repository-wide');
+check(jsFiles.indexOf('people/payroll-planning.js') !== -1 && indexHtml.includes('<script src="js/people/payroll-planning.js"></script>'), 'payroll-planning.js remains loaded (retained for its shared utilities)');
+// (c) ONE LIVE POSTING PATH.
+check(/async function commitReadyPayroll\(monthKey, ids\)\{/.test(poeSrc), 'commitReadyPayroll is defined');
+check((stripComments(srcJs).match(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/g)||[]).length === 1,
+  'exactly ONE four-store payroll posting sequence exists repository-wide (single posting authority)');
+check(/isPayrollLocked\(monthKey\)/.test(poeSrc) && /payrollCommitBlockers\(pp\)/.test(poeSrc) && /pp\.status!=='Ready'/.test(poeSrc),
+  'the sole posting path enforces period lock + commit blockers + the Ready gate');
+check((stripComments(srcJs).match(/logActivity\(\{type:'payroll\.post'/g)||[]).length === 1, 'exactly one successful-posting audit entry exists (not duplicated by any wrapper)');
+// (d) NO LIVE LOWERCASE WRITER. The v2.5.0 migration is the ONLY permitted mention.
+const lowerWriters = [];
+jsFiles.forEach((f)=>{
+  if(f === 'core/hr-persistence-portability.js') return;          // the one-time v2.5.0 migration — untouched by SPR-078
+  const code = stripComments(read(path.join(root,'js',f)));
+  if(/status\s*[:=]\s*'committed'/.test(code)) lowerWriters.push(f);
+});
+check(lowerWriters.length === 0, 'no live writer writes the lowercase legacy payroll status (found: '+(lowerWriters.join(', ')||'none')+')');
+check(/p\.status==='committed'\?'Committed':'Draft'/.test(read(path.join(root,'js','core','hr-persistence-portability.js'))), 'the one-time v2.5.0 migration is unchanged (no migration added or re-run)');
+// (e) THE CANONICAL PREDICATE — one definition, in the shared people-domain boundary.
+check(/const PAYROLL_COMMITTED_STATUS = 'Committed';/.test(coreSrc078), 'canonical committed status constant is defined (Committed)');
+check(/const PAYROLL_COMMITTED_STATUS_LEGACY = 'committed';/.test(coreSrc078), 'legacy read-compatibility constant is defined (committed)');
+check(/function isPayrollCommitted\(planOrStatus\)\{/.test(coreSrc078), 'the shared predicate isPayrollCommitted() is defined');
+check((srcJs.match(/^function isPayrollCommitted\(/gm)||[]).length === 1, 'isPayrollCommitted() has exactly one definition repository-wide');
+// It must load BEFORE every consumer, so no consumer relies on cross-file hoisting.
+['people/contracts.js','people/hr-dashboard-reports.js','people/monthly-plan.js','people/payroll-ops-engine.js'].forEach((f)=>
+  check(jsFiles.indexOf('people/people-core.js') < jsFiles.indexOf(f), 'the predicate module loads before its consumer: '+f));
+// The predicate is a pure READ helper — it never writes a status.
+const predBody = (coreSrc078.match(/function isPayrollCommitted\(planOrStatus\)\{[\s\S]*?\n\}/)||[''])[0];
+check(predBody !== '', 'the predicate body is resolvable');
+[['State access', /State\s*[.[]/], ['persistence', /persist/], ['record mutation', /\.\w+\s*=[^=]/],
+ ['UI/DOM access', /document|render\s*\(|toast\s*\(/], ['id/timestamp generation', /\buid\s*\(|new Date\s*\(/]
+].forEach(([label,re])=> check(!re.test(predBody), 'the predicate performs no '+label));
+// (f) EVERY LIVE PayrollPlan COMMITTED READER USES THE PREDICATE.
+const READER_FILES = ['people/contracts.js','people/hr-dashboard-reports.js','people/monthly-plan.js','people/payroll-ops-engine.js','core/stabilization.js','core/onboarding-reset.js'];
+const strayReaders = [];
+READER_FILES.forEach((f)=>{
+  const code = stripComments(read(path.join(root,'js',f)));
+  // A PayrollPlan status comparison is one made against a payroll record (p/pp/existing),
+  // never against a MonthlyPlan or an Overtime record. MonthlyPlan reads are excluded by
+  // their collection (State.monthlyPlans) or their variable name (plan/mplan).
+  const m = (code.split('\n')
+    .filter(line => !/monthlyPlans|\b(plan|mplan)\.status/.test(line))
+    .join('\n')
+    .match(/\b(p|pp|existing)\.status\s*===?\s*'(C|c)ommitted'/g)) || [];
+  if(m.length) strayReaders.push(f+': '+m.join(' | '));
+});
+check(strayReaders.length === 0, 'every live PayrollPlan committed-state read goes through isPayrollCommitted() (stray: '+(strayReaders.join(' ;; ')||'none')+')');
+check(/payrollPlansForContract\(id\)\.some\(isPayrollCommitted\)/.test(ctSrc), 'the contract-cancellation safety guard uses the shared predicate');
+check(/isPayrollCommitted\(pp\)\{?[\s\S]{0,80}payrollTxnOf/.test(poeSrc) || /if\(isPayrollCommitted\(pp\)\)\{/.test(poeSrc), 'payrollStage() resolves committed state through the shared predicate');
+check(/filter\(p=>p\.monthKey===monthKey && isPayrollCommitted\(p\)\)/.test(read(path.join(root,'js','people','hr-dashboard-reports.js'))), 'the HR dashboard payroll rollup uses the shared predicate');
+check(/isPayrollCommitted\(p\) && Array\.isArray\(p\.overtimeIds\)/.test(read(path.join(root,'js','core','stabilization.js'))), 'the integrity checker uses the shared predicate');
+// (g) SPR-078 INTRODUCES NO NEW ARCHITECTURE.
+check(!/PayrollPostingAggregate/.test(srcJs), 'SPR-078 introduces no PayrollPostingAggregate');
+check(aggregateDefs === 8, 'aggregate count is unchanged by SPR-078 (still eight)');
+[['coordinator', /PostingCoordinator|PersistenceCoordinator/], ['unit of work', /unitOfWork|UnitOfWork/],
+ ['transaction abstraction', /beginTransaction|TransactionCoordinator/], ['batch persistence', /saveMany|StorageAdapter\.(setMany|batch)/],
+ ['journal/recovery record', /writeAhead|journalWrite|recoveryRecord/]
+].forEach(([label,re])=> check(!re.test(srcJs), 'SPR-078 introduces no '+label));
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'SCHEMA_VERSION remains 6');
+check(fs.existsSync(path.join(root,'tools','verify-payroll-committed-runtime.js')), 'SPR-078 runtime harness present: tools/verify-payroll-committed-runtime.js');
 
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
@@ -1310,7 +1394,7 @@ check(!/c\.status='Renewed'/.test(ctSrc) && /renewal\.predecessorStatus/.test(ct
 check(/rec\.status = fd\.get\('status'\)[\s\S]{0,400}await persistContracts\(\)/.test(ctSrc), 'full Contract editor remains direct (not migrated)');
 check(/State\.contracts = State\.contracts\.filter\(x=>x\.id!==id\);\s*\n\s*await persistContracts\(\)/.test(ctSrc), 'delete Contract path remains direct (not migrated)');
 // Committed-payroll confirmation stays in the UI seam — never inside the Repository.
-check(/payrollPlansForContract\(id\)\.some\(p=>p\.status==='committed'\)/.test(ctSrc) && !/committed|confirm\s*\(|payrollPlansForContract/.test(contractRepoCode), 'committed-payroll confirmation remains outside the Repository (UI seam only)');
+check(/payrollPlansForContract\(id\)\.some\(isPayrollCommitted\)/.test(ctSrc) && !/committed|confirm\s*\(|payrollPlansForContract/.test(contractRepoCode), 'committed-payroll confirmation remains outside the Repository (UI seam only)');
 check(!/confirm\s*\(|payrollPlansForContract/.test(tcCode), 'committed-payroll confirmation remains outside the handler (UI seam only)');
 // The Repository contract itself is UNCHANGED by PR-10B (no contract evolution, no new module).
 check(/async save\(\)/.test(contractRepoSrc) && (contractRepoCode.match(/async \w+\(/g)||[]).length === 1, 'ContractRepository still exposes exactly one method (save) — contract unchanged');
@@ -1380,7 +1464,7 @@ const poeCode = stripComments(poeSrc);
 check((poeCode.match(/persistPayrollPlans\(\)/g)||[]).length === 4, 'the four non-aggregate payroll-ops persistence sites remain direct (override clear/set, regeneration, compound posting)');
 check(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/.test(poeSrc), 'commitReadyPayroll compound posting remains direct and compound (4 stores, unchanged)');
 const planSrc = read(path.join(root,'js','people','payroll-planning.js'));
-check(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/.test(planSrc) && !/PayrollRepository/.test(planSrc), 'payroll-planning compound posting remains direct and compound (not migrated)');
+check(!/await persistPayrollPlans\(\)/.test(planSrc) && !/PayrollRepository/.test(planSrc), 'payroll-planning performs NO persistence at all (SPR-078 — posting path retired, not migrated)');
 const wsSrc = read(path.join(root,'js','people','payroll-workspace.js'));
 check(/await persistPayrollPlans\(\)/.test(wsSrc) && !/PayrollRepository/.test(wsSrc), 'payroll generation (payroll-workspace) remains direct (not migrated)');
 check(/if\(touched\) await persistPayrollPlans\(\)/.test(read(path.join(root,'js','core','hr-persistence-portability.js'))), 'the v2.5 schema migration persistence remains direct (not migrated)');
@@ -1434,7 +1518,7 @@ check(/await persistPayrollPlans\(\)/.test(wsSrc) && !/PayrollRepository/.test(w
 // (c) THE BOUND: compound multi-store paths remain DIRECT and unexpressible in the contract.
 check(/renewedToId = nc\.id;[\s\S]{0,900}ContractRepository\.save\(\)/.test(ctSrc), 'Contract renewal create-successor is Repository-mediated in ONE collection write (SPR-077 — not compound)');
 check(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/.test(poeSrc), 'compound Payroll posting remains direct (commitReadyPayroll — four stores in one operation)');
-check(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/.test(planSrc), 'compound Payroll planning posting remains direct (payroll-planning — four stores in one operation)');
+check(!/persist/.test(planSrc), 'the second compound Payroll posting path no longer exists (SPR-078 retired payroll-planning posting)');
 // (d) THE DISCLAIMER, mechanically enforced: the Repository layer mediates only a
 //     MINORITY of the collection persist functions. 7 of 7 is adoption, not coverage.
 const hrPersistSrc = read(path.join(root,'js','core','hr-persistence-portability.js'));

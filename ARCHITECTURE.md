@@ -182,24 +182,42 @@ best-effort audit also stays with the handler: after successful persistence, suc
 - **Collection-grained** — one `save()` writes one collection. It models no unit of work spanning
   collections.
 - **Client-side** — it terminates at `StorageAdapter`. There is no network surface, and none is implied.
-- **Compound persistence remains outside this contract.** Three operations write multiple stores in one
-  logical unit and stay direct by design: `commitReadyPayroll` and payroll-planning posting (four stores
-  each) and Contract renewal (predecessor + successor). Non-aggregate writes (whole-record editors,
-  deletes, generation, regeneration, salary overrides, onboarding reset, the v2.5 migration) also stay
-  direct.
+- **Compound persistence remains outside this contract.** `commitReadyPayroll` writes four stores in one
+  logical unit and stays direct by design. Non-aggregate writes (whole-record editors, deletes,
+  generation, regeneration, salary overrides, onboarding reset, the v2.5 migration) also stay direct.
+- **Two operations previously listed here are no longer compound.** Contract renewal is single-collection
+  (predecessor and successor both live in `contracts`, so one write covers both) and is Repository-mediated
+  since SPR-077. Payroll-planning posting was **retired in SPR-078**: its screen had been unreachable since
+  v2.5.0 and its posting function was dead code — see *Retired surfaces* below.
+
+### Retired surfaces
+
+**Payroll Planning (retired, SPR-078).** The `renderPayrollPlanning` screen was superseded by the Payroll
+Workspace in v2.5.0 and its route was removed at that time — no `State.view` value rendered it, no
+navigation entry reached it, and its only callers were its own internal re-renders. Its posting function
+`commitPayroll` was therefore dead code, and a second divergent Payroll posting authority: no period lock,
+no commit blockers, no `Ready` gate, no audit entry, no `committedAt`, and a non-canonical lowercase
+`'committed'` status that is not a member of `PAYROLL_STATUSES`. SPR-078 removed the dead surface;
+`js/people/payroll-planning.js` is retained solely for two shared utilities defined nowhere else (`num`,
+`ensureMonthlyPlan`). **`commitReadyPayroll` is the sole live Payroll posting path.**
+
+Committed-state reads go through one shared predicate — `isPayrollCommitted()` in
+`js/people/people-core.js` — which accepts the canonical `'Committed'` and, for **reads only**, the legacy
+lowercase value the retired path may have persisted. No live writer writes the legacy value, and no
+migration was added or re-run.
 
 ### Adoption
 
-All seven aggregate-backed handlers are Repository-mediated — Employee 4 of 4, Contract 2 of 2,
-Payroll 1 of 1 (**7 of 7**). This means *only* that every aggregate-backed handler delegates persistence
+All eight aggregate-backed handlers are Repository-mediated — Employee 4 of 4, Contract 3 of 3,
+Payroll 1 of 1 (**8 of 8**). This means *only* that every aggregate-backed handler delegates persistence
 through an entity-named Repository. It is **not** full persistence abstraction (the layer mediates 3 of
 11 persist functions), **not** compound-persistence support, and **not** backend readiness — the
-application is client-only by `CLAUDE.md` §4.3. `tools/verify-build.js` asserts the 7-of-7 milestone
+application is client-only by `CLAUDE.md` §4.3. `tools/verify-build.js` asserts the 8-of-8 milestone
 *and* the bound, including a check whose message reads *"adoption completeness != persistence
 abstraction"*.
 
-The operational surface (7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query) and
-registered surface (13 commands / 4 queries) were unchanged by every slice.
+The operational surface (8 aggregates / 8 aggregate-backed commands / 1 aggregate-backed query) and
+registered surface (14 commands / 4 queries) were unchanged by every Repository slice.
 
 ---
 

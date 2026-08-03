@@ -5,7 +5,7 @@ function hrDashboardStats(monthKey){
   const activeEmployees = State.employees.filter(empEligible).length;
   const activeContracts = State.contracts.filter(c=>contractEffectiveStatus(c)==='Active').length;
   const expiringSoon = State.contracts.filter(c=>contractEffectiveStatus(c)==='Expiring Soon').length;
-  const plans = State.payrollPlans.filter(p=>p.monthKey===monthKey && p.status==='committed');
+  const plans = State.payrollPlans.filter(p=>p.monthKey===monthKey && isPayrollCommitted(p));
   const payrollPlanned = plans.reduce((s,p)=>s+(p.plannedAmount||0),0);
   const plan = monthlyPlanFor(monthKey);
   // payroll generation status for the month
@@ -162,7 +162,7 @@ function hrReportRows(id, monthKey){
       rows:ps.map(p=>{ const s=payrollHistoricalSnapshot(p); return [p.employeeName,fmtIDR(s.baseSalary),fmtIDR(s.overtimeAmount),fmtIDR(p.allowance),fmtIDR(p.bonus),fmtIDR(p.benefits),fmtIDR(p.otherAddition),fmtIDR(p.deduction),fmtIDR(p.otherDeduction),fmtIDR(s.totalPayroll)]; })};
   }
   if(id==='payroll-execution'){
-    const ps=payrollPlansForMonth(monthKey).filter(p=>p.status==='Committed');
+    const ps=payrollPlansForMonth(monthKey).filter(isPayrollCommitted);
     return {headers:['Employee','Planned','Actual Paid','Remaining','Transaction Status','Execution Date'],
       rows:ps.map(p=>{ const t=payrollTxnOf(p); return [p.employeeName,fmtIDR(payrollHistoricalSnapshot(p).totalPayroll),t&&t.actual!=null?fmtIDR(t.actual):'—',t?fmtIDR(num(t.planned)-num(t.actual)):'—',t?statusOf(t):'—',(t&&t.execution&&t.execution.executionDate)||'—']; })};
   }

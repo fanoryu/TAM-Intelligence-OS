@@ -227,7 +227,7 @@ function generatePayrollForMonth(monthKey){
     const base = (ct.monthlySalary!=null?ct.monthlySalary:e.monthlyBaseSalary)||0;
     const ot = approvedOvertimeForMonth(e.id, monthKey);
     const existing = State.payrollPlans.find(p=>p.monthKey===monthKey && p.employeeId===e.id && p.contractId===ct.id && p.status!=='Cancelled');
-    if(existing && existing.status==='Committed'){
+    if(existing && isPayrollCommitted(existing)){
       // Committed payroll is never silently regenerated — detect overtime drift and flag.
       if(!sameIdSet(existing.overtimeIds, ot.ids)) { existing.otChanged=true; existing.updatedAt=now; }
       result.skippedCommitted++; return;
@@ -274,7 +274,7 @@ function payrollPlansForMonth(monthKey, includeCancelled){
 function payrollCycleStatus(monthKey){
   const plans = payrollPlansForMonth(monthKey);
   if(!plans.length) return 'Not Generated';
-  const committed = plans.filter(p=>p.status==='Committed');
+  const committed = plans.filter(isPayrollCommitted);
   if(committed.length===plans.length && committed.length){
     const txns = committed.map(payrollTxnOf).filter(Boolean);
     if(txns.length){
@@ -302,7 +302,7 @@ function payrollMonthTotals(monthKey){
     t.additions += num(p.allowance)+num(p.bonus)+num(p.benefits)+num(p.otherAddition!=null?p.otherAddition:p.otherAdjustment);
     t.deductions += num(p.deduction)+num(p.otherDeduction);
     t.planned += num(snap.totalPayroll);
-    if(p.status==='Committed') t.committed++; else if(p.status==='Ready') t.ready++; else if(p.status==='Reviewed') t.reviewed++; else t.draft++;
+    if(isPayrollCommitted(p)) t.committed++; else if(p.status==='Ready') t.ready++; else if(p.status==='Reviewed') t.reviewed++; else t.draft++;
     const txn = payrollTxnOf(p);
     if(txn && txn.actual!=null){ t.paid += num(txn.actual); }
   });
@@ -503,7 +503,7 @@ const PAYROLL_STAGES = ['Draft','Review','Approved','Posted','Executed'];
 // Map a stored payroll plan to its operational stage (Executed derived from its transaction).
 function payrollStage(pp){
   if(!pp || pp.status==='Cancelled') return 'Cancelled';
-  if(pp.status==='Committed'){
+  if(isPayrollCommitted(pp)){
     const t=payrollTxnOf(pp);
     if(t && ['completed','archived'].includes(statusOf(t))) return 'Executed';
     return 'Posted';
