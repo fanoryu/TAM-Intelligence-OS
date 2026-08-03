@@ -24,7 +24,44 @@ function computePayrollPlanned(pp){
   return Math.round(base + ot + adds - deds);
 }
 function payrollIsNegative(pp){ return computePayrollPlanned(pp) < 0; }
-function payrollTxnOf(pp){ return findTxn(pp.committedTxnId || pp.transactionId); }
+/* ---------- Payroll transaction resolution (SPR-081) ----------
+   PRIMARY lookup is the PayrollPlan's forward linkage (committedTxnId /
+   transactionId) — unchanged, and still the only path used on the happy route.
+
+   FALLBACK reverse lookup exists because those forward fields live in the
+   payrollPlans collection while the transaction lives in txns. SPR-080 proved at
+   runtime that when the payrollPlans write fails and the txns write succeeds, a
+   reload leaves a real finance transaction carrying payrollPlanId while the plan
+   is back at Ready with no forward link. Without a reverse lookup a retry does
+   not find that transaction and creates a SECOND one — a silent double payment.
+
+   The fallback is deliberately narrow: payroll-sourced only, exact payrollPlanId,
+   exact period. There is no cancelled-transaction state in this application
+   (statusOf yields planned/partial/completed/archived), so no status exclusion
+   applies. It resolves ONLY when exactly one candidate exists; ambiguity is
+   never guessed — see resolvePayrollTxn(). */
+function payrollTxnCandidates(pp){
+  if(!pp || !pp.id) return [];
+  return State.txns.filter(t => t && t.source==='payroll' && t.payrollPlanId===pp.id && t.monthKey===pp.monthKey);
+}
+// Read-only resolution used by the posting path. Returns one of:
+//   { txn }                                  — resolved (forward link, or a unique reverse match)
+//   { txn:null }                             — nothing exists yet; the caller may create one
+//   { ambiguous:true, candidates:[ids] }     — MORE THAN ONE candidate; never guess, never create
+function resolvePayrollTxn(pp){
+  const direct = findTxn(pp && (pp.committedTxnId || pp.transactionId));
+  if(direct) return { txn: direct };
+  const cands = payrollTxnCandidates(pp);
+  if(cands.length > 1) return { ambiguous: true, candidates: cands.map(t=>t.id) };
+  return { txn: cands.length === 1 ? cands[0] : null };
+}
+// Forward-first with the unique reverse fallback. Returns null when nothing
+// resolves AND when the reverse lookup is ambiguous — callers that may CREATE a
+// transaction must use resolvePayrollTxn() so they can distinguish the two.
+function payrollTxnOf(pp){
+  const r = resolvePayrollTxn(pp);
+  return r.ambiguous ? null : r.txn;
+}
 function sameIdSet(a,b){ a=a||[]; b=b||[]; if(a.length!==b.length) return false; const sb=new Set(b); return a.every(x=>sb.has(x)); }
 
 /* ---------- immutable overtime snapshot (v2.7.1) ----------
@@ -438,7 +475,7 @@ function commitPayrollPreview(monthKey, ids){
   return s;
 }
 async function commitReadyPayroll(monthKey, ids){
-  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — finance posting cannot run again.'); return {created:0, updated:0, skipped:ids.length, posted:[], skippedDetails:[], locked:true}; }
+  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — finance posting cannot run again.'); return {ok:false, error:'PayrollPeriodLocked', created:0, updated:0, skipped:ids.length, posted:[], skippedDetails:[], locked:true}; }
   const mo=keyToMonthObj(monthKey); const plan=ensureMonthlyPlan(monthKey); const now=new Date().toISOString();
   let created=0, updated=0, skipped=0;
   const posted=[], skippedDetails=[];   // v2.6.4 — per-row outcome for the Post result summary
@@ -450,9 +487,25 @@ async function commitReadyPayroll(monthKey, ids){
     if(pp.status!=='Ready'){ skipped++; skippedDetails.push({name:pp.employeeName||'—', reasons:['not Approved (current stage: '+payrollStage(pp)+')']}); continue; }
     const blockers = payrollCommitBlockers(pp);
     if(blockers.length){ skipped++; skippedDetails.push({name:pp.employeeName, reasons:blockers}); continue; }
+    // SPR-081 — resolve the existing transaction BEFORE any mutation, so an
+    // ambiguous row is skipped without being committed. Creating a second
+    // transaction, or guessing between candidates, would be a double payment.
+    const resolved = resolvePayrollTxn(pp);
+    if(resolved.ambiguous){
+      skipped++;
+      skippedDetails.push({name:pp.employeeName||'—', reasons:['PayrollTransactionAmbiguous — '+resolved.candidates.length+' finance transactions already reference this payroll row ('+resolved.candidates.join(', ')+'). Review them before posting; no transaction was created or changed.']});
+      continue;
+    }
     pp.status='Committed'; pp.monthlyPlanId=plan.id; pp.plannedAmount=computePayrollPlanned(pp); pp.committedAt=now; pp.updatedAt=now;
     if(!pp.committedSnapshot) pp.committedSnapshot = buildPayrollCommittedSnapshot(pp); // v2.7.1 freeze historical evidence at first post
-    let txn = payrollTxnOf(pp); let wasCreated=false;
+    let txn = resolved.txn; let wasCreated=false;
+    // SPR-081 — a transaction found by the REVERSE lookup has no forward link yet
+    // (that is exactly the state a failed payrollPlans write leaves behind).
+    // Restore the link rather than creating a duplicate.
+    if(txn && pp.committedTxnId!==txn.id && pp.transactionId!==txn.id){
+      pp.committedTxnId=txn.id; pp.transactionId=txn.id;
+      (pp.history=pp.history||[]).push({event:'transaction-relinked', ts:now, note:'Re-linked to the existing planned Gaji transaction (no duplicate created)'});
+    }
     if(!txn){ txn=payrollCommitTxn(pp, mo); State.txns.push(txn); pp.committedTxnId=txn.id; pp.transactionId=txn.id; created++; wasCreated=true; (pp.history=pp.history||[]).push({event:'transaction-created', ts:now, note:'Planned Gaji transaction created'}); }
     else if(txn.actual==null){ txn.planned=pp.plannedAmount; txn.hargaSatuan=pp.plannedAmount; txn.overtimeIds=(pp.overtimeIds||[]).slice(); txn.overtimeAmount=num(pp.overtimeAmount); pushHistory(txn,'edited','Payroll re-committed'); updated++; }
     // flip approved overtime → Committed to Payroll (prevent double inclusion)
@@ -464,10 +517,35 @@ async function commitReadyPayroll(monthKey, ids){
   }
   if(plan.status==='Draft'||plan.status==='Reviewed') plan.status='Committed';
   plan.committedAt=now; plan.updatedAt=now;
-  await persistPayrollPlans(); await persistMonthlyPlans(); await persistOvertime(); await persist();
+  // SPR-081 — the four writes keep their EXISTING ORDER and the existing
+  // attempt-all behaviour (a failure does not abort the remaining writes, so the
+  // failure matrix is unchanged). What changes is that every result is now
+  // inspected instead of discarded.
+  //
+  // This is NOT atomic and no rollback is performed or claimed: one storage key
+  // per collection, and the browser is atomic per key only. A failure means the
+  // posting did not complete — earlier writes may well have persisted, which is
+  // why `partialPersistence` is reported and manual review is required.
+  const steps = [];
+  steps.push(['payrollPlans',  await persistPayrollPlans()]);
+  steps.push(['monthlyPlans',  await persistMonthlyPlans()]);
+  steps.push(['overtime',      await persistOvertime()]);
+  steps.push(['transactions',  await persist()]);
+  const failedSteps    = steps.filter(s=>s[1]!==true).map(s=>s[0]);   // strict: anything but true fails
+  const completedSteps = steps.filter(s=>s[1]===true).map(s=>s[0]);
+  if(failedSteps.length){
+    // No success audit, and no success result. The typed outcome names the first
+    // failed step in the fixed write order, so it is deterministic.
+    console.error('commitReadyPayroll: payroll posting did not complete — failed step(s): '+failedSteps.join(', '));
+    return {ok:false, error:'PayrollPersistenceFailed',
+      failedStep: failedSteps[0], failedSteps, completedSteps,
+      partialPersistence: completedSteps.length > 0,
+      recoveryHint: 'RunIntegrityCheckAndReview',
+      created, updated, skipped, posted, skippedDetails};
+  }
   logActivity({type:'payroll.post', module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey,
     desc:`Posted to finance — ${created} created, ${updated} updated, ${skipped} skipped`, refs:{monthKey}});
-  return {created, updated, skipped, posted, skippedDetails};
+  return {ok:true, created, updated, skipped, posted, skippedDetails};
 }
 
 /* ---------- prepare next month (Part 13) ---------- */

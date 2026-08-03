@@ -364,6 +364,16 @@ function openCommitPayrollModal(monthKey, main){
       root.querySelector('#cpGo').addEventListener('click', async ()=>{
         const res=await commitReadyPayroll(monthKey, readyIds); sel.clear(); closeModal();
         if(res.locked) return;
+        // SPR-081 — a persistence failure must never be presented as a completed
+        // posting: no success toast, no posted-vs-skipped summary (which reads as
+        // success), and no claim that anything was rolled back. Some datasets may
+        // already have been written, so the user is directed to Integrity Check
+        // and manual review before any further posting attempt.
+        if(res.ok !== true && res.error === 'PayrollPersistenceFailed'){
+          showError('Payroll posting did not complete successfully. Some data may already have been saved. Run Integrity Check (Settings → Run Integrity Check) and review Payroll and Finance records before attempting another posting.', null, 12000);
+          render();
+          return;
+        }
         // v2.6.4/2.6.8 — report posted vs skipped. Skips are the pre-post selection skips
         // (rows not at the Approved stage) plus any commit blockers, each with its reason.
         res.skippedDetails=[...selectionSkips, ...(res.skippedDetails||[])];

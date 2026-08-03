@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TAM Intelligence OS v2.8.2</title>
+<title>TAM Intelligence OS v2.8.3</title>
 <meta name="theme-color" content="#0E1420">
 <meta name="color-scheme" content="dark light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -358,8 +358,8 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.8.2';
-const APP_RELEASE_NAME = 'Honest Persistence Results';
+const APP_VERSION = '2.8.3';
+const APP_RELEASE_NAME = 'Payroll Posting Integrity';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
@@ -5272,6 +5272,7 @@ function renderAbout(main){
 }
 function renderReleaseNotes(main){
   const notes = [
+    {v:'2.8.3 — Payroll Posting Integrity', items:['Posting payroll now checks whether every save actually succeeded. If any of the four saves fails, you are told the posting did not complete, no success message or activity entry is recorded, and you are asked to run Integrity Check and review Payroll and Finance before posting again','Fixed a path that could pay someone twice. If the payroll save failed but the finance transaction save succeeded, posting again created a SECOND transaction for the same payroll row. Posting now finds the existing transaction, reuses it, and restores the link instead of creating a duplicate','If more than one finance transaction already references the same payroll row, that row is now skipped with a clear reason instead of guessing which one is correct or adding another','Integrity Check now reports a finance transaction that points at a payroll row which is not committed, or which does not point back at it — the state left behind by a failed payroll save. It is reported as Critical with the row, period, transaction and amount so you can review before posting again','Integrity Check now reports payroll that is committed while its linked overtime is still Approved — the state left behind by a failed overtime save. That overtime could otherwise be included in a later month and paid twice','Integrity Check only reports. It never repairs links, changes overtime status, deletes transactions, or edits committed payroll','Saving still writes each dataset separately and is not all-or-nothing, so a failure means the posting did not complete — not that nothing was saved. No schema, storage key, or migration change; SCHEMA_VERSION unchanged (6)']},
     {v:'2.8.2 — Honest Persistence Results', items:['Operations that save several datasets at once — Smart Import commit, Smart Import undo, and employee merge — now check whether every save actually succeeded. Previously they reported success even when the browser rejected one or more writes','If a save fails, you now see a clear message that the operation did not complete, instead of a success message. The import wizard stays on the review step so you can retry, the merge is not reported as done, and no completion or audit entry is recorded','Failure messages deliberately do not claim your data was rolled back. Saving several datasets is not an all-or-nothing operation in the browser, so some data may already have been written. Reloading the page returns you to the last saved state','Pre-operation safety backups are always kept when a save fails, and retrying is safe: duplicate import rows are skipped and a repeated merge produces the same result','No change to how or when data is written, and no schema, storage key, or migration change; SCHEMA_VERSION unchanged (6)']},
     {v:'2.8.1 — Single Payroll Posting Authority', items:['Retired the legacy Payroll Planning screen. It was superseded by the Payroll Workspace in v2.5.0 and has been unreachable ever since — no menu entry and no way to open it. Its leftover "Commit Payroll" code has been removed','That leftover path was a second way to post payroll that did not apply the rules the Payroll Workspace applies: it ignored the period lock, ignored commit blockers, did not require a payroll row to be Approved first, wrote no activity-log entry, and recorded no commit time','It also recorded payroll as committed using a value the rest of the app does not recognise. Any payroll it posted showed as "Draft" in the workspace, was skipped by Integrity Check and HR reports, and could not be cancelled or corrected — even though a real planned Gaji transaction had been created','Committed payroll is now recognised in one shared place used by every screen. Payroll committed through the old path is now correctly recognised as committed everywhere, so it appears in reports, in Integrity Check, and in the contract cancellation warning','The warning shown when cancelling a contract that has committed payroll now fires correctly. It previously only checked the old value, so it did not appear for payroll posted through the Payroll Workspace','Payroll Workspace posting is now the single payroll posting path. No payroll data was changed, no migration was run, and no schema, storage key, or persistence behaviour was altered; SCHEMA_VERSION unchanged (6)']},
     {v:'2.8.0 — Aggregate-Owned Contract Renewal', items:['Contract renewal is no longer authored inside the renewal form. A dedicated business boundary (ContractRenewalAggregate) now decides whether a contract may be renewed and defines the successor contract, the predecessor’s Renewed status, and both history notes; the handler applies them','Renewal now reports success only when the save actually succeeds. Previously a failed write still closed the form, showed “Contract renewed”, and navigated to the new contract while nothing had been stored','If saving fails, the renewal is fully undone in memory — the successor is discarded and the original contract’s status, renewal link, history entry, and timestamp are restored — the form stays open, and a clear “nothing was changed” message is shown','Renew is now offered only for Draft and Active contracts. Renewing an already-Renewed contract previously created a second successor and silently orphaned the first one by overwriting the renewal link','Renewal persists through the existing Contract Repository. Predecessor and successor live in the same contract collection, so both are written together in one save — no new transaction, coordinator, or multi-store persistence mechanism was introduced','No schema, storage-key, or persisted-data change; SCHEMA_VERSION unchanged (6). Contract overlap is still advisory only, and payroll, finance, and supplemental behavior are untouched']},
@@ -8000,6 +8001,46 @@ function runIntegrityCheck(){
   if(pMissingTxn) add('warning','payroll-missing-transaction',`${pMissingTxn} committed payroll plan(s) with no linked transaction`);
   if(pTxnMismatch) add('warning','payroll-txn-mismatch',`${pTxnMismatch} transaction(s) whose amount differs from the payroll plan`);
   if(pOverrideNoReason) add('warning','payroll-override-no-reason',`${pOverrideNoReason} salary override(s) without a reason`);
+
+  /* ---------- SPR-081 partial-payroll-posting detection (READ-ONLY) ----------
+     Payroll posting writes four collections one after another and is NOT atomic.
+     SPR-080 proved two partial states that previously produced NO finding at all
+     and were silently financial. Both rules below only REPORT: they never repair
+     a link, never change an overtime status, never delete a transaction, never
+     rewrite a snapshot, and never persist anything. Detection is not recovery. */
+
+  // RULE A — orphan payroll transaction. A finance transaction points at a payroll
+  // plan, but that plan is not committed, or does not point back at this
+  // transaction. This is the state left by a failed payrollPlans write after the
+  // txns write succeeded; before SPR-081 a retry created a SECOND transaction.
+  const orphanPayrollTxns=[];
+  State.txns.forEach(t=>{
+    if(!t || t.source!=='payroll' || !t.payrollPlanId) return;
+    const pp = payrollPlanById(t.payrollPlanId);
+    if(!pp) return;                                   // missing plan is covered by broken-payroll-link
+    const linkedBack = (pp.committedTxnId===t.id || pp.transactionId===t.id);
+    const committed = isPayrollCommitted(pp);
+    if(committed && linkedBack) return;               // healthy
+    orphanPayrollTxns.push({t, pp, reason: !committed ? 'the payroll row is not committed (stage: '+payrollStage(pp)+')' : 'the payroll row does not link back to this transaction'});
+  });
+  orphanPayrollTxns.forEach(({t, pp, reason})=>{
+    add('critical','payroll-orphan-transaction',
+      `Finance transaction ${t.id} (${fmtIDR(t.planned)}, ${t.monthKey}) references payroll row ${pp.id} — ${pp.employeeName||'—'}, ${pp.monthKey} — but ${reason}. Do not post this payroll again until the transaction and the payroll linkage have been reviewed.`);
+  });
+
+  // RULE C — committed payroll referencing still-Approved overtime. The overtime
+  // write failed after the payroll and transaction writes landed, so the overtime
+  // was never flipped to "Committed to Payroll" and remains eligible for a LATER
+  // payroll month — i.e. it can be paid twice.
+  State.payrollPlans.forEach(pp=>{
+    if(!isPayrollCommitted(pp)) return;
+    (pp.overtimeIds||[]).forEach(oid=>{
+      const o = overtimeById(oid);
+      if(!o || o.status!=='Approved') return;         // only the still-Approved case
+      add('critical','payroll-overtime-uncommitted',
+        `Payroll row ${pp.id} (${pp.employeeName||'—'}, ${pp.monthKey}) is committed but its linked overtime ${o.id} (${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}) is still "${o.status}" instead of "Committed to Payroll". It can be included in another payroll and paid twice. Do not include or approve this overtime in another payroll until it has been reviewed.`);
+    });
+  });
   // recurring adjustment outside effective period is prevented at generation; flag stored snapshots that fall outside
   let adjOutside=0; State.payrollAdjustments.forEach(a=>{ if(a.endMonth && a.startMonth && a.endMonth < a.startMonth) adjOutside++; });
   if(adjOutside) add('warning','adjustment-invalid-period',`${adjOutside} recurring adjustment(s) with an end month before the start month`);
@@ -9714,7 +9755,44 @@ function computePayrollPlanned(pp){
   return Math.round(base + ot + adds - deds);
 }
 function payrollIsNegative(pp){ return computePayrollPlanned(pp) < 0; }
-function payrollTxnOf(pp){ return findTxn(pp.committedTxnId || pp.transactionId); }
+/* ---------- Payroll transaction resolution (SPR-081) ----------
+   PRIMARY lookup is the PayrollPlan's forward linkage (committedTxnId /
+   transactionId) — unchanged, and still the only path used on the happy route.
+
+   FALLBACK reverse lookup exists because those forward fields live in the
+   payrollPlans collection while the transaction lives in txns. SPR-080 proved at
+   runtime that when the payrollPlans write fails and the txns write succeeds, a
+   reload leaves a real finance transaction carrying payrollPlanId while the plan
+   is back at Ready with no forward link. Without a reverse lookup a retry does
+   not find that transaction and creates a SECOND one — a silent double payment.
+
+   The fallback is deliberately narrow: payroll-sourced only, exact payrollPlanId,
+   exact period. There is no cancelled-transaction state in this application
+   (statusOf yields planned/partial/completed/archived), so no status exclusion
+   applies. It resolves ONLY when exactly one candidate exists; ambiguity is
+   never guessed — see resolvePayrollTxn(). */
+function payrollTxnCandidates(pp){
+  if(!pp || !pp.id) return [];
+  return State.txns.filter(t => t && t.source==='payroll' && t.payrollPlanId===pp.id && t.monthKey===pp.monthKey);
+}
+// Read-only resolution used by the posting path. Returns one of:
+//   { txn }                                  — resolved (forward link, or a unique reverse match)
+//   { txn:null }                             — nothing exists yet; the caller may create one
+//   { ambiguous:true, candidates:[ids] }     — MORE THAN ONE candidate; never guess, never create
+function resolvePayrollTxn(pp){
+  const direct = findTxn(pp && (pp.committedTxnId || pp.transactionId));
+  if(direct) return { txn: direct };
+  const cands = payrollTxnCandidates(pp);
+  if(cands.length > 1) return { ambiguous: true, candidates: cands.map(t=>t.id) };
+  return { txn: cands.length === 1 ? cands[0] : null };
+}
+// Forward-first with the unique reverse fallback. Returns null when nothing
+// resolves AND when the reverse lookup is ambiguous — callers that may CREATE a
+// transaction must use resolvePayrollTxn() so they can distinguish the two.
+function payrollTxnOf(pp){
+  const r = resolvePayrollTxn(pp);
+  return r.ambiguous ? null : r.txn;
+}
 function sameIdSet(a,b){ a=a||[]; b=b||[]; if(a.length!==b.length) return false; const sb=new Set(b); return a.every(x=>sb.has(x)); }
 
 /* ---------- immutable overtime snapshot (v2.7.1) ----------
@@ -10128,7 +10206,7 @@ function commitPayrollPreview(monthKey, ids){
   return s;
 }
 async function commitReadyPayroll(monthKey, ids){
-  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — finance posting cannot run again.'); return {created:0, updated:0, skipped:ids.length, posted:[], skippedDetails:[], locked:true}; }
+  if(isPayrollLocked(monthKey)){ showWarning('This payroll period is locked — finance posting cannot run again.'); return {ok:false, error:'PayrollPeriodLocked', created:0, updated:0, skipped:ids.length, posted:[], skippedDetails:[], locked:true}; }
   const mo=keyToMonthObj(monthKey); const plan=ensureMonthlyPlan(monthKey); const now=new Date().toISOString();
   let created=0, updated=0, skipped=0;
   const posted=[], skippedDetails=[];   // v2.6.4 — per-row outcome for the Post result summary
@@ -10140,9 +10218,25 @@ async function commitReadyPayroll(monthKey, ids){
     if(pp.status!=='Ready'){ skipped++; skippedDetails.push({name:pp.employeeName||'—', reasons:['not Approved (current stage: '+payrollStage(pp)+')']}); continue; }
     const blockers = payrollCommitBlockers(pp);
     if(blockers.length){ skipped++; skippedDetails.push({name:pp.employeeName, reasons:blockers}); continue; }
+    // SPR-081 — resolve the existing transaction BEFORE any mutation, so an
+    // ambiguous row is skipped without being committed. Creating a second
+    // transaction, or guessing between candidates, would be a double payment.
+    const resolved = resolvePayrollTxn(pp);
+    if(resolved.ambiguous){
+      skipped++;
+      skippedDetails.push({name:pp.employeeName||'—', reasons:['PayrollTransactionAmbiguous — '+resolved.candidates.length+' finance transactions already reference this payroll row ('+resolved.candidates.join(', ')+'). Review them before posting; no transaction was created or changed.']});
+      continue;
+    }
     pp.status='Committed'; pp.monthlyPlanId=plan.id; pp.plannedAmount=computePayrollPlanned(pp); pp.committedAt=now; pp.updatedAt=now;
     if(!pp.committedSnapshot) pp.committedSnapshot = buildPayrollCommittedSnapshot(pp); // v2.7.1 freeze historical evidence at first post
-    let txn = payrollTxnOf(pp); let wasCreated=false;
+    let txn = resolved.txn; let wasCreated=false;
+    // SPR-081 — a transaction found by the REVERSE lookup has no forward link yet
+    // (that is exactly the state a failed payrollPlans write leaves behind).
+    // Restore the link rather than creating a duplicate.
+    if(txn && pp.committedTxnId!==txn.id && pp.transactionId!==txn.id){
+      pp.committedTxnId=txn.id; pp.transactionId=txn.id;
+      (pp.history=pp.history||[]).push({event:'transaction-relinked', ts:now, note:'Re-linked to the existing planned Gaji transaction (no duplicate created)'});
+    }
     if(!txn){ txn=payrollCommitTxn(pp, mo); State.txns.push(txn); pp.committedTxnId=txn.id; pp.transactionId=txn.id; created++; wasCreated=true; (pp.history=pp.history||[]).push({event:'transaction-created', ts:now, note:'Planned Gaji transaction created'}); }
     else if(txn.actual==null){ txn.planned=pp.plannedAmount; txn.hargaSatuan=pp.plannedAmount; txn.overtimeIds=(pp.overtimeIds||[]).slice(); txn.overtimeAmount=num(pp.overtimeAmount); pushHistory(txn,'edited','Payroll re-committed'); updated++; }
     // flip approved overtime → Committed to Payroll (prevent double inclusion)
@@ -10154,10 +10248,35 @@ async function commitReadyPayroll(monthKey, ids){
   }
   if(plan.status==='Draft'||plan.status==='Reviewed') plan.status='Committed';
   plan.committedAt=now; plan.updatedAt=now;
-  await persistPayrollPlans(); await persistMonthlyPlans(); await persistOvertime(); await persist();
+  // SPR-081 — the four writes keep their EXISTING ORDER and the existing
+  // attempt-all behaviour (a failure does not abort the remaining writes, so the
+  // failure matrix is unchanged). What changes is that every result is now
+  // inspected instead of discarded.
+  //
+  // This is NOT atomic and no rollback is performed or claimed: one storage key
+  // per collection, and the browser is atomic per key only. A failure means the
+  // posting did not complete — earlier writes may well have persisted, which is
+  // why `partialPersistence` is reported and manual review is required.
+  const steps = [];
+  steps.push(['payrollPlans',  await persistPayrollPlans()]);
+  steps.push(['monthlyPlans',  await persistMonthlyPlans()]);
+  steps.push(['overtime',      await persistOvertime()]);
+  steps.push(['transactions',  await persist()]);
+  const failedSteps    = steps.filter(s=>s[1]!==true).map(s=>s[0]);   // strict: anything but true fails
+  const completedSteps = steps.filter(s=>s[1]===true).map(s=>s[0]);
+  if(failedSteps.length){
+    // No success audit, and no success result. The typed outcome names the first
+    // failed step in the fixed write order, so it is deterministic.
+    console.error('commitReadyPayroll: payroll posting did not complete — failed step(s): '+failedSteps.join(', '));
+    return {ok:false, error:'PayrollPersistenceFailed',
+      failedStep: failedSteps[0], failedSteps, completedSteps,
+      partialPersistence: completedSteps.length > 0,
+      recoveryHint: 'RunIntegrityCheckAndReview',
+      created, updated, skipped, posted, skippedDetails};
+  }
   logActivity({type:'payroll.post', module:'Payroll', entity:`${mo.month} ${mo.year}`, entityId:monthKey,
     desc:`Posted to finance — ${created} created, ${updated} updated, ${skipped} skipped`, refs:{monthKey}});
-  return {created, updated, skipped, posted, skippedDetails};
+  return {ok:true, created, updated, skipped, posted, skippedDetails};
 }
 
 /* ---------- prepare next month (Part 13) ---------- */
@@ -10766,6 +10885,16 @@ function openCommitPayrollModal(monthKey, main){
       root.querySelector('#cpGo').addEventListener('click', async ()=>{
         const res=await commitReadyPayroll(monthKey, readyIds); sel.clear(); closeModal();
         if(res.locked) return;
+        // SPR-081 — a persistence failure must never be presented as a completed
+        // posting: no success toast, no posted-vs-skipped summary (which reads as
+        // success), and no claim that anything was rolled back. Some datasets may
+        // already have been written, so the user is directed to Integrity Check
+        // and manual review before any further posting attempt.
+        if(res.ok !== true && res.error === 'PayrollPersistenceFailed'){
+          showError('Payroll posting did not complete successfully. Some data may already have been saved. Run Integrity Check (Settings → Run Integrity Check) and review Payroll and Finance records before attempting another posting.', null, 12000);
+          render();
+          return;
+        }
         // v2.6.4/2.6.8 — report posted vs skipped. Skips are the pre-post selection skips
         // (rows not at the Approved stage) plus any commit blockers, each with its reason.
         res.skippedDetails=[...selectionSkips, ...(res.skippedDetails||[])];
