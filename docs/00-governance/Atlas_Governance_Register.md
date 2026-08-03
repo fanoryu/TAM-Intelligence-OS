@@ -24,6 +24,7 @@ fabricated.
 | [DPR-005](../DPR/DPR-005-delta-completion-report.md) | Delta Completion Report | `docs/DPR/` | Accepted — official Milestone Delta completion report (superseded as current by DPR-009) |
 | [DPR-009](../DPR/DPR-009-epsilon-repository-adoption-completion.md) | Epsilon Repository Adoption Completion Report | `docs/DPR/` | **Accepted — current progress report** |
 | [ADR-013](../03-adr/ADR-013-Repository-Layer.md) | Repository Layer (entity-named, collection-grained) | `docs/03-adr/` | **Accepted — Repository architecture decision** |
+| [ECR-001](../ECR/ECR-001-milestone-epsilon-closure-record.md) | Milestone Epsilon Closure Record | `docs/ECR/` | **Accepted — Milestone Epsilon closed** (`0ad8150`) |
 | [GHA-001](../../audit/github-audit-2026-08-02/GHA-001-github-repository-comprehensive-audit.md) | GitHub & Repository Comprehensive Audit | `audit/` | Complete — recorded |
 | [SDR-0001](../security/SDR-0001-codeql-baseline-disposition.md) | CodeQL Baseline Disposition | `docs/security/` | Accepted (dispositions CodeQL #1–5) |
 
@@ -70,7 +71,10 @@ superseded history in [`Milestones.md`](../05-milestones/Milestones.md#milestone
 | PR-11A | Payroll Repository adoption — **7 of 7** | Merged — PR #34 (`6714beb`) |
 | [RDR-011](../RDR/RDR-011-epsilon-repository-snapshot.md) | Epsilon Repository Snapshot | **Published — current baseline** |
 | [DPR-009](../DPR/DPR-009-epsilon-repository-adoption-completion.md) | Epsilon Repository Adoption Completion Report | **Published — current report** |
-| SPR-074 / SPR-075 | Sprint Assignments (Payroll slice; governance synchronization) | Process instruments — realized as PR #34 and this documentation PR |
+| SPR-074 / SPR-075 | Sprint Assignments (Payroll slice; governance synchronization) | Process instruments — realized as PR #34 and PR #35 |
+| MCR-002 | Milestone Epsilon Formal Closure Review | Record-only — passed; outcome captured by [ECR-001](../ECR/ECR-001-milestone-epsilon-closure-record.md) |
+| [ECR-001](../ECR/ECR-001-milestone-epsilon-closure-record.md) | Milestone Epsilon Closure Record | **Published — Milestone Epsilon closed at `0ad8150`** |
+| SPR-076 | Sprint Assignment (ECR-001 publication) | Process instrument — realized as this documentation PR |
 
 > **7 of 7 is a bounded claim.** It means every aggregate-backed handler delegates persistence through an
 > entity-named Repository. It does **not** mean full persistence abstraction, compound-persistence support,
