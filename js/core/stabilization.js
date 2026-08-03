@@ -260,7 +260,16 @@ function runIntegrityCheck(){
   // only — nothing here repairs, and the underlying operation is not blocked.
   State.txns.filter(t=>t.source!=='payroll' && t.monthlyPlanId).forEach(t=>{
     const mp = State.monthlyPlans.find(m=>m.id===t.monthlyPlanId);
-    if(!mp) return;                                   // missing plan is a different condition; plans are never deleted
+    if(!mp){
+      // The plan is ABSENT, not merely unlinked. When the commit creates the
+      // month's plan for the first time and only the transactions write lands,
+      // a reload restores the transactions but no plan at all — so walking
+      // committedTxnIds (corrupt-plan-ref) cannot see this, and neither can the
+      // linked-back check below. Reported, never repaired.
+      add('critical','monthlyplan-orphan-transaction',
+        `Finance transaction ${t.id} (${fmtIDR(t.planned)}, ${t.monthKey}) references monthly plan ${t.monthlyPlanId}, but no such monthly plan exists. The Monthly Plan commit did not complete. Review this transaction before committing that month again.`);
+      return;
+    }
     if((mp.committedTxnIds||[]).includes(t.id)) return; // healthy
     add('critical','monthlyplan-orphan-transaction',
       `Finance transaction ${t.id} (${fmtIDR(t.planned)}, ${t.monthKey}) references monthly plan ${mp.id} (${mp.month} ${mp.year}, status ${mp.status}) but that plan does not list it as a committed row. The Monthly Plan commit did not complete. Review the plan and this transaction before committing that month again.`);

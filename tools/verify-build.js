@@ -1317,7 +1317,12 @@ const ruleM082 = (stabSrc082.match(/State\.txns\.filter\(t=>t\.source!=='payroll
 check(ruleM082 !== '', 'Rule M body is resolvable for the purity scan');
 check(/add\('critical','monthlyplan-orphan-transaction'/.test(stabSrc082), 'monthlyplan-orphan-transaction exists and is CRITICAL');
 check(/t\.source!=='payroll'/.test(ruleM082), 'Rule M excludes payroll-sourced transactions (SPR-081 rules own those)');
-check(/if\(!mp\) return;/.test(ruleM082), 'Rule M ignores a missing plan (a different condition)');
+// Reload evidence proved the plan can be ABSENT after a failed first commit of a
+// month, so the rule must report that case rather than skip it.
+check(/no such monthly plan exists/.test(ruleM082), 'Rule M reports an ABSENT monthly plan (the reloaded first-commit failure state)');
+check(!/if\(!mp\) return;/.test(ruleM082), 'Rule M no longer silently skips a missing plan');
+check((ruleM082.match(/add\('critical','monthlyplan-orphan-transaction'/g)||[]).length === 2,
+  'Rule M raises Critical for BOTH the absent-plan and the not-linked-back cases');
 check(/if\(\(mp\.committedTxnIds\|\|\[\]\)\.includes\(t\.id\)\) return;/.test(ruleM082), 'Rule M treats a linked-back transaction as healthy');
 check(/Finance transaction \$\{t\.id\}/.test(ruleM082), 'Rule M reports the transaction id');
 check(/monthly plan \$\{mp\.id\}/.test(ruleM082), 'Rule M reports the monthly plan id');

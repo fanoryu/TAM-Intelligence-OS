@@ -39,13 +39,17 @@ function check(cond, label){
 
 const KEYS = { txns:'tam_txns_v1', monthlyPlans:'tam_monthly_plans_v1' };
 
-function loadRuntime(){
+// `preset` pre-populates the storage backend BEFORE the app loads, so a fresh
+// runtime + loadState() reproduces a genuine browser reload from exactly the
+// keys that actually persisted — not a continuation of the previous in-memory
+// State. This distinction is the whole point of the reload-state evidence.
+function loadRuntime(preset){
   const root = path.resolve(__dirname, '..');
   const jsFiles = require(path.join(root,'tools','module-order.js')).filter(f => f !== 'core/app-bootstrap.js');
   const src = fs.readFileSync(path.join(root,'js','core','constants.js'),'utf8') && jsFiles.map(f => fs.readFileSync(path.join(root,'js',f),'utf8')).join('\n')
     + '\n;window.__TAM__ = { State: State, StorageAdapter: StorageAdapter, HR_KEYS: HR_KEYS };';
   const noop = function(){};
-  const memStore = {}; const ctl = { failKeys:new Set(), writes:[] };
+  const memStore = Object.assign({}, preset || {}); const ctl = { failKeys:new Set(), writes:[] };
   const memStorage = {
     getItem: (k)=> Object.prototype.hasOwnProperty.call(memStore,k) ? memStore[k] : null,
     setItem: (k,v)=>{
@@ -84,6 +88,15 @@ function seed(rt){
   rt.State.payrollPlans = []; rt.State.monthlyPlans = []; rt.State.overtimeRecords = [];
   rt.State.recurringExpenses = []; rt.State.payrollAdjustments = []; rt.State.employeeMerges = [];
   rt.State.companyAccounts = []; rt.State.supplementalPayments = []; rt.State.importBatches = [];
+}
+
+// Genuine reload: a FRESH runtime whose storage contains only what persisted,
+// then the app's own loadState() rebuilds State from those keys.
+async function reload(persistedStore){
+  const rt = loadRuntime(persistedStore);
+  await rt.w.loadState();
+  rt.ctl.writes.length = 0;   // ignore load-time bookkeeping writes
+  return rt;
 }
 
 // A fabricated two-row preview: one recurring row, one manual row. Both are new.
@@ -293,6 +306,114 @@ function preview(rt, monthKey){
       type:'expense', source:'payroll', status:'planned', monthlyPlanId:'mp_fake_2', history:[]}];
     const pay = JSON.stringify(rt3.w.runIntegrityCheck());
     check(!/monthlyplan-orphan-transaction/.test(pay), 'payroll-sourced transactions are NOT reported by this rule (SPR-081 rules own them)');
+  }
+
+  // ---------- 10. SCENARIO A — RELOAD-STATE retry (the real browser path) ----------
+  // Scenario 7 retried inside the SAME runtime, with State still in memory. That
+  // is continuation, not reload. These blocks rebuild State from ONLY the keys
+  // that actually persisted, via the app's own loadState().
+  console.log('-- scenario 10: Scenario A reload-state retry --');
+  {
+    // --- A2: the plan was CREATED by the failing commit (first commit of the month) ---
+    let rt = loadRuntime(); seed(rt); rt.ctl.failKeys.add(KEYS.monthlyPlans);
+    const first = await rt.w.commitMonthlyPlan(preview(rt,'2026-03'));
+    check(first.ok === false && first.failedStep === 'monthlyPlans', 'A2: the first attempt fails on the monthlyPlans write');
+    check(rt.memStore[KEYS.txns] !== undefined && rt.memStore[KEYS.monthlyPlans] === undefined,
+      'A2: only the transactions key persisted');
+    const storeA2 = JSON.parse(JSON.stringify(rt.memStore));
+
+    let r = await reload(storeA2);
+    check(r.State.txns.length === 2, 'A2 RELOADED: both planned transactions came back from storage');
+    check(r.State.monthlyPlans.length === 0, 'A2 RELOADED: NO monthly plan exists — the plan was never persisted');
+    check(r.State.txns.every(t=>typeof t.monthlyPlanId === 'string' && t.monthlyPlanId),
+      'A2 RELOADED: the transactions still carry a monthlyPlanId that now points at nothing');
+    let before = JSON.stringify(r.w.runIntegrityCheck());
+    check(/monthlyplan-orphan-transaction/.test(before), 'A2 RELOADED: monthlyplan-orphan-transaction fires BEFORE retry');
+    check(/critical/i.test(before), 'A2 RELOADED: the finding is Critical');
+    check(/no such monthly plan exists/.test(before), 'A2 RELOADED: the finding states the plan is absent, not merely unlinked');
+    check(!/corrupt-plan-ref/.test(before), 'A2 RELOADED: corrupt-plan-ref cannot see this state (it walks committedTxnIds)');
+
+    // Rebuild the preview from the RELOADED state and retry after storage recovers.
+    const rebuiltA2 = r.w.buildMonthlyPreview('2026-03', { payroll:false, recurring:false,
+      copyRows:[{uraian:'Fabricated Stationery', category:'Operasional Kegiatan', planned:250000}] });
+    const rowA2 = rebuiltA2.rows.find(x=>/Stationery/.test(x.label));
+    check(rowA2 && rowA2.dup === 'duplicate', 'A2 RETRY: the reloaded transaction is recognised as a duplicate');
+    const txnsBeforeA2 = r.State.txns.length;
+    const retryA2 = await r.w.commitMonthlyPlan(rebuiltA2);
+    check(retryA2.ok === true, 'A2 RETRY: succeeds once storage recovers');
+    check(retryA2.created === 0, 'A2 RETRY: created count is ZERO');
+    check(r.State.txns.length === txnsBeforeA2, 'A2 RETRY: no duplicate Finance transaction was created');
+    const afterA2 = JSON.stringify(r.w.runIntegrityCheck());
+    // The retry re-creates the plan and marks it Committed, but it links only the
+    // rows IT committed — the pre-existing reloaded transactions are skipped as
+    // duplicates and are therefore never added to committedTxnIds.
+    check(/monthlyplan-orphan-transaction/.test(afterA2),
+      'A2 RETRY: the finding REMAINS — the retry skipped the rows as duplicates, so it never linked them to the new plan');
+    check(r.State.monthlyPlans.length === 1, 'A2 RETRY: a monthly plan now exists');
+    check(r.State.monthlyPlans[0].committedTxnIds.length === 0,
+      'A2 RETRY: the new plan links NO transactions (the duplicates were skipped, never linked)');
+
+    // --- A1: the plan already existed in storage before the failing commit ---
+    let rt1 = loadRuntime(); seed(rt1);
+    rt1.State.monthlyPlans = [{id:'mp_pre', monthKey:'2026-03', month:'March', year:2026, monthNum:3, status:'Draft', committedTxnIds:[], createdAt:'2026-03-01T00:00:00.000Z'}];
+    await rt1.w.persistMonthlyPlans();
+    rt1.ctl.failKeys.add(KEYS.monthlyPlans);
+    await rt1.w.commitMonthlyPlan(preview(rt1,'2026-03'));
+    const r1 = await reload(JSON.parse(JSON.stringify(rt1.memStore)));
+    check(r1.State.monthlyPlans.length === 1, 'A1 RELOADED: the pre-existing plan came back');
+    check(r1.State.monthlyPlans[0].status === 'Draft', 'A1 RELOADED: the plan is still Draft — the commit never persisted');
+    check(r1.State.monthlyPlans[0].committedTxnIds.length === 0, 'A1 RELOADED: the plan lists none of the persisted transactions');
+    check(r1.State.txns.length === 2, 'A1 RELOADED: both transactions came back');
+    const beforeA1 = JSON.stringify(r1.w.runIntegrityCheck());
+    check(/monthlyplan-orphan-transaction/.test(beforeA1), 'A1 RELOADED: monthlyplan-orphan-transaction fires BEFORE retry');
+    check(/does not list it as a committed row/.test(beforeA1), 'A1 RELOADED: the finding states the plan exists but does not link back');
+  }
+
+  // ---------- 11. SCENARIO B — RELOAD-STATE retry ----------
+  console.log('-- scenario 11: Scenario B reload-state retry --');
+  {
+    let rt = loadRuntime(); seed(rt); rt.ctl.failKeys.add(KEYS.txns);
+    const first = await rt.w.commitMonthlyPlan(preview(rt,'2026-04'));
+    check(first.ok === false && first.failedStep === 'transactions', 'B: the first attempt fails on the transactions write');
+    check(rt.memStore[KEYS.monthlyPlans] !== undefined && rt.memStore[KEYS.txns] === undefined,
+      'B: only the monthlyPlans key persisted');
+
+    const r = await reload(JSON.parse(JSON.stringify(rt.memStore)));
+    check(r.State.txns.length === 0, 'B RELOADED: NO transactions exist — that write never landed');
+    check(r.State.monthlyPlans.length === 1, 'B RELOADED: the monthly plan came back');
+    const planB = r.State.monthlyPlans[0];
+    check(planB.status === 'Committed', 'B RELOADED: the plan is marked Committed');
+    check(planB.committedTxnIds.length === 2, 'B RELOADED: committedTxnIds holds 2 ids');
+    check(planB.committedTxnIds.every(id => !r.State.txns.some(t=>t.id===id)),
+      'B RELOADED: every committedTxnId is DANGLING — it points to a transaction that does not exist');
+    const beforeB = JSON.stringify(r.w.runIntegrityCheck());
+    check(/corrupt-plan-ref/.test(beforeB), 'B RELOADED: corrupt-plan-ref fires BEFORE retry');
+    check(!/monthlyplan-orphan-transaction/.test(beforeB),
+      'B RELOADED: the new orphan rule does NOT fire (no transaction exists to carry a monthlyPlanId)');
+
+    // Retry reachability: nothing gates the commit button, and no completion
+    // marker blocks it — the plan being Committed does not stop a re-commit.
+    const rebuiltB = r.w.buildMonthlyPreview('2026-04', { payroll:false, recurring:false,
+      copyRows:[{uraian:'Fabricated Stationery', category:'Operasional Kegiatan', planned:250000}] });
+    const rowB = rebuiltB.rows.find(x=>/Stationery/.test(x.label));
+    check(rowB && rowB.dup === 'new', 'B RETRY: the row is NEW again (its transaction never persisted), so retry is reachable');
+    const staleIds = planB.committedTxnIds.slice();
+    const retryB = await r.w.commitMonthlyPlan(rebuiltB);
+    check(retryB.ok === true, 'B RETRY: succeeds once storage recovers');
+    check(retryB.created === 1, 'B RETRY: creates the transaction that never persisted');
+    const newIds = r.State.txns.map(t=>t.id);
+    check(newIds.length === 1, 'B RETRY: exactly one transaction now exists');
+    check(!staleIds.includes(newIds[0]), 'B RETRY: the created transaction has a NEW id (the stale ids are not reused)');
+    check(staleIds.every(id => r.State.monthlyPlans[0].committedTxnIds.includes(id)),
+      'B RETRY: the stale dangling ids REMAIN on the plan (nothing removes them — no automatic repair)');
+    check(r.State.monthlyPlans[0].committedTxnIds.length === 3,
+      'B RETRY: committedTxnIds now holds 2 stale ids + 1 real id');
+    const afterB = JSON.stringify(r.w.runIntegrityCheck());
+    check(/corrupt-plan-ref/.test(afterB),
+      'B RETRY: corrupt-plan-ref REMAINS after a successful retry — the dangling ids were never cleaned');
+    // ...and the UI would report success while that finding still stands.
+    check(retryB.ok === true && /corrupt-plan-ref/.test(afterB),
+      'B RETRY: the commit reports SUCCESS even though an integrity finding still stands (documented, not repaired)');
   }
 
   // ---------- 9. no atomicity / rollback claim in the slice ----------
