@@ -1119,8 +1119,16 @@ check(/showError\(/.test(siUiFail079), 'the Smart Import failure branch reports 
 // Smart Import undo: failure branch, no success toast.
 const siUndo079 = stripComments((siCommitSrc079.match(/async function undoLastSmartImport\(\)\{[\s\S]*?\n\}/)||[''])[0]);
 check(/if\(saved !== true\)\{[\s\S]*?showError\([\s\S]*?return;/.test(siUndo079), 'undoLastSmartImport reports failure and returns before its success path');
-const siUndoFail079 = (siUndo079.match(/if\(saved !== true\)\{[\s\S]*?\n  \}/)||[''])[0];
+const siUndoFail079 = (siUndo079.match(/if\(saved !== true\)\{[\s\S]*?return;/)||[''])[0];
 check(siUndoFail079 !== '' && !/showSuccess\(/.test(siUndoFail079), 'undoLastSmartImport shows no success message on failure');
+// The `undone` flag is BOTH the completion marker and the batch selector
+// (`find(b=>!b.undone)`). Leaving it set after a failed write would misrepresent
+// completion AND block every further attempt for the session, so it must be cleared.
+check(/batch\.undone = false;\s*delete batch\.undoneAt;\s*delete batch\.keptTxns;/.test(siUndoFail079),
+  'undoLastSmartImport clears the completion marker on failure (retry is not blocked)');
+check(/find\(b=>!b\.undone\)/.test(siUndo079), 'the undo selector keys off the same `undone` flag the failure path clears');
+// Clearing a marker is not a rollback — the wording must not imply one.
+check(/you can try again, or reload the page/.test(siUndoFail079), 'undo failure offers retry AND reload without claiming a rollback');
 
 // (g) FAILURE WORDING MUST NOT CLAIM A ROLLBACK (the fan-out is not atomic).
 [dedupSrc079, siCommitSrc079, siUiSrc079].forEach((src, i)=>{

@@ -125,14 +125,24 @@ function seedMinimal(rt){
     r = await rt.w.saveAllData();
     check(r === false, 'SEVERAL writes fail -> returns false');
 
-    // A write THROWS a non-quota fault. StorageAdapter catches internally and
-    // reports false, so the established convention is preserved: saveAllData
-    // returns false rather than propagating.
+    // EXCEPTION SEMANTICS — stated precisely, because the two cases are different.
+    //
+    // TESTED: localStorage.setItem() throws. StorageAdapter._localSet catches it
+    // (and the claude-mode branch of .set likewise catches), records the fault, and
+    // returns false. The promise handed to Promise.all therefore RESOLVES to false
+    // — it is never rejected. saveAllData sees an ordinary false and reports false.
+    //
+    // NOT TESTED AND NOT CLAIMED: a persistence function returning an actually
+    // REJECTED promise. saveAllData has no try/catch and no .catch(); a rejection
+    // entering Promise.all would reject and propagate out of saveAllData to the
+    // caller. No current code path produces that, so no behaviour is asserted for
+    // it here and none should be inferred.
     rt = loadRuntime(); seedMinimal(rt); rt.ctl.throwKeys.add(KEYS.contracts);
     let threw = false;
     try { r = await rt.w.saveAllData(); } catch(e){ threw = true; }
-    check(threw === false, 'a throwing write does not escape saveAllData (StorageAdapter normalises it)');
-    check(r === false, 'a throwing write yields false (established convention preserved)');
+    check(threw === false, 'a setItem() throw is caught by StorageAdapter and never reaches Promise.all as a rejection');
+    check(r === false, 'a setItem() throw is normalised to a resolved false, so saveAllData returns false');
+    check(rt.memStore[KEYS.txns] !== undefined, 'a throwing write does not abort the rest of the fan-out');
 
     // Result is a strict boolean in every case.
     rt = loadRuntime(); seedMinimal(rt);
@@ -224,6 +234,54 @@ function seedMinimal(rt){
     await rt.w.undoLastSmartImport();
     check(!rt.toasts.some(t=>/Smart Import undone/i.test(t)), 'undo failure shows NO success message');
     check(rt.toasts.some(t=>/could not be saved/i.test(t) && /not completed successfully/i.test(t)), 'undo failure states the operation did not complete successfully');
+
+    // THE COMPLETION MARKER MUST NOT SURVIVE A FAILURE.
+    // `undone` is both the completion marker AND the selector used to find the
+    // batch (`find(b=>!b.undone)`). Before this fix it stayed true after a failed
+    // write, which misrepresented completion in memory and blocked every further
+    // attempt for the rest of the session.
+    check(rt.State.importBatches[0].undone === false, 'undo failure clears the completion marker (no false completion in memory)');
+    check(rt.State.importBatches[0].undoneAt === undefined, 'undo failure clears undoneAt');
+    check(rt.State.importBatches[0].keptTxns === undefined, 'undo failure clears keptTxns');
+    check(rt.State.importBatches.some(b=>!b.undone) === true, 'the batch is selectable again after a failed undo');
+
+    // IMMEDIATE RETRY — same session, no reload, storage recovered.
+    rt.ctl.failKeys.clear(); rt.ctl.writes.length = 0; rt.toasts.length = 0;
+    await rt.w.undoLastSmartImport();
+    check(!rt.toasts.some(t=>/No Smart Import batch available/i.test(t)), 'immediate retry is NOT blocked by the previous failure');
+    check(rt.ctl.writes.length > 0, 'immediate retry reaches storage again');
+    check(rt.toasts.some(t=>/Smart Import undone/i.test(t)), 'immediate retry succeeds once storage recovers');
+    check(rt.State.importBatches[0].undone === true, 'the completion marker is set only after a successful retry');
+    check(rt.State.importBatches.filter(b=>b.batchId==='b1').length === 1, 'retry does not duplicate the batch record');
+
+    // RETRY AFTER RELOAD — the batch write failed, so storage still holds
+    // undone:false. Rebuilding State from what actually persisted must stay
+    // retryable, and the retry must complete.
+    rt = loadRuntime(); seedUndo(rt);
+    rt.memStore[KEYS.importBatches] = JSON.stringify(rt.State.importBatches);   // prior successful commit
+    rt.ctl.failKeys.add(KEYS.importBatches);
+    await rt.w.undoLastSmartImport();
+    const reloaded = loadRuntime(); seedUndo(reloaded);
+    reloaded.State.importBatches = JSON.parse(rt.memStore[KEYS.importBatches]); // reload = read storage
+    check(reloaded.State.importBatches[0].undone === false, 'after reload the batch is still marked not-undone (the failed write never landed)');
+    reloaded.ctl.writes.length = 0; reloaded.toasts.length = 0;
+    await reloaded.w.undoLastSmartImport();
+    check(reloaded.ctl.writes.length > 0, 'retry after reload reaches storage');
+    check(reloaded.toasts.some(t=>/Smart Import undone/i.test(t)), 'retry after reload succeeds');
+    check(reloaded.State.importBatches[0].undone === true, 'retry after reload completes the undo');
+
+    // HONEST LIMIT — documented, not papered over. If the importBatches write
+    // SUCCEEDS while another key fails, storage keeps undone:true while the other
+    // dataset's removal did not land. That batch is not retryable after reload.
+    // This is a consequence of non-atomic multi-key persistence, NOT something
+    // SPR-079 introduced or claims to solve.
+    rt = loadRuntime(); seedUndo(rt);
+    rt.memStore[KEYS.importBatches] = JSON.stringify(rt.State.importBatches);
+    rt.ctl.failKeys.add(KEYS.txns);                       // batch write lands, txns write fails
+    await rt.w.undoLastSmartImport();
+    const persistedBatch = JSON.parse(rt.memStore[KEYS.importBatches])[0];
+    check(persistedBatch.undone === true, 'KNOWN LIMIT: a landed batch write records undone:true even though another key failed');
+    check(rt.State.importBatches[0].undone === false, 'in-memory state still reports the operation as incomplete (honest for this session)');
   }
 
   // ---------- 5. No failure message claims a rollback ----------

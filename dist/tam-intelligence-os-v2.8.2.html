@@ -9277,19 +9277,26 @@ async function undoLastSmartImport(){
   State.employees = State.employees.filter(e=>!c.employees.includes(e.id) || refEmp.has(e.id));
   // Clean removed txn ids out of monthly plans.
   State.monthlyPlans.forEach(mp=>{ if(Array.isArray(mp.committedTxnIds)) mp.committedTxnIds = mp.committedTxnIds.filter(id=>!removeTxn.has(id)); });
-  // The `undone` completion flag must be set BEFORE the write, because it is part
-  // of the importBatches payload being persisted. SPR-079 does not move or revert
-  // it: reverting only the flag while the record removals above stay applied would
-  // misrepresent the state. On failure the flag is simply never confirmed as
-  // saved, and reloading restores the last persisted state — which is also what
-  // makes retrying the undo safe.
+  // The `undone` completion flag must be SET before the write, because it is part
+  // of the importBatches payload being persisted.
   batch.undone = true; batch.undoneAt = new Date().toISOString(); batch.keptTxns = pv.blockedTxns;
   const saved = await saveAllData();
   if(saved !== true){
-    // SPR-079 — no success message. Wording states the operation did not complete;
-    // it does NOT claim a rollback, because the fan-out is not atomic and earlier
-    // writes may have persisted.
-    showError('Some data could not be saved. The undo was not completed successfully — reload the page to return to the last saved state, then try again.', null, 9000);
+    // SPR-079 — the flag is a COMPLETION MARKER, and the operation did not
+    // complete. It also selects the batch to undo (`find(b=>!b.undone)` above), so
+    // leaving it set would both misrepresent completion in memory AND block any
+    // further attempt for the rest of the session — the next click would report
+    // "No Smart Import batch available to undo" and never reach storage again.
+    // Clearing it restores the honest in-memory state and makes an immediate retry
+    // possible once storage recovers.
+    //
+    // This is NOT a rollback and must never be described as one: only the marker
+    // is cleared. The record removals above remain applied in memory, and whatever
+    // the fan-out already wrote stays written. Re-running the undo is safe because
+    // it recomputes purely from `batch.created` — removing already-removed records
+    // is a no-op.
+    batch.undone = false; delete batch.undoneAt; delete batch.keptTxns;
+    showError('Some data could not be saved. The undo was not completed successfully — you can try again, or reload the page to return to the last saved state.', null, 9000);
     render();
     return;
   }
