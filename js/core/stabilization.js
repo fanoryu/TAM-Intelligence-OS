@@ -5,17 +5,51 @@
    helpers. No storage keys renamed, no business logic changed.
    ============================================================ */
 
-/* ---------- unified persistence coordinator (Phase 4) ---------- */
-// Persists every dataset through StorageAdapter in one call. Used by restore
-// and available for any flow that changes several collections at once. Each
-// underlying save already surfaces its own failures; this simply coordinates.
+/* ---------- unified persistence fan-out (Phase 4) ----------
+   Persists every dataset through StorageAdapter in one call, for flows that
+   change several collections at once (Smart Import commit/undo, employee merge).
+
+   RESULT CONTRACT (SPR-079):
+     true  — EVERY required write returned success.
+     false — one or more required writes failed.
+
+   Before SPR-079 this function discarded every underlying boolean and returned
+   `true` unconditionally, so callers reported success even when storage had
+   rejected writes (ATR-011). It now inspects every result.
+
+   WHAT `false` DOES **NOT** MEAN — read this before writing a failure message:
+   this is NOT an atomic operation and makes NO rollback claim. It writes one
+   storage key per dataset; the browser gives atomicity per key only, never
+   across keys. A `false` result therefore means "the operation did not complete
+   successfully", NOT "nothing was written" — earlier writes in the fan-out may
+   well have persisted. Never tell the user their data was rolled back. The
+   honest recovery path is that reloading restores whatever was last persisted.
+
+   Deliberately NOT introduced here (SPR-079 scope): retry, compensation,
+   rollback, journaling, recovery markers, operation ids, or any transaction /
+   unit-of-work / coordinator abstraction.
+
+   Failure detail goes to the console only. Each underlying write already
+   surfaces its own user-facing failure through StorageAdapter (quota/unavailable
+   toasts), so this layer adds no duplicate notification. */
 async function saveAllData(){
-  // v2.5.2 — persist every dataset (previously only a subset), so Smart Import
-  // audit batches, overtime, adjustments and employee-merge audits are durable.
-  await Promise.all([
+  // v2.5.2 — persist every dataset, so Smart Import audit batches, overtime,
+  // adjustments and employee-merge audits are durable.
+  // Labels are positionally aligned with the promise list below. Promise.all
+  // preserves input order in its results regardless of completion order, so the
+  // mapping stays deterministic and verifiable.
+  const labels = ['transactions', 'settings', 'backups', ...Object.keys(HR_KEYS)];
+  const results = await Promise.all([
     persist(), saveSettings(), saveBackups(),
     ...Object.keys(HR_KEYS).map(k=>persistHR(k)),
   ]);
+  // Strict check — every underlying persist function returns `ok === true`, so
+  // anything else (false, undefined) is a failure. No truthy/falsy ambiguity.
+  const failed = labels.filter((_, i) => results[i] !== true);
+  if(failed.length){
+    console.error('saveAllData: ' + failed.length + ' dataset(s) were NOT persisted: ' + failed.join(', '));
+    return false;
+  }
   return true;
 }
 

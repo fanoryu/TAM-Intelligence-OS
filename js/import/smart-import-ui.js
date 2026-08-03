@@ -209,7 +209,20 @@ function renderSmartImport(main){
     if(State.importMode==='review'){ showWarning('Review Only mode: nothing is committed. Switch mode to Smart Payroll & Master Sync to import.'); return; }
     if(!confirmAction(`Commit ${sel.length} selected row(s)? A safety backup is taken first. Employees/contracts/payroll/transactions will be created with structured links; duplicates (employee+contract+month) are skipped.`)) return;
     State.smartStep=8;
-    const audit = await commitSmartImport(model);
+    const res = await commitSmartImport(model);
+    if(res.ok !== true){
+      // SPR-079 — persistence failed. The import is NOT closed as completed: the
+      // parsed model is kept so the user can retry, the wizard does not advance to
+      // the results screen, and no success message is shown. Wording states the
+      // operation did not complete; it does NOT claim a rollback, because the
+      // fan-out is not atomic and earlier writes may have persisted. The
+      // pre-import safety backup remains available.
+      State.smartStep=7;
+      showError('Some data could not be saved. The import was not completed successfully — reload the page to return to the last saved state, then try again. A pre-import backup was taken and is still available in Settings.', null, 9000);
+      render();
+      return;
+    }
+    const audit = res.audit;
     State.smartImport=null; State.smartStep=9;
     showSuccess(`Smart Import complete: ${audit.counts.employees} employees, ${audit.counts.contracts} contracts, ${audit.counts.payrollPlans} payroll plans, ${audit.counts.txns} transactions created.`, 7000);
     State.view='importResults'; State.lastImportAudit=audit; render();

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TAM Intelligence OS v2.8.1</title>
+<title>TAM Intelligence OS v2.8.2</title>
 <meta name="theme-color" content="#0E1420">
 <meta name="color-scheme" content="dark light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -358,8 +358,8 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.8.1';
-const APP_RELEASE_NAME = 'Single Payroll Posting Authority';
+const APP_VERSION = '2.8.2';
+const APP_RELEASE_NAME = 'Honest Persistence Results';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
@@ -5272,6 +5272,7 @@ function renderAbout(main){
 }
 function renderReleaseNotes(main){
   const notes = [
+    {v:'2.8.2 — Honest Persistence Results', items:['Operations that save several datasets at once — Smart Import commit, Smart Import undo, and employee merge — now check whether every save actually succeeded. Previously they reported success even when the browser rejected one or more writes','If a save fails, you now see a clear message that the operation did not complete, instead of a success message. The import wizard stays on the review step so you can retry, the merge is not reported as done, and no completion or audit entry is recorded','Failure messages deliberately do not claim your data was rolled back. Saving several datasets is not an all-or-nothing operation in the browser, so some data may already have been written. Reloading the page returns you to the last saved state','Pre-operation safety backups are always kept when a save fails, and retrying is safe: duplicate import rows are skipped and a repeated merge produces the same result','No change to how or when data is written, and no schema, storage key, or migration change; SCHEMA_VERSION unchanged (6)']},
     {v:'2.8.1 — Single Payroll Posting Authority', items:['Retired the legacy Payroll Planning screen. It was superseded by the Payroll Workspace in v2.5.0 and has been unreachable ever since — no menu entry and no way to open it. Its leftover "Commit Payroll" code has been removed','That leftover path was a second way to post payroll that did not apply the rules the Payroll Workspace applies: it ignored the period lock, ignored commit blockers, did not require a payroll row to be Approved first, wrote no activity-log entry, and recorded no commit time','It also recorded payroll as committed using a value the rest of the app does not recognise. Any payroll it posted showed as "Draft" in the workspace, was skipped by Integrity Check and HR reports, and could not be cancelled or corrected — even though a real planned Gaji transaction had been created','Committed payroll is now recognised in one shared place used by every screen. Payroll committed through the old path is now correctly recognised as committed everywhere, so it appears in reports, in Integrity Check, and in the contract cancellation warning','The warning shown when cancelling a contract that has committed payroll now fires correctly. It previously only checked the old value, so it did not appear for payroll posted through the Payroll Workspace','Payroll Workspace posting is now the single payroll posting path. No payroll data was changed, no migration was run, and no schema, storage key, or persistence behaviour was altered; SCHEMA_VERSION unchanged (6)']},
     {v:'2.8.0 — Aggregate-Owned Contract Renewal', items:['Contract renewal is no longer authored inside the renewal form. A dedicated business boundary (ContractRenewalAggregate) now decides whether a contract may be renewed and defines the successor contract, the predecessor’s Renewed status, and both history notes; the handler applies them','Renewal now reports success only when the save actually succeeds. Previously a failed write still closed the form, showed “Contract renewed”, and navigated to the new contract while nothing had been stored','If saving fails, the renewal is fully undone in memory — the successor is discarded and the original contract’s status, renewal link, history entry, and timestamp are restored — the form stays open, and a clear “nothing was changed” message is shown','Renew is now offered only for Draft and Active contracts. Renewing an already-Renewed contract previously created a second successor and silently orphaned the first one by overwriting the renewal link','Renewal persists through the existing Contract Repository. Predecessor and successor live in the same contract collection, so both are written together in one save — no new transaction, coordinator, or multi-store persistence mechanism was introduced','No schema, storage-key, or persisted-data change; SCHEMA_VERSION unchanged (6). Contract overlap is still advisory only, and payroll, finance, and supplemental behavior are untouched']},
     {v:'2.7.3 — Supplemental-Aware Payroll History', items:['Payroll History (Employee Detail) now represents months that also have a Supplemental Payment. Columns are Base Payroll · Payroll OT · Supplemental · Total Compensation · Stage, so overtime paid after payroll posting is no longer invisible','New read-only reporting helper (payrollTotalCompensation): Total Compensation = immutable Base Payroll + Payroll Overtime + committed (Posted/Executed) supplementals. The base payroll and its finance transaction are never modified and never redefined','Only Posted/Executed supplementals count toward Total Compensation; Draft/Review/Approved are surfaced as a subtle "Pending" figure and excluded from the total; Cancelled is ignored. The Supplemental cell shows the amount plus a document count (e.g. "2 Supplementals")','Integrity Check wording now distinguishes a legacy (pre-v2.7.1) supplemental with no frozen source snapshot (informational, display-only, payment unaffected) from one approved under v2.7.1+ that is genuinely missing its snapshot (a warning to investigate)','Reporting/presentation only — no persistence, finance, schema, or storage-key change; SCHEMA_VERSION unchanged (6), 15 storage keys; no historical record is rewritten']},
@@ -7682,17 +7683,51 @@ function exportHRReportCsv(id, monthKey){
    helpers. No storage keys renamed, no business logic changed.
    ============================================================ */
 
-/* ---------- unified persistence coordinator (Phase 4) ---------- */
-// Persists every dataset through StorageAdapter in one call. Used by restore
-// and available for any flow that changes several collections at once. Each
-// underlying save already surfaces its own failures; this simply coordinates.
+/* ---------- unified persistence fan-out (Phase 4) ----------
+   Persists every dataset through StorageAdapter in one call, for flows that
+   change several collections at once (Smart Import commit/undo, employee merge).
+
+   RESULT CONTRACT (SPR-079):
+     true  — EVERY required write returned success.
+     false — one or more required writes failed.
+
+   Before SPR-079 this function discarded every underlying boolean and returned
+   `true` unconditionally, so callers reported success even when storage had
+   rejected writes (ATR-011). It now inspects every result.
+
+   WHAT `false` DOES **NOT** MEAN — read this before writing a failure message:
+   this is NOT an atomic operation and makes NO rollback claim. It writes one
+   storage key per dataset; the browser gives atomicity per key only, never
+   across keys. A `false` result therefore means "the operation did not complete
+   successfully", NOT "nothing was written" — earlier writes in the fan-out may
+   well have persisted. Never tell the user their data was rolled back. The
+   honest recovery path is that reloading restores whatever was last persisted.
+
+   Deliberately NOT introduced here (SPR-079 scope): retry, compensation,
+   rollback, journaling, recovery markers, operation ids, or any transaction /
+   unit-of-work / coordinator abstraction.
+
+   Failure detail goes to the console only. Each underlying write already
+   surfaces its own user-facing failure through StorageAdapter (quota/unavailable
+   toasts), so this layer adds no duplicate notification. */
 async function saveAllData(){
-  // v2.5.2 — persist every dataset (previously only a subset), so Smart Import
-  // audit batches, overtime, adjustments and employee-merge audits are durable.
-  await Promise.all([
+  // v2.5.2 — persist every dataset, so Smart Import audit batches, overtime,
+  // adjustments and employee-merge audits are durable.
+  // Labels are positionally aligned with the promise list below. Promise.all
+  // preserves input order in its results regardless of completion order, so the
+  // mapping stays deterministic and verifiable.
+  const labels = ['transactions', 'settings', 'backups', ...Object.keys(HR_KEYS)];
+  const results = await Promise.all([
     persist(), saveSettings(), saveBackups(),
     ...Object.keys(HR_KEYS).map(k=>persistHR(k)),
   ]);
+  // Strict check — every underlying persist function returns `ok === true`, so
+  // anything else (false, undefined) is a failure. No truthy/falsy ambiguity.
+  const failed = labels.filter((_, i) => results[i] !== true);
+  if(failed.length){
+    console.error('saveAllData: ' + failed.length + ' dataset(s) were NOT persisted: ' + failed.join(', '));
+    return false;
+  }
   return true;
 }
 
@@ -9205,12 +9240,19 @@ async function commitSmartImport(model){
     uniqueEmployees: Object.keys(candidateMap).length,
     counts:{employees:created.employees.length, contracts:created.contracts.length, payrollPlans:created.payrollPlans.length, txns:created.txns.length, skipped, duplicatesSkipped:dupSkipped, contractConflicts, uniqueEmployees:Object.keys(candidateMap).length}, undone:false};
   State.importBatches.unshift(audit);
-  await saveAllData();
+  // SPR-079 — the fan-out result is now inspected. A failed write must never be
+  // recorded as a completed import: the success audit entry below is written ONLY
+  // after every required write succeeded. No rollback is performed and none is
+  // claimed — the pre-import safety backup (taken and persisted above) is
+  // untouched, and reloading restores whatever was last persisted. Re-running the
+  // import is safe: duplicate employee+contract+month rows are skipped by design.
+  const saved = await saveAllData();
+  if(saved !== true) return { ok:false, audit };
   const c=audit.counts;
   logActivity({type:'import.commit', module:'Import', entity:model.fileName||'Smart Import', entityId:batchId,
     desc:`Committed — ${c.employees} employee(s), ${c.contracts} contract(s), ${c.payrollPlans} payroll plan(s), ${c.txns} transaction(s)${c.skipped?', '+c.skipped+' skipped':''}`,
     refs:{importBatchId:batchId}});
-  return audit;
+  return { ok:true, audit };
 }
 
 /* ---------- undo (Part 11) ---------- */
@@ -9235,8 +9277,29 @@ async function undoLastSmartImport(){
   State.employees = State.employees.filter(e=>!c.employees.includes(e.id) || refEmp.has(e.id));
   // Clean removed txn ids out of monthly plans.
   State.monthlyPlans.forEach(mp=>{ if(Array.isArray(mp.committedTxnIds)) mp.committedTxnIds = mp.committedTxnIds.filter(id=>!removeTxn.has(id)); });
+  // The `undone` completion flag must be SET before the write, because it is part
+  // of the importBatches payload being persisted.
   batch.undone = true; batch.undoneAt = new Date().toISOString(); batch.keptTxns = pv.blockedTxns;
-  await saveAllData();
+  const saved = await saveAllData();
+  if(saved !== true){
+    // SPR-079 — the flag is a COMPLETION MARKER, and the operation did not
+    // complete. It also selects the batch to undo (`find(b=>!b.undone)` above), so
+    // leaving it set would both misrepresent completion in memory AND block any
+    // further attempt for the rest of the session — the next click would report
+    // "No Smart Import batch available to undo" and never reach storage again.
+    // Clearing it restores the honest in-memory state and makes an immediate retry
+    // possible once storage recovers.
+    //
+    // This is NOT a rollback and must never be described as one: only the marker
+    // is cleared. The record removals above remain applied in memory, and whatever
+    // the fan-out already wrote stays written. Re-running the undo is safe because
+    // it recomputes purely from `batch.created` — removing already-removed records
+    // is a no-op.
+    batch.undone = false; delete batch.undoneAt; delete batch.keptTxns;
+    showError('Some data could not be saved. The undo was not completed successfully — you can try again, or reload the page to return to the last saved state.', null, 9000);
+    render();
+    return;
+  }
   showSuccess(`Smart Import undone.${pv.blockedTxns?(' '+pv.blockedTxns+' executed/modified record(s) preserved.'):''}`, 6000);
   render();
 }
@@ -9300,8 +9363,14 @@ async function mergeEmployeeGroup(canonicalId, duplicateIds, profileChoices){
     relinkedCounts:{contracts:relinked.contracts.length, payrollPlans:relinked.payrollPlans.length, txns:relinked.txns.length, overtime:relinked.overtime.length, adjustments:relinked.adjustments.length},
     selectedProfile:appliedProfile};
   State.employeeMerges.unshift(auditRec);
-  await saveAllData();
-  return auditRec;
+  // SPR-079 — the fan-out result is now inspected. A failed write must never be
+  // reported to the user as a completed merge. No rollback is performed and none
+  // is claimed: the merge has already been applied in memory, the pre-merge
+  // safety backup (taken and persisted above) is untouched, and reloading
+  // restores whatever was last persisted. Retry is safe — the merge is
+  // idempotent over the same canonical/duplicate ids.
+  const saved = await saveAllData();
+  return { ok: saved === true, audit: auditRec };
 }
 
 function renderEmployeeDedup(main){
@@ -9349,8 +9418,21 @@ function renderEmployeeDedup(main){
     let tot={contracts:0,payrollPlans:0,txns:0,overtime:0,adjustments:0}; dupIds.forEach(id=>{ const t=employeeLinkTotals(id); Object.keys(tot).forEach(k=>tot[k]+=t[k]); });
     const canon=State.employees.find(e=>e.id===canonId);
     if(!confirmAction(`Merge ${dupIds.length} duplicate record(s) into "${canon.fullName}" (${canon.employeeId})?\n\nWill relink: ${tot.contracts} contract(s), ${tot.payrollPlans} payroll plan(s), ${tot.txns} transaction(s), ${tot.overtime} overtime, ${tot.adjustments} adjustment(s).\n\nA complete backup is taken first. No records are deleted and no amounts change.`)) return;
-    const rec=await mergeEmployeeGroup(canonId, dupIds, profile);
-    if(rec){ if(State.dedupCanon) delete State.dedupCanon[key]; showSuccess(`Merged ${rec.duplicateEmployeeIds.length} duplicate(s) into ${rec.canonicalCode}. ${rec.relinkedCounts.txns} transaction(s) relinked; amounts unchanged.`, 7000); render(); }
+    const res=await mergeEmployeeGroup(canonId, dupIds, profile);
+    if(!res) return;                        // nothing to merge (unchanged behaviour)
+    if(res.ok !== true){
+      // SPR-079 — persistence failed. No success message, no completion state is
+      // cleared. Wording states the operation did not complete; it does NOT claim
+      // a rollback, because the fan-out is not atomic and earlier writes may have
+      // persisted. The pre-merge safety backup remains available.
+      showError('Some data could not be saved. The merge was not completed successfully — reload the page to return to the last saved state. A pre-merge backup was taken and is still available in Settings.', null, 9000);
+      render();
+      return;
+    }
+    const rec=res.audit;
+    if(State.dedupCanon) delete State.dedupCanon[key];
+    showSuccess(`Merged ${rec.duplicateEmployeeIds.length} duplicate(s) into ${rec.canonicalCode}. ${rec.relinkedCounts.txns} transaction(s) relinked; amounts unchanged.`, 7000);
+    render();
   }));
 }
 
@@ -9565,7 +9647,20 @@ function renderSmartImport(main){
     if(State.importMode==='review'){ showWarning('Review Only mode: nothing is committed. Switch mode to Smart Payroll & Master Sync to import.'); return; }
     if(!confirmAction(`Commit ${sel.length} selected row(s)? A safety backup is taken first. Employees/contracts/payroll/transactions will be created with structured links; duplicates (employee+contract+month) are skipped.`)) return;
     State.smartStep=8;
-    const audit = await commitSmartImport(model);
+    const res = await commitSmartImport(model);
+    if(res.ok !== true){
+      // SPR-079 — persistence failed. The import is NOT closed as completed: the
+      // parsed model is kept so the user can retry, the wizard does not advance to
+      // the results screen, and no success message is shown. Wording states the
+      // operation did not complete; it does NOT claim a rollback, because the
+      // fan-out is not atomic and earlier writes may have persisted. The
+      // pre-import safety backup remains available.
+      State.smartStep=7;
+      showError('Some data could not be saved. The import was not completed successfully — reload the page to return to the last saved state, then try again. A pre-import backup was taken and is still available in Settings.', null, 9000);
+      render();
+      return;
+    }
+    const audit = res.audit;
     State.smartImport=null; State.smartStep=9;
     showSuccess(`Smart Import complete: ${audit.counts.employees} employees, ${audit.counts.contracts} contracts, ${audit.counts.payrollPlans} payroll plans, ${audit.counts.txns} transactions created.`, 7000);
     State.view='importResults'; State.lastImportAudit=audit; render();

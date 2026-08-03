@@ -279,12 +279,19 @@ async function commitSmartImport(model){
     uniqueEmployees: Object.keys(candidateMap).length,
     counts:{employees:created.employees.length, contracts:created.contracts.length, payrollPlans:created.payrollPlans.length, txns:created.txns.length, skipped, duplicatesSkipped:dupSkipped, contractConflicts, uniqueEmployees:Object.keys(candidateMap).length}, undone:false};
   State.importBatches.unshift(audit);
-  await saveAllData();
+  // SPR-079 — the fan-out result is now inspected. A failed write must never be
+  // recorded as a completed import: the success audit entry below is written ONLY
+  // after every required write succeeded. No rollback is performed and none is
+  // claimed — the pre-import safety backup (taken and persisted above) is
+  // untouched, and reloading restores whatever was last persisted. Re-running the
+  // import is safe: duplicate employee+contract+month rows are skipped by design.
+  const saved = await saveAllData();
+  if(saved !== true) return { ok:false, audit };
   const c=audit.counts;
   logActivity({type:'import.commit', module:'Import', entity:model.fileName||'Smart Import', entityId:batchId,
     desc:`Committed — ${c.employees} employee(s), ${c.contracts} contract(s), ${c.payrollPlans} payroll plan(s), ${c.txns} transaction(s)${c.skipped?', '+c.skipped+' skipped':''}`,
     refs:{importBatchId:batchId}});
-  return audit;
+  return { ok:true, audit };
 }
 
 /* ---------- undo (Part 11) ---------- */
@@ -309,8 +316,29 @@ async function undoLastSmartImport(){
   State.employees = State.employees.filter(e=>!c.employees.includes(e.id) || refEmp.has(e.id));
   // Clean removed txn ids out of monthly plans.
   State.monthlyPlans.forEach(mp=>{ if(Array.isArray(mp.committedTxnIds)) mp.committedTxnIds = mp.committedTxnIds.filter(id=>!removeTxn.has(id)); });
+  // The `undone` completion flag must be SET before the write, because it is part
+  // of the importBatches payload being persisted.
   batch.undone = true; batch.undoneAt = new Date().toISOString(); batch.keptTxns = pv.blockedTxns;
-  await saveAllData();
+  const saved = await saveAllData();
+  if(saved !== true){
+    // SPR-079 — the flag is a COMPLETION MARKER, and the operation did not
+    // complete. It also selects the batch to undo (`find(b=>!b.undone)` above), so
+    // leaving it set would both misrepresent completion in memory AND block any
+    // further attempt for the rest of the session — the next click would report
+    // "No Smart Import batch available to undo" and never reach storage again.
+    // Clearing it restores the honest in-memory state and makes an immediate retry
+    // possible once storage recovers.
+    //
+    // This is NOT a rollback and must never be described as one: only the marker
+    // is cleared. The record removals above remain applied in memory, and whatever
+    // the fan-out already wrote stays written. Re-running the undo is safe because
+    // it recomputes purely from `batch.created` — removing already-removed records
+    // is a no-op.
+    batch.undone = false; delete batch.undoneAt; delete batch.keptTxns;
+    showError('Some data could not be saved. The undo was not completed successfully — you can try again, or reload the page to return to the last saved state.', null, 9000);
+    render();
+    return;
+  }
   showSuccess(`Smart Import undone.${pv.blockedTxns?(' '+pv.blockedTxns+' executed/modified record(s) preserved.'):''}`, 6000);
   render();
 }
