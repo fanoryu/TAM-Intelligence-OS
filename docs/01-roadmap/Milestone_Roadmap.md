@@ -11,7 +11,7 @@ them into named eras. Detailed, per-milestone scope is recorded in
 | **Beta** | Completed | Domain Foundation — registry, query, command, aggregates, shared helpers |
 | **Gamma** | Completed | Domain Expansion — widened the operational aggregate/command surface (PR-5G–PR-5J) |
 | **Delta** | Completed | Platform & Transport — Application Gateway, Transport Adapter, first Repository boundary, CLI ingress |
-| **Epsilon** | Engineering complete · closure pending | Repository Adoption — entity-named repositories across every aggregate (7 of 7) |
+| **Epsilon** | Completed | Repository Adoption — entity-named repositories across every aggregate (7 of 7); closed at `0ad8150`, recorded in [ECR-001](../ECR/ECR-001-milestone-epsilon-closure-record.md) |
 | **Zeta** | Upcoming | Intelligence Layer — read-only analytical clients of the Domain |
 | **Omega** | Upcoming | Enterprise Platform — fully Domain-governed operations |
 

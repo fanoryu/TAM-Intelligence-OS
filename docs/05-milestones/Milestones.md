@@ -65,11 +65,11 @@ v2.7.3, SCHEMA 6, commit `55499f2`, 824 verifier checks. The frozen state is rec
 [RDR-007](../RDR/RDR-007-delta-repository-snapshot.md); completion in
 [DPR-005](../DPR/DPR-005-delta-completion-report.md).
 
-## Milestone Epsilon — **Repository Adoption**
+## Milestone Epsilon — **Completed**
 
 **Theme:** Repository Adoption.
-**Status:** Engineering complete · architecture adoption objective complete · governance synchronized by
-SPR-075 · **formal closure pending a final closure record.**
+**Status:** **Closed** at commit `0ad8150` — closure review passed under MCR-002; closure recorded in
+[ECR-001](../ECR/ECR-001-milestone-epsilon-closure-record.md).
 
 > **Charter reconciliation.** Epsilon was originally chartered as **Workflow** — *"model multi-step
 > lifecycles (payroll, supplemental, finance execution) as explicit workflows over the existing status
@@ -100,7 +100,8 @@ unchanged; 7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query
 4 registered queries; v2.7.3, SCHEMA 6, commit `6714beb`, **942 verifier checks**. The frozen state is
 recorded in [RDR-011](../RDR/RDR-011-epsilon-repository-snapshot.md); progress in
 [DPR-009](../DPR/DPR-009-epsilon-repository-adoption-completion.md); the decision in
-[ADR-013](../03-adr/ADR-013-Repository-Layer.md).
+[ADR-013](../03-adr/ADR-013-Repository-Layer.md); the closure in
+[ECR-001](../ECR/ECR-001-milestone-epsilon-closure-record.md) at commit `0ad8150`.
 
 > **7 of 7 is a bounded claim.** It means every aggregate-backed handler delegates persistence through an
 > entity-named Repository. It does **not** mean full persistence abstraction (3 of 11 persist functions
