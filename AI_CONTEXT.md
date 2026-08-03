@@ -75,19 +75,29 @@ failure branch retains the row selection so the user can see what was involved. 
 its forward resolution and adds a narrow reverse fallback — payroll-sourced only, exact `payrollPlanId`,
 exact period — that resolves **only when exactly one candidate exists**; more than one yields a typed
 `PayrollTransactionAmbiguous` skip and never a guess. A reverse-matched transaction has its forward
-linkage restored rather than being duplicated, closing a proven duplicate-on-retry path. **This added no
-atomicity and no rollback** — the four writes are still sequential.
+linkage restored rather than being duplicated. **This added no atomicity and no rollback** — the four
+writes are still sequential.
+
+**The two SPR-080 failure modes are not equally addressed.** Scenario A (duplicate finance transaction on
+retry) is **prevented on retry** by the unique reverse lookup: the existing transaction is found and
+relinked instead of a second one being created. Scenario C (overtime left `Approved` after a committed
+posting, and therefore re-payable) is **detected as a Critical integrity finding before reuse** — it is
+**not automatically repaired, and not universally blocked**. Nothing prevents that overtime from being
+included in a later payroll; the finding is advisory and requires a human to act on it.
 
 **Multi-dataset persistence (SPR-079, v2.8.2).** `saveAllData()` inspects every one of its 14 writes and
 returns `true` only when all succeed; Employee Merge and Smart Import no longer report false success.
 Multi-key saves remain non-atomic: a failure means the operation did not complete, **not** that nothing
-was written, and reload reads whatever successfully persisted.
+was written. **Reload reads whatever storage keys successfully persisted. It does not restore a complete
+prior state.**
 
-**Integrity Check** gained two **Critical** rules in SPR-081 — `payroll-orphan-transaction` (a
-payroll-sourced Finance transaction whose linked plan is not committed) and
-`payroll-overtime-uncommitted` (committed payroll whose linked overtime is still `Approved`, which was
-runtime-proven to be re-payable in the next month). Both are **read-only detection**: they report that a
-partial state exists and where — they do **not** repair it.
+**Integrity Check** gained two **Critical** rules in SPR-081 — `payroll-orphan-transaction`, which fires
+when a payroll-sourced Finance transaction references a `PayrollPlan` that is **either not `Committed`
+or does not link back to that transaction** (both broken-linkage directions, not only the uncommitted
+case), and `payroll-overtime-uncommitted` (committed payroll whose linked overtime is still `Approved`,
+which was runtime-proven to be re-payable in the next month). Both are **read-only detection**: they
+report that a partial state exists and where — they do **not** repair it and do **not** block the
+underlying operation.
 
 Operational surface: 8 aggregates / 8 aggregate-backed commands / 1 aggregate-backed query; 14 registered
 commands / 4 registered queries — unchanged by every Repository slice. Business authority remains
@@ -261,10 +271,18 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 - **`commitMonthlyPlan` still has unchecked multi-key persistence.** In `js/people/monthly-plan.js` it
   awaits `persist()` and `persistMonthlyPlans()` without inspecting either result — the same class of
   defect SPR-079 fixed elsewhere. This is a known, unaddressed residual.
-- **Smart Import undo leaves in-memory state ahead of storage on a failed save.** The completion marker
-  is cleared so an immediate retry works, but the record removals stay applied in memory while storage
-  holds whatever was written. This is explicitly **not** a rollback; reloading returns to the last
-  successfully persisted state. Unresolved.
+- **Smart Import undo has an unresolved partial-persistence case.** The undo sets its `undone` completion
+  marker *before* the write, because the marker is part of the `importBatches` payload. If the
+  `importBatches` write **succeeds** but another required dataset write **fails**, reload may preserve
+  `undone:true` while some record removals did not persist — and because the marker is also the batch
+  selector (`find(b=>!b.undone)`), **the batch may then be unavailable for retry after reload**.
+  **Immediate retry is available only where the failure branch clears the in-memory completion marker
+  before reload**; once a divergent state has been reloaded, that path is gone. This is explicitly
+  **not** a rollback: the record removals stay applied in memory and whatever the fan-out wrote stays
+  written. Unresolved.
+- **Smart Import undo has no pre-operation backup.** Employee Merge and Smart Import **commit** each
+  snapshot a pre-operation safety backup before writing; **Smart Import undo does not** take an
+  equivalent snapshot, so there is no undo-specific restore point to fall back on.
 - **No backend, server-side transaction, or multi-user synchronisation exists** — the application is
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,

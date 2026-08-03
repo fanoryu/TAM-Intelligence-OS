@@ -270,13 +270,19 @@ Since SPR-081 the posting path:
 - **resolves the finance transaction before mutating**, via a forward lookup plus a narrow reverse
   fallback (payroll-sourced only, exact `payrollPlanId`, exact period). The reverse fallback resolves
   **only when exactly one candidate exists**; a reverse-matched transaction has its forward linkage
-  restored — with a `transaction-relinked` history entry — instead of being duplicated. This closes a
-  runtime-proven duplicate-on-retry path that previously doubled a payroll;
+  restored — with a `transaction-relinked` history entry — instead of being duplicated;
 - **never guesses an ambiguous match.** More than one candidate yields a typed
   `PayrollTransactionAmbiguous` skip listing every candidate; the row stays uncommitted and no third
   transaction is created.
 
 **None of this introduced atomicity or rollback.** The four writes are still sequential.
+
+**The two SPR-080 failure modes are not equally addressed — neither should be described as "closed".**
+
+| SPR-080 scenario | Current disposition |
+|---|---|
+| **Scenario A** — duplicate finance transaction on retry (payroll-plans write failed, transactions write succeeded; the retry could not see the orphaned transaction and created a second one, doubling the payroll) | **Prevented on retry** by the unique reverse transaction lookup: the existing transaction is resolved and relinked instead of duplicated. Prevention applies to the retry path; it does not make the original posting atomic |
+| **Scenario C** — overtime paid twice (overtime write failed after the plan and transaction writes landed, leaving the overtime `Approved` and eligible for a later month) | **Detected before reuse** as a Critical `payroll-overtime-uncommitted` finding. **Not automatically repaired and not universally blocked** — nothing prevents that overtime from being included in a later payroll. The finding is advisory and requires a human to act |
 
 ### Multi-dataset persistence (SPR-079)
 
@@ -284,7 +290,11 @@ Since SPR-081 the posting path:
 Merge and Smart Import no longer report false success: a failed save shows a message stating the operation
 did not complete, records no success audit entry, and preserves the pre-operation safety backup. Multi-key
 saves remain **non-atomic** — a failure means the operation did not complete, **not** that nothing was
-written — and reload reads whatever successfully persisted.
+written. **Reload reads whatever storage keys successfully persisted. It does not restore a complete
+prior state.**
+
+Employee Merge and Smart Import **commit** each snapshot a pre-operation safety backup before writing.
+**Smart Import undo does not** take an equivalent pre-operation snapshot.
 
 ### Integrity checker
 
@@ -293,10 +303,11 @@ SPR-081, both **Critical**:
 
 | Rule | Detects |
 |---|---|
-| `payroll-orphan-transaction` | a payroll-sourced Finance transaction whose linked payroll plan is not committed — the residue of a partial posting |
+| `payroll-orphan-transaction` | a payroll-sourced Finance transaction whose referenced `PayrollPlan` is **either not `Committed`** — the residue of a partial posting — **or does not link back to that transaction**. Both broken-linkage directions fire the rule; a row is healthy only when it is committed **and** linked back |
 | `payroll-overtime-uncommitted` | committed payroll whose linked Overtime is still `Approved`, which was runtime-proven to be re-included in the next month's generated payroll |
 
-Both **detect only and repair nothing.** They report that a partial state exists and where it is.
+Both **detect only and repair nothing.** They report that a partial state exists and where it is, and
+neither blocks the underlying operation.
 
 ### Compound persistence: current state
 
@@ -312,15 +323,25 @@ Both **detect only and repair nothing.** They report that a partial state exists
 | Repair of partial states | **none** — manual review may still be required |
 
 Not every possible partial Payroll state is automatically detectable or repairable. The two failure modes
-closed in SPR-081 are the two proven by SPR-080 runtime discovery.
+**addressed** in SPR-081 are the two proven by SPR-080 runtime discovery — one **prevented on retry**
+(Scenario A), one **detected but neither repaired nor blocked** (Scenario C). Neither is "closed" in the
+sense of being made impossible.
 
 **Known residuals.**
 
 - `commitMonthlyPlan` (`js/people/monthly-plan.js`) still awaits `persist()` and `persistMonthlyPlans()`
   **without inspecting either result** — the same class of defect SPR-079 fixed elsewhere. Unaddressed.
-- **Smart Import undo** leaves in-memory state ahead of storage on a failed save. The completion marker is
-  cleared so an immediate retry works, but the record removals stay applied in memory while storage holds
-  whatever was written. Explicitly **not** a rollback; reloading returns to the last persisted state.
+- **Smart Import undo has an unresolved partial-persistence case.** The `undone` marker is set *before*
+  the write, because it is part of the `importBatches` payload. If the `importBatches` write **succeeds**
+  but another required dataset write **fails**, reload may preserve `undone:true` while some record
+  removals did not persist; because the marker is also the batch selector (`find(b=>!b.undone)`), **the
+  batch may then be unavailable for retry after reload**. **Immediate retry is available only where the
+  failure branch clears the in-memory completion marker before reload** — once a divergent state has been
+  reloaded, that path is gone. Explicitly **not** a rollback: the record removals stay applied in memory
+  and whatever the fan-out wrote stays written. **Reload reads whatever storage keys successfully
+  persisted; it does not restore a complete prior state.**
+- **Smart Import undo takes no pre-operation backup.** Employee Merge and Smart Import commit each
+  snapshot one before writing; the undo path does not, so there is no undo-specific restore point.
 - There is **no backend, server-side transaction, or multi-user synchronisation**, so cross-key atomicity
   cannot be delegated to a server. Backend remains prohibited by [`CLAUDE.md`](CLAUDE.md) §4.3.
 
