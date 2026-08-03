@@ -1,64 +1,81 @@
-# TAM Intelligence OS v2.8.2 — Honest Persistence Results
+# TAM Intelligence OS v2.8.3 — Payroll Posting Integrity
 
-**Release Name:** Honest Persistence Results
+**Release Name:** Payroll Posting Integrity
 
 ## Summary
-A correctness release from one bounded sprint, **SPR-079**. Operations that save several datasets at
-once previously reported success even when the browser rejected one or more writes. They now inspect
-every result and report failure honestly.
+A correctness release from one bounded sprint, **SPR-081**. Posting a payroll period previously ignored
+whether its writes actually succeeded. It could report success after a failed posting, and two failure
+modes proven during discovery (SPR-080) could quietly cost or double real money. Posting now inspects
+every result, reports failure honestly, refuses to guess an ambiguous match, and Integrity Check
+surfaces the two partial states that previously went undetected.
 
 No schema change, no new or renamed storage key, no data migration, and **no change to how or when data
 is written**. No historical record is rewritten.
 
-> **This release adds no atomicity and no rollback.** Saving several datasets writes one storage key per
-> dataset, and the browser provides atomicity for a single key only. A failure therefore means *the
-> operation did not complete successfully* — **not** *nothing was written*. Earlier writes in a failing
-> sequence may well have persisted. Reloading reloads the state that was successfully persisted.
-> Because a multi-dataset save may partially succeed, manual review — or restoration from the
-> pre-operation backup — may still be required.
+> **This release adds no atomicity and no rollback.** Payroll posting still writes four storage keys
+> sequentially — payroll plans, monthly plan, overtime, then finance transactions — and the browser
+> provides atomicity for a single key only. A failure therefore means *the posting did not complete
+> successfully* — **not** *nothing was written*. Earlier writes in the sequence may well have persisted.
+> Reloading reloads the state that was successfully persisted. **No rollback or compensating action was
+> introduced.** Manual review — or restoration from the pre-operation backup — may still be required.
 
 ## Changed
-- **`saveAllData()` reports failure honestly.** The shared fan-out used by Smart Import and employee
-  merge performs 14 writes. It previously discarded every underlying result and returned success
-  unconditionally; it now returns success only when **all 14** writes succeeded. The boolean contract is
-  unchanged, so no caller signature had to widen. Failing dataset names go to the console; the storage
-  layer already surfaces each failure to the user, so no duplicate notification was added.
-- **Employee merge no longer reports false success.** A failed save shows a clear message instead of the
-  "Merged…" confirmation, clears no completion state, and keeps the pre-merge safety backup. Retrying is
-  safe — a repeated merge over the same records is idempotent.
-- **Smart Import commit no longer writes a success audit entry after a failed save.** The `import.commit`
-  audit record is written only after every write has succeeded. On failure the wizard stays on the review
-  step with the parsed model intact, does not navigate to the results screen, and shows no success
-  message. The pre-import safety backup is preserved.
-- **Smart Import undo remains retryable after a failed save.** The `undone` flag is both the completion
-  marker and the selector used to find the batch, so leaving it set after a failed write previously
-  blocked every further attempt for the rest of the session — the next click reported "No Smart Import
-  batch available to undo" and never reached storage again. The failure path now clears that marker, so
-  an immediate retry works once storage recovers. Only the marker is cleared; this is **not** a rollback.
+- **Posting inspects all four persistence results.** `commitReadyPayroll` captures and strictly inspects
+  every one of its four writes. Success requires all four. Failure returns a typed outcome naming the
+  first failed step in the fixed write order, the steps that completed, and that partial persistence
+  occurred. The write order and the write mechanics themselves are unchanged.
+- **A failed posting writes no success audit entry.** The audit trail records what actually happened.
+- **A failed posting shows no completion behavior.** The workspace Post handler previously ran
+  `sel.clear()` and `closeModal()` on the same line as the posting call, before the result was inspected.
+  The result is now inspected first; the success toast and the posted-vs-skipped summary are on the
+  success path only.
+- **Selected Payroll rows remain visible after a failed posting.** Clearing the selection is completion
+  behavior — it discarded which rows the user was posting, exactly when they were being told to review
+  the data manually. The failure branch now retains the selection so the same rows stay checked after
+  the re-render. It closes the modal explicitly because `render()` rebuilds the workspace beneath it.
+  The locked branch keeps its existing clear-and-close behavior and its single warning.
+- **Retry after the orphan-transaction failure reuses the existing Finance transaction.** When the
+  payroll-plans write failed and the transactions write succeeded, a reload left a real transaction
+  carrying `payrollPlanId` while the plan was back at Ready with no forward link. Lookup resolved only
+  through that forward link, so a retry created a **second** transaction and doubled the payroll — with
+  no integrity finding beforehand. Lookup keeps its forward resolution and gains a narrow reverse
+  fallback: payroll-sourced only, exact `payrollPlanId`, exact period. A reverse-matched transaction has
+  its forward linkage restored, with a `transaction-relinked` history entry, instead of being duplicated.
+- **Ambiguous Finance transaction matches are never guessed.** Resolution distinguishes resolved / none /
+  ambiguous, so a caller that may **create** a transaction can never mistake ambiguity for absence.
+  Posting resolves the transaction **before** mutating, so an ambiguous row is skipped uncommitted with a
+  `PayrollTransactionAmbiguous` reason listing every candidate. It never picks one and never adds a third.
+
+## Added
+- **Integrity Check reports orphan Payroll transactions as Critical.** A payroll-sourced Finance
+  transaction whose linked payroll plan is not committed — the residue of a partial posting — is now
+  surfaced rather than going unnoticed.
+- **Integrity Check reports committed Payroll whose linked Overtime is still Approved as Critical.**
+  When the overtime write failed after the payroll and transaction writes landed, the linked overtime
+  stayed Approved and was runtime-proven to be re-included in the next month's generated payroll —
+  paying it twice. No rule previously detected this.
 
 ## Compatibility & Data Safety
 - `SCHEMA_VERSION`: **unchanged (6)**. Storage keys: **unchanged (15)**. No migration was added or re-run.
-- **No persisted data shape changed.** This release changes result *reporting*, not what is written.
-- Pre-operation safety backups are preserved in every failure path.
-- Failure messages state that the operation did not complete. They deliberately never claim a rollback,
-  full restoration, or that nothing was written. Reloading reloads the state that was successfully
-  persisted; because a multi-dataset save may partially succeed, manual review — or restoration from
-  the pre-operation backup — may still be required.
+- **No persisted data shape changed.** This release changes result *inspection*, transaction *resolution*,
+  and *detection* — not what is written or in what order.
+- Committed payroll remains immutable; no committed total or posted transaction is modified.
+- Failure messages state that the posting did not complete. They deliberately never claim a rollback,
+  full restoration, or that nothing was written.
 - No coordinator, unit of work, transaction manager, batch persistence, journal, recovery marker, or
   retry framework was introduced. The application remains client-only per `CLAUDE.md` §4.3.
 
 ## Known Limitations
-- **Payroll posting is unchanged and remains non-atomic.** Posting a payroll period still writes four
-  datasets sequentially — payroll plans, monthly plan, overtime, then finance transactions — and still
-  does not check those results. If one write fails, the period can be left partially posted. Depending on
-  which write fails, the result may be a committed payroll with no finance transaction (surfaced by
-  **Settings → Run Integrity Check** as a critical finding), or a partially linked period that Integrity
-  Check does not currently surface. **No coordinated rollback exists.** Manual review is required.
-  Discovery for this work is complete (SPR-080); the corrective sprint is not part of v2.8.2.
-- **Nothing in Payroll posting was fixed in this release.** In particular, the two silent partial-posting
-  paths identified during discovery — a duplicate finance transaction on retry after one failure mode,
-  and overtime that can be re-included in a later month after another — are **present in v2.8.2 exactly
-  as in v2.8.1**, and are the subject of the next sprint.
+- **Payroll posting is still not atomic.** It still writes four storage keys sequentially. Checking the
+  results makes failure *visible*; it does not make the operation all-or-nothing.
+- **No rollback or compensation exists.** Nothing undoes the writes that already landed when a later
+  write fails.
+- **Integrity Check detects but does not repair.** The two new findings report that a partial state
+  exists and where it is. They do not fix it.
+- **Not every possible Payroll partial state is automatically repairable.** The two failure modes closed
+  here are the two proven by SPR-080 discovery. This release does not claim to detect or remediate every
+  combination of the four writes failing. **Manual review may still be required after partial
+  persistence.**
 - Payroll rows persisted by the retired Payroll Planning path keep a non-canonical stored value. They are
   read correctly everywhere; a remediation migration remains unauthorised.
 - Supplemental source remains **overtime only**.
@@ -66,28 +83,31 @@ is written**. No historical record is rewritten.
 - The tracked company workbook remains a documented, accepted exception (untouched).
 
 ## QA
-- Build: `dist/tam-intelligence-os-v2.8.2.html`, byte-identical on rebuild from clean `main`.
-- Verify: **1136 checks** — no weakened checks.
-- Runtime: **61** (`saveAllData` result integrity) + **67** (Contract renewal) + **72** (Payroll committed
-  state) = **200**. The `saveAllData` harness covers all-succeed; first, middle, final and multiple write
-  failures; a throwing write; each caller's success and failure behaviour; backup survival; undo marker
-  clearing; immediate retry; and retry after reload. It also asserts that partial persistence is **real**
-  rather than hidden, and that no failure message claims a rollback.
+- Build: `dist/tam-intelligence-os-v2.8.3.html`, byte-identical on rebuild from clean `main`.
+- Verify: **1212 checks** — no weakened checks.
+- Runtime: **106** (Payroll posting) + **61** (`saveAllData` result integrity) + **67** (Contract
+  renewal) + **72** (Payroll committed state) = **306**. The payroll-posting harness drives the live
+  engine, selection set, and UI seams: all-succeed; each of the four writes failing; the orphan-retry
+  scenario proven not to duplicate; the overtime-still-Approved scenario proven to be detected; ambiguous
+  resolution proven to skip rather than guess; and failure proven to retain the selection and emit only
+  the manual-review error while success preserves the full completion UX including the skip summary.
+  Branch ordering is proven by index — nothing completion-shaped sits between the posting call and the
+  failure branch.
 - Browser: modular source and portable build both boot with **zero console errors**; a fresh install
   seeds no data.
 
 ## Git Information
-- Release tag: `v2.8.2`
+- Release tag: `v2.8.3` *(not yet created)*
 - Release branch: `main`
 - Publication channel: GitHub Releases
 - Contributing commits:
-  - `cdce6df` — fix(persistence): make saveAllData report failure honestly (SPR-079)
-  - `3dcc783` — fix(import): clear the undo completion marker on a failed persist (SPR-079)
+  - `fc4f590` — fix(payroll): check posting results and detect partial posting states (SPR-081)
+  - `516bc67` — fix(payroll): inspect posting result before any completion behaviour (SPR-081)
 
 ## Release Asset
-- Asset: `tam-intelligence-os-v2.8.2.html`
-- Size: 898,118 bytes
-- SHA-256: `a5b6dfaef5d2f949841dcafee9c2981ec43725ffb3f39f1e10ef9dbf9cdc88cb`
+- Asset: `tam-intelligence-os-v2.8.3.html`
+- Size: 908,988 bytes
+- SHA-256: `b71e1832989082c4aa2ea218dd0200ef16c9b59319b53efc78c3c2a2c1b85818`
 
 The asset is built from `main` by `tools/build-single-file.js` and is byte-reproducible: rebuilding from
 the same source produces an identical file, so the checksum above verifies any downloaded copy.
