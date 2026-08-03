@@ -1,5 +1,60 @@
 # Changelog
 
+## 2.8.1 — Single Payroll Posting Authority
+
+**Type:** Correctness release (SPR-077 + SPR-078). **No** schema, storage-key, persisted-data, or
+persistence-mechanics change (still 15 keys, `SCHEMA_VERSION` 6); no migration added or re-run; no
+historical record is rewritten.
+
+> `2.8.0` ("Aggregate-Owned Contract Renewal") was merged to `main` but never tagged or published. Its
+> content is included here.
+
+### Added
+- `ContractRenewalAggregate` — eighth aggregate boundary, third Contract boundary. A pure decision
+  boundary: it decides renewal eligibility and authors the successor's business shape, the predecessor's
+  canonical `Renewed` status, and both history note texts. It never mutates, generates ids/timestamps, or
+  persists.
+- `contract.renewal.execute` — one operational command; no Domain facade change.
+- `renewContract` handler and `requestContractRenewal` UI seam — the handler owns id, timestamps, the
+  history append, one `ContractRepository.save()`, strict result inspection, in-memory rollback, and the
+  typed result.
+- `isPayrollCommitted()` in `js/people/people-core.js` — one canonical committed-state predicate.
+  Canonical `'Committed'`; the legacy lowercase value is accepted for reads only.
+- Runtime harnesses `tools/verify-renewal-runtime.js` (67 checks) and
+  `tools/verify-payroll-committed-runtime.js` (72 checks).
+
+### Changed
+- Contract renewal reports success only when the write succeeds. The result of `persistContracts()` was
+  previously discarded, so a failed save still closed the modal, showed "Contract renewed", and navigated
+  to the successor while nothing had been stored. A failed save now fully restores `State.contracts`,
+  keeps the modal open, and reports that nothing changed.
+- Renew is offered only from the non-terminal statuses (`Draft`, `Active`). Renewing an already `Renewed`
+  contract previously overwrote `renewedToId` and orphaned the first successor. Expired contracts remain
+  renewable (`Expired` is derived; the stored status stays `Active`).
+- Legacy Payroll Planning retired. The screen had been unreachable since v2.5.0; its posting function was
+  dead code and a divergent authority that bypassed the period lock, commit blockers, and Approved gate,
+  wrote no audit entry, never set `committedAt`, and wrote a status value outside `PAYROLL_STATUSES`.
+  `commitReadyPayroll` is now the sole live Payroll posting path.
+- All fourteen live committed-payroll reads now use the shared predicate, so payroll committed through
+  the retired path is recognised in reports, Integrity Check, and stage display instead of showing as
+  "Draft".
+- The contract-cancellation warning fires again. It previously checked only the legacy value and so never
+  appeared for payroll posted through the Payroll Workspace.
+- Governance: `ARCHITECTURE.md`, `AI_CONTEXT.md`, and the ARCH-007 backlog entry corrected. Accepted
+  decision records (ADR-013, DPR-009, ECR-001) left immutable per `CLAUDE.md` §18.
+- `APP_VERSION` → `2.8.1`, `APP_RELEASE_NAME` → "Single Payroll Posting Authority".
+
+### Removed
+- Dead legacy Payroll Planning surface: `commitPayroll`, `renderPayrollPlanning`, `renderPayrollDraft`,
+  `payrollRowHTML`, `generatePayrollRows`, `buildPayrollTxn`, `payrollAmount`, `samePayrollComponents` —
+  none had an external consumer. `js/people/payroll-planning.js` is retained for `num()` and
+  `ensureMonthlyPlan()`, which are defined nowhere else.
+
+### Known limitation
+- Persistence mechanics are unchanged and remain non-atomic: `commitReadyPayroll` still writes four
+  stores sequentially and discards their results. No cross-key atomicity is claimed. This is the open
+  compound-persistence question recorded in ATR-011.
+
 ## 2.7.3 — Supplemental-Aware Payroll History
 
 **Type:** Reporting/presentation patch. **No** persistence, finance, schema, or storage-key change

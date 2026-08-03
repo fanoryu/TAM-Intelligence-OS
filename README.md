@@ -6,7 +6,7 @@ dependencies.
 
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.7.3-blue)
+![Version](https://img.shields.io/badge/version-2.8.1-blue)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
@@ -45,37 +45,39 @@ Design principles:
 
 ## Current release
 
-**v2.7.3 — Supplemental-Aware Payroll History** · `SCHEMA_VERSION` 6
+**v2.8.1 — Single Payroll Posting Authority** · `SCHEMA_VERSION` 6
 
-A reporting/presentation patch so Payroll History correctly represents months that also have a
-Supplemental Payment. No new storage key, no schema change, no persistence or finance behaviour change;
-no historical record is rewritten.
+A correctness release that gives Contract renewal a proper business boundary and reduces Payroll posting
+to exactly one authoritative path. No schema change, no new storage key, no data migration, and no
+change to persistence mechanics.
 
-- **Supplemental-aware Payroll History** — the Employee Detail Payroll History table now shows
-  **Base Payroll · Payroll OT · Supplemental · Total Compensation · Stage**, so overtime paid after
-  payroll posting is no longer invisible.
-- **`payrollTotalCompensation()` read-model** — a read-only aggregate: Total Compensation = immutable
-  Base Payroll + Payroll Overtime + committed (Posted/Executed) supplementals. The base payroll and its
-  finance transaction are never modified or redefined.
-- **Committed vs pending** — only Posted/Executed supplementals count toward Total Compensation;
-  Draft/Review/Approved appear as a subtle "Pending" figure and are excluded; Cancelled is ignored. The
-  Supplemental cell also shows a document count (e.g. "2 Supplementals").
-- **Clearer integrity wording** — a legacy (pre-v2.7.1) supplemental with no frozen source snapshot is
-  now an informational finding (display-only, payment unaffected), distinct from one approved under
-  v2.7.1+ that is genuinely missing its snapshot (a warning to investigate).
+- **Aggregate-owned Contract renewal** — renewal is no longer authored inside the renewal form. A
+  dedicated business boundary decides whether a contract may be renewed and defines the successor
+  contract, the predecessor's `Renewed` status, and both history entries; the handler applies them and
+  persists once through the Contract Repository.
+- **Renewal reports success only when the save succeeds** — previously a failed write still closed the
+  form, showed "Contract renewed", and navigated to the new contract while nothing had been stored. A
+  failed save now fully undoes the renewal in memory and says plainly that nothing changed.
+- **Renew offered only where it is valid** — Draft and Active contracts. Renewing an already-renewed
+  contract previously created a second successor and silently orphaned the first.
+- **One Payroll posting path** — the legacy Payroll Planning screen, unreachable since v2.5.0, and its
+  leftover posting code are retired. Payroll Workspace posting is now the single authority, so the
+  period lock, commit blockers, and the Approved gate can no longer be bypassed.
+- **Committed payroll recognised consistently** — one shared predicate is used by every screen. Payroll
+  committed through the retired path is now correctly recognised everywhere (reports, Integrity Check,
+  and the contract-cancellation warning) instead of appearing as "Draft".
+- **Contract-cancellation warning restored** — the committed-payroll warning previously checked only the
+  legacy value, so it never appeared for payroll posted through the Payroll Workspace.
 
-Builds on the **v2.7.2 Persistence & Transactional Integrity** patch and the **v2.7.1 Payroll Integrity
-& Reporting Foundation**. Download the portable build from the release page:
-**[Release v2.7.3](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.3)** →
-`tam-intelligence-os-v2.7.3.html`. See [`CHANGELOG.md`](CHANGELOG.md) and
-[`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
+Builds on the **v2.7.3 Supplemental-Aware Payroll History** patch. See [`CHANGELOG.md`](CHANGELOG.md)
+and [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
 
 Two supported outputs:
 
 | Output | What it is | Where |
 |---|---|---|
-| **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (45 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/`), one shared global scope, no ES modules | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.7.3.html` |
+| **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (64 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/ domain/ platform/ transport/ repository/ cli/`), one shared global scope, no ES modules | project root |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.1.html` |
 
 ---
 
@@ -154,7 +156,7 @@ flowchart LR
   subgraph Source["Modular source"]
     IDX["index.html<br/>(ordered script tags)"]
     CSS["css/ (5 files)"]
-    JS["js/ (45 classic-script modules)<br/>core · ui · finance · people · import · analytics"]
+    JS["js/ (64 classic-script modules)<br/>core · ui · finance · people · import · analytics<br/>domain · platform · transport · repository · cli"]
   end
   subgraph Runtime["Browser runtime (client-only)"]
     STATE["State (in-memory)"]
@@ -163,9 +165,9 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(188 checks)"]
+    VERIFY["tools/verify-build.js<br/>(1088 checks)"]
   end
-  DIST["dist/tam-intelligence-os-v2.7.3.html<br/>(portable single file)"]
+  DIST["dist/tam-intelligence-os-v2.8.1.html<br/>(portable single file)"]
 
   IDX --> JS --> STATE --> LS
   CSS --> IDX
@@ -196,7 +198,7 @@ index.html                         Modular entry: meta, external deps, pre-paint
                                    script, ordered CSS <link> + JS <script> tags, mounts
 css/                               Extracted styles (load order fixed)
   tokens.css base.css shell.css components.css charts.css
-js/                                45 classic-script modules, one shared global scope
+js/                                64 classic-script modules, one shared global scope
   core/       constants, utils, storage-adapter, state, state-load-migrations,
               domain-services, hr-persistence-portability, stabilization,
               onboarding-reset, app-bootstrap
@@ -218,7 +220,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.7.3.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.8.1.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
@@ -244,8 +246,8 @@ python -m http.server 8000
 ```
 
 Then open <http://localhost:8000>. Any static server works (`npx serve`, VS Code Live Server). The
-portable build in `dist/` — or the asset from
-[Release v2.7.3](https://github.com/fanoryu/TAM-Intelligence-OS/releases/tag/v2.7.3) — can also be
+portable build in `dist/` — or the asset from the
+[latest release](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest) — can also be
 opened directly in a browser.
 
 ---
@@ -394,6 +396,10 @@ changes. Browsing `docs/`? Start at the [`docs/` index](docs/README.md).
 Directions only — no release numbers are assigned unless already approved.
 
 **Released**
+- Single Payroll Posting Authority — legacy Payroll Planning retired, one canonical committed-state
+  predicate, contract-cancellation warning restored (v2.8.1)
+- Aggregate-Owned Contract Renewal — `ContractRenewalAggregate`, checked Repository persistence,
+  in-memory rollback, no false-success UI (v2.8.1)
 - Supplemental-Aware Payroll History — `payrollTotalCompensation()` read-model, Total Compensation
   reporting, pending/committed distinction (v2.7.3)
 - Persistence & Transactional Integrity — strict persistence results, atomic supplemental posting,
