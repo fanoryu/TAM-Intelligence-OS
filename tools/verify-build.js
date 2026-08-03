@@ -241,7 +241,7 @@ if (fs.existsSync(prevDist)) {
 // dist/ holds exactly one release artifact — the current version (release dist-swap invariant).
 const distArtifacts = fs.readdirSync(path.join(root, 'dist')).filter((f)=>/^tam-intelligence-os-v[\d.]+\.html$/.test(f));
 check(distArtifacts.length === 1 && distArtifacts[0] === 'tam-intelligence-os-v' + meta.version + '.html', 'dist/ holds exactly one release artifact — the current v' + meta.version);
-check(meta.version === '2.8.1', 'APP_VERSION is 2.8.1 (this development release)');
+check(meta.version === '2.8.2', 'APP_VERSION is 2.8.2 (this development release)');
 // v2.7.1 polishing pass — snapshot metadata, single historical API, compact integrity badge.
 check(dist.includes('function overtimeSnapshotMeta('), 'overtime snapshot audit metadata helper present');
 check((dist.match(/overtimeSnapshotMeta:\s*overtimeSnapshotMeta\(/g)||[]).length === 1, 'the ONE remaining commit pipeline stores overtimeSnapshotMeta {recordCount,totalHours}');
@@ -1051,6 +1051,97 @@ check(aggregateDefs === 8, 'aggregate count is unchanged by SPR-078 (still eight
 ].forEach(([label,re])=> check(!re.test(srcJs), 'SPR-078 introduces no '+label));
 check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'SCHEMA_VERSION remains 6');
 check(fs.existsSync(path.join(root,'tools','verify-payroll-committed-runtime.js')), 'SPR-078 runtime harness present: tools/verify-payroll-committed-runtime.js');
+
+// SPR-079 — UNIFIED PERSISTENCE RESULT INTEGRITY (saveAllData honesty).
+console.log('== SPR-079 saveAllData RESULT INTEGRITY (no false success) ==');
+const stabSrc079 = read(path.join(root,'js','core','stabilization.js'));
+const sadBody = stripComments((stabSrc079.match(/async function saveAllData\(\)\{[\s\S]*?\n\}/)||[''])[0]);
+check(sadBody !== '', 'saveAllData() is defined in js/core/stabilization.js');
+// (a) NO UNCONDITIONAL SUCCESS.
+check(!/\}\s*$/.test('') && !/await Promise\.all\(\[[\s\S]*?\]\);\s*return true;/.test(sadBody), 'saveAllData() no longer returns unconditional true after the fan-out');
+check((sadBody.match(/return true;/g)||[]).length === 1 && /return false;/.test(sadBody), 'saveAllData() has exactly one success return and at least one failure return');
+// (b) EVERY REQUIRED RESULT IS AWAITED AND INSPECTED.
+check(/const results = await Promise\.all\(\[/.test(sadBody), 'saveAllData() awaits every write and captures the results');
+check(/results\[i\] !== true/.test(sadBody), 'saveAllData() inspects every result strictly (!== true, no truthy ambiguity)');
+check(/if\(failed\.length\)\{[\s\S]*?return false;/.test(sadBody), 'saveAllData() returns false when any required write fails');
+// (c) THE FAN-OUT STILL COVERS THE SAME DATASETS, IN A DETERMINISTIC ORDER.
+check(/persist\(\), saveSettings\(\), saveBackups\(\)/.test(sadBody) && /Object\.keys\(HR_KEYS\)\.map\(k=>persistHR\(k\)\)/.test(sadBody), 'saveAllData() invokes the same authorized persistence operations');
+check(/const labels = \['transactions', 'settings', 'backups', \.\.\.Object\.keys\(HR_KEYS\)\]/.test(sadBody), 'saveAllData() labels are positionally aligned with the promise list (deterministic ordering)');
+// (d) NO ATOMICITY / ROLLBACK CLAIM, AND NO NEW MACHINERY.
+// NOTE: the fan-out legitimately labels one dataset 'transactions', so the
+// transaction-abstraction probe targets identifiers, never that data label.
+[['retry', /\bretry\b|setTimeout|attempt\s*\+\+/i], ['compensation/rollback', /rollback|compensat/i],
+ ['journal', /journal|writeAhead/i], ['recovery marker', /recoveryMarker|operationId/i],
+ ['transaction abstraction', /unitOfWork|UnitOfWork|beginTransaction|commitTransaction|TransactionCoordinator/],
+ ['StorageAdapter access', /StorageAdapter/]
+].forEach(([label,re])=> check(!re.test(sadBody), 'saveAllData() introduces no '+label));
+// It must not duplicate the user-facing failure notification StorageAdapter already emits.
+check(!/toast\(|showError\(|showWarning\(/.test(sadBody), 'saveAllData() emits no duplicate user-facing notification (console only)');
+check(/console\.error\(/.test(sadBody), 'saveAllData() reports which datasets failed to the console');
+
+// (e) EVERY LIVE CALLER AWAITS AND CHECKS THE RESULT.
+const CALLER_FILES_079 = ['people/employee-dedup.js','import/smart-import-commit.js'];
+const uncheckedCallers = [];
+CALLER_FILES_079.forEach((f)=>{
+  const code = stripComments(read(path.join(root,'js',f)));
+  // Every saveAllData() call must be awaited INTO a variable that is then tested.
+  (code.match(/^.*saveAllData\(\).*$/gm)||[]).forEach((line)=>{
+    if(!/=\s*await saveAllData\(\)/.test(line)) uncheckedCallers.push(f+': '+line.trim());
+  });
+});
+check(uncheckedCallers.length === 0, 'every live caller awaits saveAllData() into a checked variable (unchecked: '+(uncheckedCallers.join(' ;; ')||'none')+')');
+check((stripComments(srcJs).match(/await saveAllData\(\)/g)||[]).length === 3, 'exactly three live saveAllData() call sites exist (merge, import commit, import undo)');
+check((stripComments(srcJs).match(/=\s*await saveAllData\(\)/g)||[]).length === 3, 'all three call sites capture the result');
+
+// (f) NO SUCCESS UI / AUDIT / COMPLETION AFTER FAILURE.
+const dedupSrc079 = read(path.join(root,'js','people','employee-dedup.js'));
+const siCommitSrc079 = read(path.join(root,'js','import','smart-import-commit.js'));
+const siUiSrc079 = read(path.join(root,'js','import','smart-import-ui.js'));
+// Employee merge: typed result; UI shows success only on ok===true.
+check(/return \{ ok: saved === true, audit: auditRec \};/.test(dedupSrc079), 'mergeEmployeeGroup returns a typed result carrying the persistence outcome');
+check(/if\(res\.ok !== true\)\{[\s\S]{0,600}showError\(/.test(dedupSrc079), 'employee merge reports failure with showError before any success path');
+const dedupFailBlock = (stripComments(dedupSrc079).match(/if\(res\.ok !== true\)\{[\s\S]*?\n    \}/)||[''])[0];
+check(dedupFailBlock !== '' && !/showSuccess\(/.test(dedupFailBlock), 'employee merge shows no success message on failure');
+check(dedupFailBlock !== '' && !/delete State\.dedupCanon/.test(dedupFailBlock), 'employee merge clears no completion state on failure');
+// Smart Import commit: the success audit entry is written only after success.
+check(/if\(saved !== true\) return \{ ok:false, audit \};/.test(siCommitSrc079), 'commitSmartImport returns failure before writing the success audit entry');
+const siCommitBody079 = stripComments((siCommitSrc079.match(/async function commitSmartImport\(model\)\{[\s\S]*?\n\}/)||[''])[0]);
+check(/if\(saved !== true\) return[\s\S]*?logActivity\(\{type:'import\.commit'/.test(siCommitBody079), 'the import.commit audit entry is unreachable on a failed persist');
+// Smart Import UI: no success, no navigation, model retained for retry.
+// Extract the failure branch from its opening brace to its `return;`, independent
+// of indentation depth.
+const siUiFail079 = (stripComments(siUiSrc079).match(/if\(res\.ok !== true\)\{[\s\S]*?return;/)||[''])[0];
+check(siUiFail079 !== '', 'the Smart Import UI has an explicit failure branch');
+[['success message', /showSuccess\(/], ['results navigation', /State\.view='importResults'/],
+ ['model discard (retry blocked)', /State\.smartImport=null/], ['completion step', /State\.smartStep=9/]
+].forEach(([label,re])=> check(!re.test(siUiFail079), 'Smart Import failure branch performs no '+label));
+check(/showError\(/.test(siUiFail079), 'the Smart Import failure branch reports the failure to the user');
+// Smart Import undo: failure branch, no success toast.
+const siUndo079 = stripComments((siCommitSrc079.match(/async function undoLastSmartImport\(\)\{[\s\S]*?\n\}/)||[''])[0]);
+check(/if\(saved !== true\)\{[\s\S]*?showError\([\s\S]*?return;/.test(siUndo079), 'undoLastSmartImport reports failure and returns before its success path');
+const siUndoFail079 = (siUndo079.match(/if\(saved !== true\)\{[\s\S]*?\n  \}/)||[''])[0];
+check(siUndoFail079 !== '' && !/showSuccess\(/.test(siUndoFail079), 'undoLastSmartImport shows no success message on failure');
+
+// (g) FAILURE WORDING MUST NOT CLAIM A ROLLBACK (the fan-out is not atomic).
+[dedupSrc079, siCommitSrc079, siUiSrc079].forEach((src, i)=>{
+  const msgs = (stripComments(src).match(/showError\('[^']*'/g)||[]).join(' ');
+  check(!/rolled back|reverted|nothing was changed|no data was saved|undone automatically/i.test(msgs),
+    'SPR-079 failure wording claims no rollback in caller file #'+(i+1));
+});
+check(/was not completed successfully/.test(dedupSrc079) && /was not completed successfully/.test(siCommitSrc079) && /was not completed successfully/.test(siUiSrc079),
+  'every failure message states the operation was not completed successfully');
+
+// (h) SAFETY BACKUPS SURVIVE A FAILURE — no caller prunes State.backups.
+[['people/employee-dedup.js', dedupSrc079], ['import/smart-import-commit.js', siCommitSrc079]].forEach(([f,src])=>
+  check(!/State\.backups\s*=\s*State\.backups\.filter|State\.backups\.splice|State\.backups\s*=\s*\[\]/.test(stripComments(src)), 'no safety backup is removed by '+f));
+check(/State\.backups\.unshift\(\{[\s\S]{0,300}Pre-merge safety backup|State\.backups\.unshift\(\{[\s\S]{0,300}Pre-employee-merge backup/.test(dedupSrc079), 'employee merge still takes a pre-operation safety backup');
+check(/State\.backups\.unshift\(\{[\s\S]{0,300}Pre-Smart-Import backup/.test(siCommitSrc079), 'Smart Import still takes a pre-operation safety backup');
+
+// (i) SPR-079 CHANGES NOTHING ELSE.
+check(read(path.join(root,'js','core','storage-adapter.js')).indexOf('async set(key, value)') !== -1, 'StorageAdapter still exposes its unchanged single-key set()');
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'SCHEMA_VERSION remains 6');
+check(aggregateDefs === 8, 'aggregate count is unchanged by SPR-079 (still eight)');
+check(fs.existsSync(path.join(root,'tools','verify-savealldata-runtime.js')), 'SPR-079 runtime harness present: tools/verify-savealldata-runtime.js');
 
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');

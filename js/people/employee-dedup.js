@@ -57,8 +57,14 @@ async function mergeEmployeeGroup(canonicalId, duplicateIds, profileChoices){
     relinkedCounts:{contracts:relinked.contracts.length, payrollPlans:relinked.payrollPlans.length, txns:relinked.txns.length, overtime:relinked.overtime.length, adjustments:relinked.adjustments.length},
     selectedProfile:appliedProfile};
   State.employeeMerges.unshift(auditRec);
-  await saveAllData();
-  return auditRec;
+  // SPR-079 — the fan-out result is now inspected. A failed write must never be
+  // reported to the user as a completed merge. No rollback is performed and none
+  // is claimed: the merge has already been applied in memory, the pre-merge
+  // safety backup (taken and persisted above) is untouched, and reloading
+  // restores whatever was last persisted. Retry is safe — the merge is
+  // idempotent over the same canonical/duplicate ids.
+  const saved = await saveAllData();
+  return { ok: saved === true, audit: auditRec };
 }
 
 function renderEmployeeDedup(main){
@@ -106,7 +112,20 @@ function renderEmployeeDedup(main){
     let tot={contracts:0,payrollPlans:0,txns:0,overtime:0,adjustments:0}; dupIds.forEach(id=>{ const t=employeeLinkTotals(id); Object.keys(tot).forEach(k=>tot[k]+=t[k]); });
     const canon=State.employees.find(e=>e.id===canonId);
     if(!confirmAction(`Merge ${dupIds.length} duplicate record(s) into "${canon.fullName}" (${canon.employeeId})?\n\nWill relink: ${tot.contracts} contract(s), ${tot.payrollPlans} payroll plan(s), ${tot.txns} transaction(s), ${tot.overtime} overtime, ${tot.adjustments} adjustment(s).\n\nA complete backup is taken first. No records are deleted and no amounts change.`)) return;
-    const rec=await mergeEmployeeGroup(canonId, dupIds, profile);
-    if(rec){ if(State.dedupCanon) delete State.dedupCanon[key]; showSuccess(`Merged ${rec.duplicateEmployeeIds.length} duplicate(s) into ${rec.canonicalCode}. ${rec.relinkedCounts.txns} transaction(s) relinked; amounts unchanged.`, 7000); render(); }
+    const res=await mergeEmployeeGroup(canonId, dupIds, profile);
+    if(!res) return;                        // nothing to merge (unchanged behaviour)
+    if(res.ok !== true){
+      // SPR-079 — persistence failed. No success message, no completion state is
+      // cleared. Wording states the operation did not complete; it does NOT claim
+      // a rollback, because the fan-out is not atomic and earlier writes may have
+      // persisted. The pre-merge safety backup remains available.
+      showError('Some data could not be saved. The merge was not completed successfully — reload the page to return to the last saved state. A pre-merge backup was taken and is still available in Settings.', null, 9000);
+      render();
+      return;
+    }
+    const rec=res.audit;
+    if(State.dedupCanon) delete State.dedupCanon[key];
+    showSuccess(`Merged ${rec.duplicateEmployeeIds.length} duplicate(s) into ${rec.canonicalCode}. ${rec.relinkedCounts.txns} transaction(s) relinked; amounts unchanged.`, 7000);
+    render();
   }));
 }

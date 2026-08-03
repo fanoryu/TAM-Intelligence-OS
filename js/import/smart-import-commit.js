@@ -279,12 +279,19 @@ async function commitSmartImport(model){
     uniqueEmployees: Object.keys(candidateMap).length,
     counts:{employees:created.employees.length, contracts:created.contracts.length, payrollPlans:created.payrollPlans.length, txns:created.txns.length, skipped, duplicatesSkipped:dupSkipped, contractConflicts, uniqueEmployees:Object.keys(candidateMap).length}, undone:false};
   State.importBatches.unshift(audit);
-  await saveAllData();
+  // SPR-079 — the fan-out result is now inspected. A failed write must never be
+  // recorded as a completed import: the success audit entry below is written ONLY
+  // after every required write succeeded. No rollback is performed and none is
+  // claimed — the pre-import safety backup (taken and persisted above) is
+  // untouched, and reloading restores whatever was last persisted. Re-running the
+  // import is safe: duplicate employee+contract+month rows are skipped by design.
+  const saved = await saveAllData();
+  if(saved !== true) return { ok:false, audit };
   const c=audit.counts;
   logActivity({type:'import.commit', module:'Import', entity:model.fileName||'Smart Import', entityId:batchId,
     desc:`Committed — ${c.employees} employee(s), ${c.contracts} contract(s), ${c.payrollPlans} payroll plan(s), ${c.txns} transaction(s)${c.skipped?', '+c.skipped+' skipped':''}`,
     refs:{importBatchId:batchId}});
-  return audit;
+  return { ok:true, audit };
 }
 
 /* ---------- undo (Part 11) ---------- */
@@ -309,8 +316,22 @@ async function undoLastSmartImport(){
   State.employees = State.employees.filter(e=>!c.employees.includes(e.id) || refEmp.has(e.id));
   // Clean removed txn ids out of monthly plans.
   State.monthlyPlans.forEach(mp=>{ if(Array.isArray(mp.committedTxnIds)) mp.committedTxnIds = mp.committedTxnIds.filter(id=>!removeTxn.has(id)); });
+  // The `undone` completion flag must be set BEFORE the write, because it is part
+  // of the importBatches payload being persisted. SPR-079 does not move or revert
+  // it: reverting only the flag while the record removals above stay applied would
+  // misrepresent the state. On failure the flag is simply never confirmed as
+  // saved, and reloading restores the last persisted state — which is also what
+  // makes retrying the undo safe.
   batch.undone = true; batch.undoneAt = new Date().toISOString(); batch.keptTxns = pv.blockedTxns;
-  await saveAllData();
+  const saved = await saveAllData();
+  if(saved !== true){
+    // SPR-079 — no success message. Wording states the operation did not complete;
+    // it does NOT claim a rollback, because the fan-out is not atomic and earlier
+    // writes may have persisted.
+    showError('Some data could not be saved. The undo was not completed successfully — reload the page to return to the last saved state, then try again.', null, 9000);
+    render();
+    return;
+  }
   showSuccess(`Smart Import undone.${pv.blockedTxns?(' '+pv.blockedTxns+' executed/modified record(s) preserved.'):''}`, 6000);
   render();
 }
