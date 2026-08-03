@@ -245,6 +245,27 @@ function runIntegrityCheck(){
   let badRefs=0; State.monthlyPlans.forEach(m=>{ (m.committedTxnIds||[]).forEach(id=>{ if(!txIds.has(id)) badRefs++; }); });
   if(badRefs) add('warning','corrupt-plan-ref',`${badRefs} monthly-plan transaction reference(s) point to a missing transaction`);
 
+  // SPR-082 — RULE M: monthly-plan transaction with no reverse linkage. The
+  // Monthly Plan commit writes transactions FIRST and the monthly plan SECOND.
+  // If the transactions write succeeds and the monthlyPlans write fails, a
+  // reload leaves a real planned transaction carrying monthlyPlanId while the
+  // plan neither lists it in committedTxnIds nor records the commit. The
+  // existing corrupt-plan-ref rule only walks committedTxnIds, so it cannot see
+  // a transaction that was never added to that list — this direction was
+  // previously invisible.
+  //
+  // Scoped to NON-payroll transactions on purpose: payroll-sourced rows (which
+  // includes Smart Import, whose transactions are source:'payroll') are covered
+  // by payroll-orphan-transaction and payroll-missing-monthlyplan. Detection
+  // only — nothing here repairs, and the underlying operation is not blocked.
+  State.txns.filter(t=>t.source!=='payroll' && t.monthlyPlanId).forEach(t=>{
+    const mp = State.monthlyPlans.find(m=>m.id===t.monthlyPlanId);
+    if(!mp) return;                                   // missing plan is a different condition; plans are never deleted
+    if((mp.committedTxnIds||[]).includes(t.id)) return; // healthy
+    add('critical','monthlyplan-orphan-transaction',
+      `Finance transaction ${t.id} (${fmtIDR(t.planned)}, ${t.monthKey}) references monthly plan ${mp.id} (${mp.month} ${mp.year}, status ${mp.status}) but that plan does not list it as a committed row. The Monthly Plan commit did not complete. Review the plan and this transaction before committing that month again.`);
+  });
+
   // ----- Overtime integrity (v2.3.0) -----
   dupIds(State.overtimeRecords,'overtime records');
   let otBrokenEmp=0, otBrokenCt=0, otBrokenPay=0, otNegHours=0, otBadSnap=0, otOutside=0;
