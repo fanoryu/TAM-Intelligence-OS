@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.8.2 — Honest Persistence Results
+
+**Type:** Correctness patch (SPR-079). **No** schema, storage-key, persisted-data, or
+persistence-mechanics change (still 15 keys, `SCHEMA_VERSION` 6); no migration added or re-run; no
+historical record is rewritten.
+
+> **No atomicity or rollback was introduced.** Multi-dataset saves write one storage key per dataset and
+> the browser is atomic per key only, so a failure means the operation did not complete — not that
+> nothing was written.
+
+### Changed
+- `saveAllData()` inspects every one of its 14 write results and returns success only when all succeeded.
+  It previously discarded every result and returned `true` unconditionally, so callers reported success
+  after failed writes. The strict boolean contract is unchanged; failing dataset names go to the console.
+- Employee merge returns a typed result. A failed save shows a clear message instead of a merge
+  confirmation, clears no completion state, and preserves the pre-merge safety backup.
+- Smart Import commit writes its `import.commit` audit entry only after a successful save. On failure the
+  wizard stays on the review step with the parsed model intact, does not navigate to the results screen,
+  and shows no success message.
+- Smart Import undo clears its completion marker (`undone`, `undoneAt`, `keptTxns`) when the save fails.
+  Because that marker is also the batch selector, leaving it set previously blocked every further attempt
+  for the rest of the session. Clearing it restores an honest in-memory state and allows an immediate
+  retry. Only the marker is cleared — record removals stay applied and nothing is rolled back.
+- Failure messages state that the operation did not complete and point to the honest recovery path
+  (reload restores the last saved state). The verifier asserts that no failure message claims a rollback.
+
+### Added
+- `tools/verify-savealldata-runtime.js` (61 checks) — exercises all-succeed, first/middle/final/multiple
+  write failures, a throwing write, each caller's success and failure behaviour, backup survival, undo
+  marker clearing, immediate retry, and retry after reload. It asserts partial persistence is real rather
+  than hidden.
+
+### Known limitation
+- Payroll posting is **unchanged**: four sequential writes, results still unchecked, no coordinated
+  rollback. A failed write can leave a period partially posted and needing manual review. Nothing in
+  Payroll posting was fixed in this release; discovery is complete (SPR-080) and the corrective sprint
+  follows separately.
+
 ## 2.8.1 — Single Payroll Posting Authority
 
 **Type:** Correctness release (SPR-077 + SPR-078). **No** schema, storage-key, persisted-data, or
