@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TAM Intelligence OS v2.7.3</title>
+<title>TAM Intelligence OS v2.8.0</title>
 <meta name="theme-color" content="#0E1420">
 <meta name="color-scheme" content="dark light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -358,8 +358,8 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.7.3';
-const APP_RELEASE_NAME = 'Supplemental-Aware Payroll History';
+const APP_VERSION = '2.8.0';
+const APP_RELEASE_NAME = 'Aggregate-Owned Contract Renewal';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
@@ -5272,6 +5272,7 @@ function renderAbout(main){
 }
 function renderReleaseNotes(main){
   const notes = [
+    {v:'2.8.0 — Aggregate-Owned Contract Renewal', items:['Contract renewal is no longer authored inside the renewal form. A dedicated business boundary (ContractRenewalAggregate) now decides whether a contract may be renewed and defines the successor contract, the predecessor’s Renewed status, and both history notes; the handler applies them','Renewal now reports success only when the save actually succeeds. Previously a failed write still closed the form, showed “Contract renewed”, and navigated to the new contract while nothing had been stored','If saving fails, the renewal is fully undone in memory — the successor is discarded and the original contract’s status, renewal link, history entry, and timestamp are restored — the form stays open, and a clear “nothing was changed” message is shown','Renew is now offered only for Draft and Active contracts. Renewing an already-Renewed contract previously created a second successor and silently orphaned the first one by overwriting the renewal link','Renewal persists through the existing Contract Repository. Predecessor and successor live in the same contract collection, so both are written together in one save — no new transaction, coordinator, or multi-store persistence mechanism was introduced','No schema, storage-key, or persisted-data change; SCHEMA_VERSION unchanged (6). Contract overlap is still advisory only, and payroll, finance, and supplemental behavior are untouched']},
     {v:'2.7.3 — Supplemental-Aware Payroll History', items:['Payroll History (Employee Detail) now represents months that also have a Supplemental Payment. Columns are Base Payroll · Payroll OT · Supplemental · Total Compensation · Stage, so overtime paid after payroll posting is no longer invisible','New read-only reporting helper (payrollTotalCompensation): Total Compensation = immutable Base Payroll + Payroll Overtime + committed (Posted/Executed) supplementals. The base payroll and its finance transaction are never modified and never redefined','Only Posted/Executed supplementals count toward Total Compensation; Draft/Review/Approved are surfaced as a subtle "Pending" figure and excluded from the total; Cancelled is ignored. The Supplemental cell shows the amount plus a document count (e.g. "2 Supplementals")','Integrity Check wording now distinguishes a legacy (pre-v2.7.1) supplemental with no frozen source snapshot (informational, display-only, payment unaffected) from one approved under v2.7.1+ that is genuinely missing its snapshot (a warning to investigate)','Reporting/presentation only — no persistence, finance, schema, or storage-key change; SCHEMA_VERSION unchanged (6), 15 storage keys; no historical record is rewritten']},
     {v:'2.7.2 — Persistence & Transactional Integrity', items:['Fixed a critical Supplemental Payment posting bug: the shared HR persistence helper did not return its success flag, so posting always took the failure path — it rolled the finance transaction out of storage while the supplemental stayed Posted, leaving an orphaned supplemental linked to a deleted transaction after reload. Persistence helpers now return a strict true/false and posting is coordinated: on success exactly one Planned transaction exists with valid two-way links; on failure nothing is left orphaned, and an unrecoverable rollback surfaces a clear message','Startup recovery: a supplemental left Posted by the old bug (its linked transaction missing, never executed) is safely restored to a re-postable Approved state with an audit entry — no financial amount is fabricated or altered; anything ambiguous is left for Integrity Check','Complete Backup restore is now transaction-safe: the file is validated first, a full pre-restore snapshot is kept, every dataset write is checked, and any failure rolls back in memory and re-persists the original values; the UI only reports success when the restore fully succeeds','Transaction execution now checks that the write succeeded: on a storage failure the transaction is restored exactly, no execution audit is written, and no linked supplemental is marked Executed; a clear failure message is shown','No storage key added or renamed (15); SCHEMA_VERSION unchanged (6); no committed payroll/finance amount or historical record is rewritten']},
     {v:'2.7.1 — Payroll Integrity & Reporting Foundation', items:['Fixed a historical payroll rendering defect: a Posted/Executed payroll could show a plan total (e.g. Rp7,000,000, 0 overtime) that disagreed with its committed finance transaction (e.g. Rp8,750,000). Posted/Executed payroll now renders immutable committed values, never reconstructed from current contract or overtime data','New centralized stage-aware source-of-truth helper (payrollHistoricalSnapshot): Draft/Review/Approved show working-plan values; Posted/Executed derive from the strongest committed evidence in priority order — an explicit committed snapshot, then the immutable linked transaction, then committed plan fields — with a visible "Payroll snapshot mismatch" notice when sources disagree. The posted transaction is never altered','Immutable overtime snapshots: new payroll postings freeze an overtime breakdown (overtimeSnapshot) on the transaction and a committed snapshot on the plan, so historical detail survives later edits or deletion of the source overtime. Unknown legacy hours display "— / unavailable" (distinct from an explicit 0 hrs)','Payroll Detail, worksheet rows, period totals/summary and CSV export are now stage-aware and consistent; Base Payroll Snapshot is shown separately from supplementals','Company settings onboarding: "Configure company settings" now completes via an explicit persisted marker (companySettingsConfiguredAt) set only after a successful Settings save, with a conservative legacy fallback for older settings; opening Settings without saving, or a failed save, does not complete it','Supplemental hardening: Posted supplemental notes are now immutable; an overtime ID cannot be captured by more than one non-cancelled supplemental anywhere in the store (global duplicate guard); Execution Center deep-link focuses the exact linked transaction; empty company-account posting state is clearer; new integrity checks for payroll/supplemental linkage','No storage key added or renamed (15); SCHEMA_VERSION unchanged (6); no historical payroll or finance amount is auto-repaired']},
@@ -6506,7 +6507,7 @@ function contractRowsHTML(){
     <td>${hrActionsMenu('ct', c.id, [
       ['ct-detail','View Detail'],
       ['ct-edit','Edit'],
-      ['ct-renew','Renew'],
+      contractIsRenewable(c)?['ct-renew','Renew']:null,
       c.status==='Draft'?['ct-activate','Activate']:null,
       c.status!=='Cancelled'&&c.status!=='Renewed'?['ct-cancel','Cancel']:null,
       ['ct-delete','Delete']
@@ -6693,10 +6694,120 @@ async function deleteContract(id){
   toast('Contract deleted.'); render();
 }
 
+// Read-only UI eligibility mirror for renewal. Consults the SAME source of truth
+// the aggregate uses (CONTRACT_RENEWABLE_STATUSES — the non-terminal stored
+// statuses) so the menu/detail affordance and the business rule cannot drift.
+// Purely presentational: the aggregate remains the authority and re-checks.
+function contractIsRenewable(c){
+  if(!c) return false;
+  if(c.renewedToId) return false;
+  const renewable = (typeof CONTRACT_RENEWABLE_STATUSES !== 'undefined' && CONTRACT_RENEWABLE_STATUSES) || ['Draft','Active'];
+  return renewable.indexOf(c.status) !== -1;
+}
+
+/* ============================================================
+   SPR-077 "The Successor" — Contract renewal HANDLER.
+   The IMPLEMENTATION AUTHORITY for the contract.renewal.execute command. The
+   business authority is ContractRenewalAggregate (js/domain); this handler keeps
+   its own defense-in-depth eligibility check and owns id generation, timestamps,
+   the history APPEND, the single persistence invocation, rollback, and the typed
+   result. It receives the authored { predecessorStatus, predecessorNote,
+   successorNote, successor } decision from the aggregate (via Domain.command).
+
+   Before SPR-077 this workflow lived inline in the renewal form's submit handler:
+   it mutated the predecessor, pushed the successor, called persistContracts()
+   directly, DISCARDED the result, and then reported success and navigated — so a
+   failed write was shown to the user as a completed renewal. That is the defect
+   this slice closes (ATR-011 §4).
+
+   NOT a compound-persistence operation: the predecessor and the successor both
+   live in State.contracts, so ONE ContractRepository.save() -> persistContracts()
+   -> StorageAdapter.set() write covers both. Rollback is therefore strictly
+   IN-MEMORY — no coordinator, no unit of work, no compensation across keys.
+
+   AUDIT: the pre-SPR-077 renewal wrote no activity entry, so none is added here —
+   the same preservation rule PR-5K applied to transitionContractStatus. Adding
+   one would be a behavior change outside this slice's authority.
+   ============================================================ */
+async function renewContract(id, renewal){
+  const c = contractById(id);
+  if(!c) return { success:false, error:'ContractNotFound' };
+  renewal = renewal || {};
+  const successor = renewal.successor;
+  if(!successor) return { success:false, error:'RenewalNotAllowed' };
+  // Defense-in-depth (the aggregate decided first): the predecessor must still be
+  // in a renewable stored status and must not already point at a successor.
+  const renewable = (typeof CONTRACT_RENEWABLE_STATUSES !== 'undefined' && CONTRACT_RENEWABLE_STATUSES) || ['Draft','Active'];
+  if(renewable.indexOf(c.status) === -1) return { success:false, error:'RenewalNotAllowed' };
+  if(c.renewedToId) return { success:false, error:'ContractAlreadyRenewed' };
+
+  const now = new Date().toISOString();
+  // Successor: the aggregate-authored business shape plus handler-owned identity,
+  // timestamps, back-link, and the history entry built from the authored note.
+  const nc = {
+    id: uid('ct'),
+    employeeId: successor.employeeId, employeeName: successor.employeeName,
+    contractNumber: successor.contractNumber,
+    startDate: successor.startDate, durationMonths: successor.durationMonths,
+    monthlySalary: successor.monthlySalary,
+    status: successor.status, notes: successor.notes,
+    createdAt: now, updatedAt: now, renewedFromId: c.id,
+    history: [{event:'created', ts:now, note: renewal.successorNote}],
+  };
+  // Predecessor: snapshot exactly what changes, then apply the authored decision.
+  const prevStatus = c.status, prevRenewedToId = c.renewedToId, prevUpdatedAt = c.updatedAt;
+  c.status = renewal.predecessorStatus;
+  c.renewedToId = nc.id;
+  c.updatedAt = now;
+  (c.history=c.history||[]).push({event:'renewed', ts:now, note: renewal.predecessorNote});
+  State.contracts.push(nc);
+
+  // Persistence mechanics go through the Repository boundary (ContractRepository
+  // .save() -> persistContracts() -> StorageAdapter). ONE write covers both
+  // contracts. Strict persisted.ok handling — no truthy/falsy ambiguity.
+  const persisted = await ContractRepository.save();
+  if(persisted.ok !== true){
+    // In-memory rollback — drop the successor and restore every predecessor field
+    // so State.contracts matches the last successfully persisted state.
+    State.contracts = State.contracts.filter(x=>x.id!==nc.id);
+    c.status = prevStatus;
+    if(prevRenewedToId===undefined) delete c.renewedToId; else c.renewedToId = prevRenewedToId;
+    c.history.pop();
+    c.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
+  }
+  return { success:true, data:{ predecessor:c, successor:nc } };
+}
+
+// The ONE official UI seam for a Contract renewal. The renewal modal routes
+// through here; no UI calls the handler directly. Success actions (toast, modal
+// close, successor navigation, re-render) run ONLY after the Repository has
+// confirmed the write, and typed business failures are surfaced to the user.
+// Returns true only on success.
+async function requestContractRenewal(id, patch){
+  const outcome = await uiExecute('command', 'contract.renewal.execute', [id, patch]);
+  if(outcome && outcome.success){
+    const nc = outcome.data && outcome.data.successor;
+    closeModal();
+    toast('Contract renewed. Old contract marked Renewed; history preserved.');
+    if(nc) State.detailContractId = nc.id;
+    render();
+    return true;
+  }
+  const err = outcome && outcome.error;
+  toast(err==='PersistFailed'
+    ? 'Contract renewal could not be saved — nothing was changed. Free up storage and try again.'
+    : 'Could not renew this contract'+(err && err!=='ContractNotFound' ? ': '+err : '')+'.', 6000);
+  return false;
+}
+
 // Renewal: old → Renewed, new → Active (or Draft), history preserved, no
 // historical payroll/transactions touched.
 function openRenewModal(id){
   const c = contractById(id); if(!c){ toast('Contract not found.'); return; }
+  // Terminal statuses (Renewed/Cancelled) and contracts that already have a
+  // successor are not renewable — the aggregate rejects them; don't open the form.
+  if(!contractIsRenewable(c)){ toast(c.renewedToId||c.status==='Renewed' ? 'This contract has already been renewed.' : 'A '+String(c.status||'').toLowerCase()+' contract cannot be renewed.', 5000); return; }
   const prevEnd = contractCalc(c).endDate;
   const suggestedStart = prevEnd ? (()=>{ const d=new Date(prevEnd+'T00:00:00'); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })() : isoToday();
   openModalHTML(`
@@ -6718,23 +6829,19 @@ function openRenewModal(id){
       root.querySelector('#renewCancel').addEventListener('click', closeModal);
       root.querySelector('#renewForm').addEventListener('submit', async ev=>{
         ev.preventDefault();
+        // UI owns ONLY input collection. Business authority (eligibility, the
+        // successor's shape, the predecessor's renewed status, both history notes)
+        // belongs to ContractRenewalAggregate; mutation, persistence, rollback and
+        // the success actions belong to the handler/seam. On failure the modal is
+        // deliberately left open so the user can retry or cancel.
         const fd = new FormData(ev.target);
-        const now = new Date().toISOString();
-        const nc = {
-          id:uid('ct'), employeeId:c.employeeId, employeeName:c.employeeName,
-          contractNumber:(fd.get('contractNumber')||'').trim(),
-          startDate:fd.get('startDate'), durationMonths:Number(fd.get('durationMonths'))||0,
-          monthlySalary: fd.get('monthlySalary')===''?null:Number(fd.get('monthlySalary')),
-          status: fd.get('status'), notes:`Renewal of ${c.contractNumber||''}`,
-          createdAt:now, updatedAt:now, renewedFromId:c.id,
-          history:[{event:'created', ts:now, note:`Renewed from ${c.contractNumber||''}`}],
-        };
-        c.status='Renewed'; c.renewedToId=nc.id; c.updatedAt=now;
-        (c.history=c.history||[]).push({event:'renewed', ts:now, note:`Renewed into ${nc.contractNumber}`});
-        State.contracts.push(nc);
-        await persistContracts();
-        closeModal(); toast('Contract renewed. Old contract marked Renewed; history preserved.');
-        State.detailContractId = nc.id; render();
+        await requestContractRenewal(id, {
+          contractNumber: fd.get('contractNumber'),
+          startDate: fd.get('startDate'),
+          durationMonths: fd.get('durationMonths'),
+          monthlySalary: fd.get('monthlySalary'),
+          status: fd.get('status'),
+        });
       });
     }});
 }
@@ -6853,7 +6960,7 @@ function renderContractDetail(main){
         <button class="btn" id="backCt">← Contracts</button>
         <button class="btn" id="editCtD">Edit</button>
         <button class="btn" id="editDatesCtD">Dates</button>
-        <button class="btn btn-accent" id="renewCtD">Renew Contract</button>
+        ${contractIsRenewable(c)?'<button class="btn btn-accent" id="renewCtD">Renew Contract</button>':''}
       </div>
     </div>
     ${alerts.length?`<div class="insight-list" style="margin-bottom:14px;">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
@@ -6899,7 +7006,7 @@ function renderContractDetail(main){
   document.getElementById('backCt').addEventListener('click', ()=>hrNavTo('contracts'));
   document.getElementById('editCtD').addEventListener('click', ()=>openContractModal(c.id));
   document.getElementById('editDatesCtD').addEventListener('click', ()=>openContractDatesModal(c.id));
-  document.getElementById('renewCtD').addEventListener('click', ()=>openRenewModal(c.id));
+  { const rb=document.getElementById('renewCtD'); if(rb) rb.addEventListener('click', ()=>openRenewModal(c.id)); }
   const el = document.getElementById('ctEmpLink'); if(el && emp) el.addEventListener('click', ()=>hrNavTo('employeeDetail', {detailEmpId:emp.id}));
   main.querySelectorAll('[data-open-detail]').forEach(b=>b.addEventListener('click', ()=>openDetailModal(b.dataset.openDetail)));
 }
@@ -11509,6 +11616,16 @@ const DOMAIN_COMMANDS = Object.freeze({
   // renewal workflow; creation/renewal status writes remain out of scope. Uses the
   // shared lifecycle contract (boundaryMethod/boundaryPayload = transition).
   'contract.status.transition': Object.freeze({ aggregate: 'Contract', boundary: 'ContractStatusAggregate', boundaryMethod: 'transition', boundaryPayload: 'transition', handler: 'transitionContractStatus', transition: 'controlled Contract status transition (Draft→Active/Cancelled, Active→Cancelled; Renewed/Cancelled terminal) — OPERATIONAL via Domain.command(); business authority = ContractStatusAggregate (PR-5K); Renewed is renewal-only, creation/renewal status writes out of scope' }),
+  // SPR-077 — eighth OPERATIONAL command, third Contract boundary. The Contract
+  // RENEWAL workflow: the predecessor moves to the terminal `Renewed` status and a
+  // successor Contract is created, both inside the ONE `contracts` collection (one
+  // storage-key write — ATR-011 confirmed this is NOT a compound-persistence
+  // operation). The aggregate is the business authority: it decides eligibility and
+  // AUTHORS the successor's shape, the predecessor's renewed status, and both
+  // history notes; the handler applies them, persists once through
+  // ContractRepository, and rolls back in memory on a failed persist. Uses the
+  // default boundaryMethod (prepare) with a dedicated boundaryPayload (`renewal`).
+  'contract.renewal.execute': Object.freeze({ aggregate: 'Contract', boundary: 'ContractRenewalAggregate', boundaryPayload: 'renewal', handler: 'renewContract', transition: 'Contract renewal (predecessor Draft/Active → Renewed, successor created as Active/Draft) — OPERATIONAL via Domain.command(); business authority = ContractRenewalAggregate (SPR-077); one collection, one persist, in-memory rollback' }),
   // Payroll
   'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
   // Finance
@@ -12153,6 +12270,156 @@ const ContractStatusAggregate = Object.freeze({
 // name (top-level `const` objects are not attached to `window`, unlike function
 // declarations). No eval; classic shared global scope.
 if (typeof window !== 'undefined') { window.ContractStatusAggregate = ContractStatusAggregate; }
+
+/* ============================================================
+   DOMAIN LAYER — CONTRACT RENEWAL AGGREGATE (SPR-077 "The Successor")
+   ------------------------------------------------------------
+   The EIGHTH aggregate boundary and the THIRD Contract boundary. It is the
+   BUSINESS AUTHORITY for the contract.renewal.execute command: it decides
+   whether a Contract may be renewed and AUTHORS the complete renewal — the
+   successor Contract's business shape, the predecessor's canonical renewed
+   status, and the history note text belonging to each side. It is pure and has
+   NO side effects.
+
+   AUTHORITY SPLIT (identical to every prior Epsilon slice — ATR-011 §2):
+   the aggregate DECIDES and AUTHORS; the handler (renewContract) APPLIES. The
+   aggregate never mutates a Contract, never assigns an id or a timestamp, and
+   never appends a history entry — it returns the note TEXT under its own
+   authority and the handler performs the append with the handler-owned
+   timestamp, exactly as updateContractDates and transitionContractStatus do.
+   This keeps the aggregate deterministic and testable, and keeps rollback
+   ownership where every other slice already places it.
+
+   RENEWAL ELIGIBILITY — derived from the existing stored status model, never
+   invented. CONTRACT_STATUS_TRANSITIONS (contract-status-aggregate.js) records
+   Renewed and Cancelled as TERMINAL. Renewal is therefore offered only from a
+   non-terminal stored status:
+     Draft     → renewable
+     Active    → renewable
+     Renewed   → NOT renewable (terminal; already has a successor)
+     Cancelled → NOT renewable (terminal)
+   The pre-SPR-077 row menu offered "Renew" unconditionally, so a Renewed
+   contract could be renewed a second time — silently overwriting renewedToId
+   and ORPHANING the first successor (which keeps pointing back via
+   renewedFromId). That is a link-corruption path, not valid behavior, so it is
+   closed here per SPR-077 §8 ("preserve existing valid behavior unless a
+   contradiction or corruption risk is found").
+
+   OVERLAP IS DELIBERATELY NOT ENFORCED. ADR-012 (Contract Overlap Enforcement)
+   is **Proposed**, not Accepted, and explicitly authorizes no implementation and
+   no runtime change. overlappingActiveContracts stays diagnostic-only, exactly
+   as it is for contract.dates.update.
+
+   Contract (enforced by the verifier):
+     - MUST NOT mutate State, mutate a Contract, call persistContracts() /
+       persistHR(), append a history entry, write updatedAt, generate an id or
+       timestamp, render UI, toast, access localStorage, or audit.
+     - MAY only READ (existence via contractById) and RETURN a typed decision.
+
+   Uses the DEFAULT aggregate entry method (prepare) with a dedicated payload key
+   (`renewal`), so no Domain facade routing change is required.
+
+   prepare(id, patch) returns:
+     { ok: true, renewal: {
+         predecessorId,
+         predecessorStatus: 'Renewed',
+         predecessorNote,                 // history note TEXT (handler appends)
+         successorNote,                   // history note TEXT (handler appends)
+         successor: { employeeId, employeeName, contractNumber, startDate,
+                      durationMonths, monthlySalary, status, notes }
+       } }
+     { ok: false, error: 'ContractNotFound' | 'RenewalNotAllowed'
+                       | 'ContractAlreadyRenewed' | 'InvalidContractNumber'
+                       | 'InvalidStartDate' | 'InvalidDurationMonths'
+                       | 'InvalidContractDateRange' | 'InvalidMonthlySalary'
+                       | 'InvalidContractStatusState' }
+   ============================================================ */
+
+// Stored statuses a Contract may be renewed FROM. Single source of truth for the
+// rule; the handler consults the same list for its defense-in-depth check. It is
+// exactly the set of NON-terminal stored statuses in CONTRACT_STATUS_TRANSITIONS.
+const CONTRACT_RENEWABLE_STATUSES = Object.freeze(['Draft', 'Active']);
+
+// Stored statuses a SUCCESSOR contract may be created in. Mirrors the existing
+// renewal form's Initial Status choices exactly (Active | Draft) — unchanged.
+const CONTRACT_RENEWAL_TARGET_STATUSES = Object.freeze(['Active', 'Draft']);
+
+const ContractRenewalAggregate = Object.freeze({
+  prepare: function (id, patch) {
+    // 1. Predecessor existence (read-only; never mutates State).
+    var c = (typeof contractById === 'function') ? contractById(id) : null;
+    if (!c) return { ok: false, error: 'ContractNotFound' };
+
+    // 2. Eligibility: only a non-terminal stored status may be renewed.
+    if (CONTRACT_RENEWABLE_STATUSES.indexOf(c.status) === -1) return { ok: false, error: 'RenewalNotAllowed' };
+
+    // 3. A contract that already points at a successor is never renewed again
+    //    (defends the linkage even if a status were somehow inconsistent).
+    if (c.renewedToId) return { ok: false, error: 'ContractAlreadyRenewed' };
+
+    patch = patch || {};
+
+    // 4. Successor contract number — required, trimmed (matches the form's
+    //    `required` input and the existing editor's trim convention).
+    var number = (patch.contractNumber == null ? '' : String(patch.contractNumber)).trim();
+    if (number === '') return { ok: false, error: 'InvalidContractNumber' };
+
+    // 5. Successor start date — strict canonical calendar date, reusing the
+    //    single source of truth from ContractDateAggregate (PR-5I).
+    var start = (patch.startDate == null ? '' : String(patch.startDate)).trim();
+    if (typeof isCanonicalContractDate !== 'function' || !isCanonicalContractDate(start)) return { ok: false, error: 'InvalidStartDate' };
+
+    // 6. Successor duration — finite positive integer (same rule as PR-5I).
+    var rawDur = (patch.durationMonths == null ? '' : String(patch.durationMonths)).trim();
+    var dur = Number(rawDur);
+    if (rawDur === '' || !isFinite(dur) || !Number.isInteger(dur) || dur <= 0) return { ok: false, error: 'InvalidDurationMonths' };
+
+    // 7. Derived extent validity (defensive; equivalent to contractCalc).
+    if (typeof contractExtentIsValid !== 'function' || !contractExtentIsValid(start, dur)) return { ok: false, error: 'InvalidContractDateRange' };
+
+    // 8. Successor monthly salary — optional (null is a valid stored value, as in
+    //    the existing editor); when supplied it must be a finite non-negative number.
+    var salary = null;
+    if (patch.monthlySalary != null && String(patch.monthlySalary).trim() !== '') {
+      var s = Number(patch.monthlySalary);
+      if (!isFinite(s) || s < 0) return { ok: false, error: 'InvalidMonthlySalary' };
+      salary = s;
+    }
+
+    // 9. Successor initial status — exactly the existing form's two choices.
+    var target = (patch.status == null ? '' : String(patch.status)).trim();
+    if (CONTRACT_RENEWAL_TARGET_STATUSES.indexOf(target) === -1) return { ok: false, error: 'InvalidContractStatusState' };
+
+    // 10. Author the renewal. Business text (notes + both history notes) is
+    //     produced here under aggregate authority; the handler only applies it.
+    //     Wording is preserved verbatim from the pre-SPR-077 renewal workflow.
+    var predNumber = c.contractNumber || '';
+    return {
+      ok: true,
+      renewal: {
+        predecessorId: c.id,
+        predecessorStatus: 'Renewed',
+        predecessorNote: 'Renewed into ' + number,
+        successorNote: 'Renewed from ' + predNumber,
+        successor: {
+          employeeId: c.employeeId,
+          employeeName: c.employeeName,
+          contractNumber: number,
+          startDate: start,
+          durationMonths: dur,
+          monthlySalary: salary,
+          status: target,
+          notes: 'Renewal of ' + predNumber
+        }
+      }
+    };
+  }
+});
+
+// Expose on the global object so the Domain facade can resolve this aggregate by
+// name (top-level `const` objects are not attached to `window`, unlike function
+// declarations). No eval; classic shared global scope.
+if (typeof window !== 'undefined') { window.ContractRenewalAggregate = ContractRenewalAggregate; }
 
 /* ============================================================
    DOMAIN LAYER — READ-ONLY REGISTRY FACADE (Enterprise Foundation, PR-5A)
