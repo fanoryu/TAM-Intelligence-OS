@@ -40,7 +40,13 @@ links forward if it is ever superseded.
 | [ADR-010](ADR-010-Compensation-Write-Authority.md) | Compensation Write Authority | **Proposed** | PR-5H review ([ARCH-003](../02-architecture/Architecture_Evolution_Backlog.md#arch-003--compensation-write-authority)) |
 | [ADR-011](ADR-011-Contract-Date-Model-Authority.md) | Contract Date Model Authority | **Proposed** | PR-5I review ([ARCH-004](../02-architecture/Architecture_Evolution_Backlog.md#arch-004--contract-date-model-authority)) |
 | [ADR-012](ADR-012-Contract-Overlap-Enforcement.md) | Contract Overlap Enforcement | **Proposed** | PR-5I review ([ARCH-005](../02-architecture/Architecture_Evolution_Backlog.md#arch-005--contract-overlap-enforcement)) |
+| [ADR-013](ADR-013-Repository-Layer.md) | Repository Layer (entity-named, collection-grained) | Accepted | PR-8A … PR-11A; direction ATR-008, validated ATR-009 / ATR-010 |
 
 **Proposed** ADRs (ADR-008 through ADR-012) record open questions from the PR-5G, PR-5H, and PR-5I
 Atlas Reviews. They are not Accepted, record no decision, and authorize no implementation; see the
 [Architecture Evolution Backlog](../02-architecture/Architecture_Evolution_Backlog.md).
+
+[ADR-013](ADR-013-Repository-Layer.md) is **Accepted** and records the Repository layer delivered across
+Milestones Delta and Epsilon: three entity-named repositories on one unevolved, collection-grained
+`save()` contract, mediating all seven aggregate-backed handlers (7 of 7). It states explicitly that this
+is **not** full persistence abstraction and implies **no** backend.

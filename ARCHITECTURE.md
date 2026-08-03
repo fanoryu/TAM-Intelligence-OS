@@ -35,8 +35,11 @@ flowchart TD
   subgraph SRC["Modular source (edited by hand)"]
     IDX["index.html<br/>ordered CSS link + JS script tags, mount points"]
     CSS["css/ — tokens, base, shell, components, charts"]
-    subgraph JSMOD["js/ — 45 classic-script modules (one global scope)"]
+    subgraph JSMOD["js/ — 63 classic-script modules (one global scope)"]
       CORE["core/ — constants, state, storage-adapter,<br/>state-load-migrations, domain-services, bootstrap"]
+      DOM["domain/ — aggregates, aggregate-helpers,<br/>commands, queries, domain-layer"]
+      PLAT["platform/ + transport/ — application-gateway,<br/>transport-adapter"]
+      REPO["repository/ — employee-repository,<br/>contract-repository, payroll-repository"]
       UI["ui/ — shell-render, charts, settings-about, activity-log"]
       FIN["finance/ — dashboard, transactions, execution-center,<br/>cashflow, budget, add-upload"]
       PPL["people/ — employees, contracts, overtime,<br/>payroll-ops-engine, payroll-workspace, monthly-plan"]
@@ -121,6 +124,82 @@ flowchart LR
 
 CI (`ci.yml`) runs build + verify on every push/PR to `main` and uploads the portable HTML as an
 artifact. The release job publishes nothing unless every guardrail passes.
+
+---
+
+## 18. Repository layer — entity-named persistence-mechanics boundary (no runtime behavior change)
+
+**Decision record:** [ADR-013](docs/03-adr/ADR-013-Repository-Layer.md) · **Baseline:**
+[RDR-011](docs/RDR/RDR-011-epsilon-repository-snapshot.md) (`6714beb`) · **Delivered:** PR-8A (Delta) …
+PR-11A (Epsilon).
+
+### Canonical path
+
+```
+Browser ┐
+        ├→ Transport Adapter → Application Gateway → Domain → Aggregate
+CLI    ─┘                                                        │
+                                                                 ▼
+                                        Handler → Entity-Named Repository → StorageAdapter
+                                                                                  │
+                                                                                  ▼
+                                                              localStorage / Artifact storage
+```
+
+### Modules — `js/repository/`
+
+| Module | Global | Collection | Delegates to |
+|---|---|---|---|
+| `employee-repository.js` | `EmployeeRepository` | employees | `persistEmployees()` |
+| `contract-repository.js` | `ContractRepository` | contracts | `persistContracts()` |
+| `payroll-repository.js` | `PayrollRepository` | payrollPlans | `persistPayrollPlans()` |
+
+Each is a frozen object exposing exactly one method:
+
+```js
+async save() → { ok: true } | { ok: false, error: 'PersistFailed' }
+```
+
+Each loads **after** the persist function it delegates to (`core/hr-persistence-portability.js`) and
+**before** its migrated handler — enforced by `tools/verify-build.js` against `tools/module-order.js`.
+
+### Ownership boundaries
+
+| Layer | Owns |
+|---|---|
+| **Aggregate** | **Business authority** — transition rules, legality, sanitized decisions |
+| **Handler** | **Implementation authority** — validation, mutation, `updatedAt`, history, persistence decision, rollback, typed result |
+| **Repository** | **Persistence mechanics** — delegate the write, normalize the strict boolean |
+| **StorageAdapter** | **Storage-backend boundary** — unchanged |
+
+The Repository owns no validation, mutation, `updatedAt`, history, rollback, UI, or audit, and never
+touches Domain or Aggregates. Rollback stays with the handler. In `transitionPayrollLifecycle` the
+best-effort audit also stays with the handler: after successful persistence, success path only,
+`try/catch`-wrapped, never emitted on failure.
+
+### Contract properties and limits
+
+- **Collection-grained** — one `save()` writes one collection. It models no unit of work spanning
+  collections.
+- **Client-side** — it terminates at `StorageAdapter`. There is no network surface, and none is implied.
+- **Compound persistence remains outside this contract.** Three operations write multiple stores in one
+  logical unit and stay direct by design: `commitReadyPayroll` and payroll-planning posting (four stores
+  each) and Contract renewal (predecessor + successor). Non-aggregate writes (whole-record editors,
+  deletes, generation, regeneration, salary overrides, onboarding reset, the v2.5 migration) also stay
+  direct.
+
+### Adoption
+
+All seven aggregate-backed handlers are Repository-mediated — Employee 4 of 4, Contract 2 of 2,
+Payroll 1 of 1 (**7 of 7**). This means *only* that every aggregate-backed handler delegates persistence
+through an entity-named Repository. It is **not** full persistence abstraction (the layer mediates 3 of
+11 persist functions), **not** compound-persistence support, and **not** backend readiness — the
+application is client-only by `CLAUDE.md` §4.3. `tools/verify-build.js` asserts the 7-of-7 milestone
+*and* the bound, including a check whose message reads *"adoption completeness != persistence
+abstraction"*.
+
+The operational surface (7 aggregates / 7 aggregate-backed commands / 1 aggregate-backed query) and
+registered surface (13 commands / 4 queries) were unchanged by every slice.
 
 ---
 
