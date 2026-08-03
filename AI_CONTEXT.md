@@ -6,7 +6,7 @@ AI assistants get productive quickly. It is descriptive (what *is*), whereas
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
 there rather than duplicating it.
 
-**As of the current release:** v2.7.3 — "Supplemental-Aware Payroll History"; `SCHEMA_VERSION` 6.
+**As of the current release:** v2.8.3 — "Payroll Posting Integrity"; `SCHEMA_VERSION` 6.
 When these change, update this document (not `CLAUDE.md`).
 
 **Current baseline (aggregate-backed Repository adoption complete):**
@@ -33,17 +33,30 @@ CLI    ─┘
   Handlers keep validation, mutation, `updatedAt`, history, rollback, typed results — and, for Payroll,
   the post-persistence best-effort audit. See [ADR-013](docs/03-adr/ADR-013-Repository-Layer.md).
 
-**Aggregate-backed Repository adoption: 7 of 7** — Employee 4/4, Contract 2/2, Payroll 1/1.
+**Aggregate-backed Repository adoption: 8 of 8** — Employee 4/4, Contract 3/3, Payroll 1/1.
 This means *only* that every aggregate-backed handler delegates persistence through an entity-named
 Repository. It does **not** mean all persistence is mediated (the layer covers 3 of 11 persist
 functions), that compound persistence is solved, that multi-store transactions are supported, or that
 backend readiness is achieved. Non-aggregate and compound writes remain direct by design and are
 verifier-fenced. **Backend remains prohibited** by [`CLAUDE.md`](CLAUDE.md) §4.3 (client-only MUST).
 
+**Contract authority.** Contract status transitions are aggregate-backed, and renewal is
+**aggregate-authored**: `ContractRenewalAggregate` decides eligibility and authors the successor's
+business shape, the predecessor's canonical `Renewed` status, and both history note texts, without
+mutating, generating ids/timestamps, or persisting. The `renewContract` handler owns ids, timestamps, the
+history append, one `ContractRepository.save()`, strict result inspection, in-memory rollback on a failed
+write, and the typed result. Renewability is evaluated against **stored** statuses (`Draft`, `Active`),
+never derived display states — so a contract displayed as *Expired* or *Expiring Soon* remains renewable
+while its stored status is still `Active`. Terminal statuses (`Renewed`, `Cancelled`) are never renewable.
+
 **Next architecture frontier: compound persistence** — `commitReadyPayroll` writes four stores in one
 logical unit, which the collection-grained contract cannot express. This is the open question, not backend
 work. It is now the **only** compound operation in the Payroll domain: Contract renewal was shown to be
 single-collection (SPR-077, ATR-011 §4) and payroll-planning posting was retired as dead code (SPR-078).
+
+SPR-079 and SPR-081 changed how compound persistence is **reported and detected**, not how it is
+performed. Multi-key writes remain sequential and non-atomic; see *Known Limitations* for the standing
+residuals and *Future Roadmap* for what is and is not authorised.
 
 `commitReadyPayroll` is the **sole live Payroll posting path**. The legacy Payroll Planning screen and its
 `commitPayroll` function were removed in SPR-078: the screen had been unreachable since v2.5.0 (no route,
@@ -51,7 +64,40 @@ no navigation entry, no external caller) and its posting path was a second, dive
 bypassed the period lock, commit blockers, and the `Ready` gate, and wrote a non-canonical lowercase
 `'committed'` status. Committed-state reads now go through one shared predicate, `isPayrollCommitted()`
 (`js/people/people-core.js`), which accepts the canonical `'Committed'` and — for reads only — the legacy
-lowercase value that retired path may have persisted.
+lowercase value that retired path may have persisted. No live writer writes the legacy value.
+
+**Payroll posting result integrity (SPR-081, v2.8.3).** `commitReadyPayroll` captures and strictly
+inspects **all four** persistence results (payroll plans, monthly plan, overtime, finance transactions);
+success requires all four, and failure returns a typed outcome naming the first failed step in the fixed
+write order, the completed steps, and that partial persistence occurred. The success audit entry and the
+success UI (toast, posted-vs-skipped summary, selection clear) are gated on full persistence success; the
+failure branch retains the row selection so the user can see what was involved. Transaction lookup keeps
+its forward resolution and adds a narrow reverse fallback — payroll-sourced only, exact `payrollPlanId`,
+exact period — that resolves **only when exactly one candidate exists**; more than one yields a typed
+`PayrollTransactionAmbiguous` skip and never a guess. A reverse-matched transaction has its forward
+linkage restored rather than being duplicated. **This added no atomicity and no rollback** — the four
+writes are still sequential.
+
+**The two SPR-080 failure modes are not equally addressed.** Scenario A (duplicate finance transaction on
+retry) is **prevented on retry** by the unique reverse lookup: the existing transaction is found and
+relinked instead of a second one being created. Scenario C (overtime left `Approved` after a committed
+posting, and therefore re-payable) is **detected as a Critical integrity finding before reuse** — it is
+**not automatically repaired, and not universally blocked**. Nothing prevents that overtime from being
+included in a later payroll; the finding is advisory and requires a human to act on it.
+
+**Multi-dataset persistence (SPR-079, v2.8.2).** `saveAllData()` inspects every one of its 14 writes and
+returns `true` only when all succeed; Employee Merge and Smart Import no longer report false success.
+Multi-key saves remain non-atomic: a failure means the operation did not complete, **not** that nothing
+was written. **Reload reads whatever storage keys successfully persisted. It does not restore a complete
+prior state.**
+
+**Integrity Check** gained two **Critical** rules in SPR-081 — `payroll-orphan-transaction`, which fires
+when a payroll-sourced Finance transaction references a `PayrollPlan` that is **either not `Committed`
+or does not link back to that transaction** (both broken-linkage directions, not only the uncommitted
+case), and `payroll-overtime-uncommitted` (committed payroll whose linked overtime is still `Approved`,
+which was runtime-proven to be re-payable in the next month). Both are **read-only detection**: they
+report that a partial state exists and where — they do **not** repair it and do **not** block the
+underlying operation.
 
 Operational surface: 8 aggregates / 8 aggregate-backed commands / 1 aggregate-backed query; 14 registered
 commands / 4 registered queries — unchanged by every Repository slice. Business authority remains
@@ -106,16 +152,20 @@ A capability status matrix (Available / Planned) is maintained in [`README.md`](
 ## 5. Current Architecture
 
 Client-only, single shared global scope of classic-script modules organized into
-`core / ui / finance / people / import / analytics`, assembled into one portable HTML file. There are
-no ES modules and no bundler; module load order is the critical invariant. The full structure,
-provenance, and diagrams (application structure, payroll workflow, release pipeline) live in
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
+`core / ui / finance / people / import / analytics / domain / platform / transport / repository / cli`,
+assembled into one portable HTML file. **65 JS modules** exist in the source: **64 are browser-loaded**
+(the load-order manifest and `index.html` agree on all 64), and `js/cli/cli.js` is the CLI-only ingress,
+deliberately outside the browser load order. There are no ES modules and no bundler; module load order is
+the critical invariant. The full structure, provenance, and diagrams (application structure, payroll
+workflow, release pipeline) live in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks. PowerShell fallbacks
-  exist for machines without Node.
+  the portable single file, and a verifier runs a suite of invariant checks (**1212** at v2.8.3), joined
+  by four runtime harnesses (**306** checks). PowerShell fallbacks exist for machines without Node.
+- The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
+  published SHA-256 verifies any downloaded copy.
 - **Version is derived** from a single source constant; the portable filename follows it
   automatically.
 - Commands and the full verifier scope are documented in [`README.md`](README.md) and
@@ -188,25 +238,59 @@ detailed layout is in [`README.md`](README.md#project-structure) and
 
 Bump the version constants, add release notes, build + verify, present a Release Candidate, and — on
 approval — commit, tag, push, and let the tag-triggered workflow publish the GitHub Release and
-portable asset (guarded so it publishes only when the tag matches the source version). Detailed steps:
+portable asset (guarded so it publishes only when the tag matches the source version). **v2.8.3 is the
+current published release and is marked Latest.** Detailed steps:
 [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md). History: [`CHANGELOG.md`](CHANGELOG.md); latest
 summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 ## 15. CI/CD Overview
 
-- **CI** builds + verifies on every push/PR to the main branch and uploads the portable HTML as a
-  build artifact; permissions are read-only.
-- **Release** is tag-triggered, re-derives the version, enforces the tag-equals-version guardrail,
-  and creates/refreshes the GitHub Release idempotently.
+- **CI** (`ci.yml`) builds + verifies on every push/PR to the main branch and uploads the portable HTML
+  as a build artifact; permissions are read-only.
+- **CodeQL** (`codeql.yml`) runs code scanning on push/PR with two Analyze jobs
+  (`javascript-typescript` and `actions`).
+- **Release** (`release.yml`) is tag-triggered, re-derives the version, enforces the tag-equals-version
+  guardrail, and creates/refreshes the GitHub Release idempotently, uploading the portable HTML as the
+  release asset. It titles the Release `TAM Intelligence OS <tag>` — the short convention, which is why a
+  published Release title reads `TAM Intelligence OS v2.8.3` rather than including the release name.
+  Shipped releases are never rewritten.
 - Workflows use **official GitHub Actions only**, on current stable major versions, with minimal
   permissions.
 
 ## 16. Known Limitations
 
+- **Payroll posting is not atomic.** `commitReadyPayroll` still writes **four storage keys
+  sequentially** and retains attempt-all behaviour. Its results are now checked (SPR-081), which makes
+  failure *visible* — it does not make the operation all-or-nothing. **No coordinated rollback and no
+  compensating action exist for Payroll posting.** A failure means the posting did not complete, not
+  that nothing was written.
+- **Integrity Check detects but does not repair.** `payroll-orphan-transaction` and
+  `payroll-overtime-uncommitted` report that a partial state exists and where it is; neither fixes it.
+  **Some partial states may still require manual review** or restoration from the pre-operation backup,
+  and not every possible partial state is automatically detectable or repairable.
+- **`commitMonthlyPlan` still has unchecked multi-key persistence.** In `js/people/monthly-plan.js` it
+  awaits `persist()` and `persistMonthlyPlans()` without inspecting either result — the same class of
+  defect SPR-079 fixed elsewhere. This is a known, unaddressed residual.
+- **Smart Import undo has an unresolved partial-persistence case.** The undo sets its `undone` completion
+  marker *before* the write, because the marker is part of the `importBatches` payload. If the
+  `importBatches` write **succeeds** but another required dataset write **fails**, reload may preserve
+  `undone:true` while some record removals did not persist — and because the marker is also the batch
+  selector (`find(b=>!b.undone)`), **the batch may then be unavailable for retry after reload**.
+  **Immediate retry is available only where the failure branch clears the in-memory completion marker
+  before reload**; once a divergent state has been reloaded, that path is gone. This is explicitly
+  **not** a rollback: the record removals stay applied in memory and whatever the fan-out wrote stays
+  written. Unresolved.
+- **Smart Import undo has no pre-operation backup.** Employee Merge and Smart Import **commit** each
+  snapshot a pre-operation safety backup before writing; **Smart Import undo does not** take an
+  equivalent snapshot, so there is no undo-specific restore point to fall back on.
+- **No backend, server-side transaction, or multi-user synchronisation exists** — the application is
+  client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier plus manual browser
-  validation.
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1212** checks) plus four
+  Node runtime harnesses (**306** checks total: payroll posting 106, `saveAllData` 61, contract renewal
+  67, payroll committed state 72) plus manual browser validation. The runtime harnesses drive real
+  behaviour against the live engine and UI seams, but they are not a general test suite.
 - **External CDN references** for the spreadsheet parser and fonts mean the fully offline experience
   depends on those assets (no user data is sent to them).
 - **Single-owner project** — response and review timelines are best-effort.
@@ -219,10 +303,21 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 Directions (no committed release numbers unless already approved):
 
-- **Released:** Supplemental Payroll Engine (v2.7.0) — overtime-drift settlement; Payroll Integrity &
-  Reporting Foundation (v2.7.1) — historical source-of-truth model, immutable snapshots, integrity checks.
-- **Planned:** Payroll Reporting suite expansion (after the v2.7.1 source-of-truth model is validated);
-  supplemental sources beyond overtime; ongoing repository maintenance.
+- **Released:** Supplemental Payroll Engine (v2.7.0); Payroll Integrity & Reporting Foundation (v2.7.1);
+  Persistence & Transactional Integrity (v2.7.2); Supplemental-Aware Payroll History (v2.7.3);
+  Aggregate-Owned Contract Renewal + Single Payroll Posting Authority (v2.8.1); Honest Persistence
+  Results (v2.8.2); **Payroll Posting Integrity (v2.8.3 — current)**.
+- **Immediate residuals** (evidence-backed, not yet scheduled): `commitMonthlyPlan` result integrity;
+  the Smart Import undo in-memory/storage divergence described under *Known Limitations*.
+- **Deferred architecture** — considered only if evidence justifies it, never pre-emptively:
+  operation-specific compensation (only where a concrete failure mode warrants it); a persisted recovery
+  marker (only if runtime evidence requires one); a generic coordination mechanism (only after a
+  **second** convergent operation demonstrates the need). None of these is approved today.
+- **Explicitly not authorised:** a Unit of Work; a Transaction Coordinator; a `StorageAdapter` journal;
+  a single-key envelope; any backend assumption. Generic compound-persistence coordination is an **open
+  question**, not an approved direction.
+- **Planned:** Payroll Reporting suite expansion; supplemental sources beyond overtime; ongoing
+  repository maintenance.
 - **Under consideration:** authentication and role-based access control; attachment/evidence
   handling; expanded approval workflows.
 
@@ -230,12 +325,13 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
 
 ## 18. Technical Debt
 
-- No automated regression tests beyond the invariant verifier; behavioral coverage is manual.
+- No general automated regression suite; coverage is the invariant verifier plus four targeted runtime
+  harnesses, with the remaining behavioural coverage manual.
 - Heavy use of direct DOM string rendering — safe today because user data is escaped, but a
   standing reason to keep escaping disciplined.
 - Some persisted records carry legacy/compatibility fields retained to avoid migrations.
-- Optional security automation (secret scanning, CodeQL) is not enabled; enabling it depends on the
-  repository's GitHub plan / Advanced Security settings.
+- Compound (multi-key) persistence is checked and reported but not coordinated; see *Known Limitations*
+  for the two outstanding residuals.
 
 ## 19. Important Design Decisions
 
