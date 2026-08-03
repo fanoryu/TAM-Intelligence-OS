@@ -110,13 +110,17 @@ mechanics**. No historical record is rewritten.
 - The tracked company workbook remains a documented, accepted exception (untouched).
 
 ## Git Information
-- Branch: main
+- Release tag: `v2.8.1`
+- Release branch: `main`
+- Publication channel: GitHub Releases
 - Contributing commits:
   - `764afe9` — feat(contracts): move renewal authority into an aggregate with checked persistence (SPR-077)
   - `5f4d4ad` — refactor(payroll): retire legacy Payroll Planning and normalize committed-state reads (SPR-078)
-- Release commit: *pending — the Release Preparation merge commit.*
-- Tag: *not yet created. `v2.8.1` is unpublished at the time of writing.*
 
 ## Release Asset
-- `dist/tam-intelligence-os-v2.8.1.html` (891,216 bytes) — built and version-controlled; **not yet
-  published** as a GitHub Release asset.
+- Asset: `tam-intelligence-os-v2.8.1.html`
+- Size: 891,216 bytes
+- SHA-256: `cb40e7da26c617df1aeb97537ed384c9cc0bf592db500ec1d625989645b79208`
+
+The asset is built from `main` by `tools/build-single-file.js` and is byte-reproducible: rebuilding from
+the same source produces an identical file, so the checksum above verifies any downloaded copy.
