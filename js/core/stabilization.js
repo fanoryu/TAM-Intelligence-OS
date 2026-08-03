@@ -322,6 +322,46 @@ function runIntegrityCheck(){
   if(pMissingTxn) add('warning','payroll-missing-transaction',`${pMissingTxn} committed payroll plan(s) with no linked transaction`);
   if(pTxnMismatch) add('warning','payroll-txn-mismatch',`${pTxnMismatch} transaction(s) whose amount differs from the payroll plan`);
   if(pOverrideNoReason) add('warning','payroll-override-no-reason',`${pOverrideNoReason} salary override(s) without a reason`);
+
+  /* ---------- SPR-081 partial-payroll-posting detection (READ-ONLY) ----------
+     Payroll posting writes four collections one after another and is NOT atomic.
+     SPR-080 proved two partial states that previously produced NO finding at all
+     and were silently financial. Both rules below only REPORT: they never repair
+     a link, never change an overtime status, never delete a transaction, never
+     rewrite a snapshot, and never persist anything. Detection is not recovery. */
+
+  // RULE A — orphan payroll transaction. A finance transaction points at a payroll
+  // plan, but that plan is not committed, or does not point back at this
+  // transaction. This is the state left by a failed payrollPlans write after the
+  // txns write succeeded; before SPR-081 a retry created a SECOND transaction.
+  const orphanPayrollTxns=[];
+  State.txns.forEach(t=>{
+    if(!t || t.source!=='payroll' || !t.payrollPlanId) return;
+    const pp = payrollPlanById(t.payrollPlanId);
+    if(!pp) return;                                   // missing plan is covered by broken-payroll-link
+    const linkedBack = (pp.committedTxnId===t.id || pp.transactionId===t.id);
+    const committed = isPayrollCommitted(pp);
+    if(committed && linkedBack) return;               // healthy
+    orphanPayrollTxns.push({t, pp, reason: !committed ? 'the payroll row is not committed (stage: '+payrollStage(pp)+')' : 'the payroll row does not link back to this transaction'});
+  });
+  orphanPayrollTxns.forEach(({t, pp, reason})=>{
+    add('critical','payroll-orphan-transaction',
+      `Finance transaction ${t.id} (${fmtIDR(t.planned)}, ${t.monthKey}) references payroll row ${pp.id} — ${pp.employeeName||'—'}, ${pp.monthKey} — but ${reason}. Do not post this payroll again until the transaction and the payroll linkage have been reviewed.`);
+  });
+
+  // RULE C — committed payroll referencing still-Approved overtime. The overtime
+  // write failed after the payroll and transaction writes landed, so the overtime
+  // was never flipped to "Committed to Payroll" and remains eligible for a LATER
+  // payroll month — i.e. it can be paid twice.
+  State.payrollPlans.forEach(pp=>{
+    if(!isPayrollCommitted(pp)) return;
+    (pp.overtimeIds||[]).forEach(oid=>{
+      const o = overtimeById(oid);
+      if(!o || o.status!=='Approved') return;         // only the still-Approved case
+      add('critical','payroll-overtime-uncommitted',
+        `Payroll row ${pp.id} (${pp.employeeName||'—'}, ${pp.monthKey}) is committed but its linked overtime ${o.id} (${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}) is still "${o.status}" instead of "Committed to Payroll". It can be included in another payroll and paid twice. Do not include or approve this overtime in another payroll until it has been reviewed.`);
+    });
+  });
   // recurring adjustment outside effective period is prevented at generation; flag stored snapshots that fall outside
   let adjOutside=0; State.payrollAdjustments.forEach(a=>{ if(a.endMonth && a.startMonth && a.endMonth < a.startMonth) adjOutside++; });
   if(adjOutside) add('warning','adjustment-invalid-period',`${adjOutside} recurring adjustment(s) with an end month before the start month`);

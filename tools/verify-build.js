@@ -241,7 +241,7 @@ if (fs.existsSync(prevDist)) {
 // dist/ holds exactly one release artifact — the current version (release dist-swap invariant).
 const distArtifacts = fs.readdirSync(path.join(root, 'dist')).filter((f)=>/^tam-intelligence-os-v[\d.]+\.html$/.test(f));
 check(distArtifacts.length === 1 && distArtifacts[0] === 'tam-intelligence-os-v' + meta.version + '.html', 'dist/ holds exactly one release artifact — the current v' + meta.version);
-check(meta.version === '2.8.2', 'APP_VERSION is 2.8.2 (this development release)');
+check(meta.version === '2.8.3', 'APP_VERSION is 2.8.3 (this development release)');
 // v2.7.1 polishing pass — snapshot metadata, single historical API, compact integrity badge.
 check(dist.includes('function overtimeSnapshotMeta('), 'overtime snapshot audit metadata helper present');
 check((dist.match(/overtimeSnapshotMeta:\s*overtimeSnapshotMeta\(/g)||[]).length === 1, 'the ONE remaining commit pipeline stores overtimeSnapshotMeta {recordCount,totalHours}');
@@ -995,7 +995,7 @@ check((srcJs.match(/^function ensureMonthlyPlan\(/gm)||[]).length === 1, 'ensure
 check(jsFiles.indexOf('people/payroll-planning.js') !== -1 && indexHtml.includes('<script src="js/people/payroll-planning.js"></script>'), 'payroll-planning.js remains loaded (retained for its shared utilities)');
 // (c) ONE LIVE POSTING PATH.
 check(/async function commitReadyPayroll\(monthKey, ids\)\{/.test(poeSrc), 'commitReadyPayroll is defined');
-check((stripComments(srcJs).match(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/g)||[]).length === 1,
+check((stripComments(srcJs).match(/steps\.push\(\['payrollPlans',\s+await persistPayrollPlans\(\)\]\);/g)||[]).length === 1,
   'exactly ONE four-store payroll posting sequence exists repository-wide (single posting authority)');
 check(/isPayrollLocked\(monthKey\)/.test(poeSrc) && /payrollCommitBlockers\(pp\)/.test(poeSrc) && /pp\.status!=='Ready'/.test(poeSrc),
   'the sole posting path enforces period lock + commit blockers + the Ready gate');
@@ -1150,6 +1150,119 @@ check(read(path.join(root,'js','core','storage-adapter.js')).indexOf('async set(
 check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'SCHEMA_VERSION remains 6');
 check(aggregateDefs === 8, 'aggregate count is unchanged by SPR-079 (still eight)');
 check(fs.existsSync(path.join(root,'tools','verify-savealldata-runtime.js')), 'SPR-079 runtime harness present: tools/verify-savealldata-runtime.js');
+
+// SPR-081 — PAYROLL POSTING RESULT INTEGRITY + PARTIAL-STATE DETECTION.
+console.log('== SPR-081 PAYROLL POSTING INTEGRITY (result checking + Scenario A/C detection) ==');
+const poeSrc081 = read(path.join(root,'js','people','payroll-ops-engine.js'));
+const crpBody081 = stripComments((poeSrc081.match(/async function commitReadyPayroll\(monthKey, ids\)\{[\s\S]*?\n\}/)||[''])[0]);
+const stabSrc081 = read(path.join(root,'js','core','stabilization.js'));
+const wsSrc081 = read(path.join(root,'js','people','payroll-workspace.js'));
+
+// (a) ALL FOUR RESULTS CAPTURED AND STRICTLY INSPECTED.
+['payrollPlans','monthlyPlans','overtime','transactions'].forEach((step)=>
+  check(new RegExp("steps\\.push\\(\\['"+step+"',").test(crpBody081), 'payroll posting captures the result of the '+step+' write'));
+check(/const failedSteps\s+= steps\.filter\(s=>s\[1\]!==true\)/.test(crpBody081), 'payroll posting inspects every result strictly (!== true)');
+check(/const completedSteps = steps\.filter\(s=>s\[1\]===true\)/.test(crpBody081), 'payroll posting reports completed steps deterministically');
+// (b) TYPED FAILURE / SUCCESS CONTRACT.
+check(/error:\s*'PayrollPersistenceFailed'/.test(crpBody081), 'payroll posting returns the typed PayrollPersistenceFailed outcome');
+check(/failedStep: failedSteps\[0\]/.test(crpBody081), 'the failed step is the FIRST failure in the fixed write order (deterministic)');
+check(/partialPersistence: completedSteps\.length > 0/.test(crpBody081), 'partialPersistence is true only when at least one write succeeded');
+check(/recoveryHint: 'RunIntegrityCheckAndReview'/.test(crpBody081), 'the failure result carries an actionable recovery hint');
+check(/return \{ok:true, created, updated, skipped, posted, skippedDetails\}/.test(crpBody081), 'success returns ok:true with the existing summary fields');
+check(/return \{ok:false, error:'PayrollPeriodLocked'/.test(crpBody081), 'the locked-period refusal is also typed');
+// (c) SUCCESS AUDIT ONLY AFTER FULL PERSISTENCE SUCCESS.
+check(/if\(failedSteps\.length\)\{[\s\S]*?return \{ok:false[\s\S]*?\}\s*logActivity\(\{type:'payroll\.post'/.test(crpBody081),
+  "the payroll.post success audit is unreachable when any write failed");
+check((crpBody081.match(/logActivity\(\{type:'payroll\.post'/g)||[]).length === 1, 'exactly one payroll.post audit call exists');
+// (d) NO SUCCESS UI AFTER FAILURE.
+const wsFail081 = (stripComments(wsSrc081).match(/if\(res\.ok !== true && res\.error === 'PayrollPersistenceFailed'\)\{[\s\S]*?return;/)||[''])[0];
+check(wsFail081 !== '', 'the posting caller has an explicit persistence-failure branch');
+[['success toast', /showSuccess\(/], ['posted-vs-skipped summary', /openPostResultModal\(/]].forEach(([label,re])=>
+  check(!re.test(wsFail081), 'the payroll failure branch shows no '+label));
+check(/showError\(/.test(wsFail081) && /Run Integrity Check/.test(wsFail081), 'the payroll failure branch reports the failure and directs the user to Integrity Check');
+// SPR-081 follow-up — CONTROL-FLOW ORDERING. Clearing the selection is completion
+// behaviour and must never precede result inspection. Scope the scan to the Post
+// click handler so unrelated sel.clear() sites cannot mask a regression.
+const postHandler081 = stripComments((wsSrc081.match(/const res=await commitReadyPayroll\(monthKey, readyIds\);[\s\S]*?\n      \}\);/)||[''])[0]);
+check(postHandler081 !== '', 'the Post click handler is resolvable');
+const iCommit081 = postHandler081.indexOf('await commitReadyPayroll');
+const iFailBranch081 = postHandler081.indexOf("res.error === 'PayrollPersistenceFailed'");
+const iSuccessClear081 = postHandler081.lastIndexOf('sel.clear()');
+const iSummary081 = postHandler081.indexOf('openPostResultModal(');
+const iSuccessToast081 = postHandler081.indexOf('showSuccess(');
+check(iCommit081 > -1 && iFailBranch081 > iCommit081, 'the persistence-failure branch is evaluated after the posting call');
+check(iSuccessClear081 > iFailBranch081, 'the success-path selection clear occurs AFTER the persistence-failure branch');
+check(iSummary081 > iFailBranch081, 'the posted-vs-skipped summary occurs AFTER the persistence-failure branch');
+check(iSuccessToast081 > iFailBranch081, 'the success toast occurs AFTER the persistence-failure branch');
+// Nothing completion-shaped may sit between the call and the failure branch.
+const preFail081 = postHandler081.slice(iCommit081, iFailBranch081);
+[['selection clear', /sel\.clear\(\)/], ['success summary', /openPostResultModal\(/], ['success toast', /showSuccess\(/]
+].forEach(([label,re])=> check(!re.test(preFail081.replace(/if\(res\.locked\)\{[^}]*\}/,'')), 'no success-only '+label+' precedes the persistence-failure branch'));
+// The failure branch itself must not clear the selection.
+check(!/sel\.clear\(\)/.test(wsFail081), 'the persistence-failure branch retains the selection (no sel.clear())');
+// Locked keeps its own completion behaviour, and only warns once (from the engine).
+check(/if\(res\.locked\)\{ sel\.clear\(\); closeModal\(\); return; \}/.test(postHandler081), 'the locked branch preserves its existing clear+close behaviour and returns');
+check(!/showWarning\(|showError\(/.test((postHandler081.match(/if\(res\.locked\)\{[^}]*\}/)||[''])[0]), 'the locked branch adds no second warning');
+check(!/rolled back|reverted|nothing was saved|nothing was written/i.test(wsFail081), 'the payroll failure message claims no rollback');
+check(/Some data may already have been saved/.test(wsSrc081), 'the payroll failure message states that data may already have been saved');
+
+// (e) TRANSACTION LOOKUP — forward first, narrow unique reverse fallback.
+check(/function payrollTxnOf\(pp\)\{/.test(poeSrc081), 'payrollTxnOf is defined');
+check(/const direct = findTxn\(pp && \(pp\.committedTxnId \|\| pp\.transactionId\)\);/.test(poeSrc081), 'the lookup still tries the FORWARD linkage first');
+check(/function payrollTxnCandidates\(pp\)\{/.test(poeSrc081), 'the reverse-lookup candidate set is a named function');
+const candBody081 = stripComments((poeSrc081.match(/function payrollTxnCandidates\(pp\)\{[\s\S]*?\n\}/)||[''])[0]);
+check(/t\.source==='payroll'/.test(candBody081), 'the reverse lookup considers payroll-sourced transactions only');
+check(/t\.payrollPlanId===pp\.id/.test(candBody081), 'the reverse lookup requires a matching payrollPlanId');
+check(/t\.monthKey===pp\.monthKey/.test(candBody081), 'the reverse lookup requires matching period identity');
+const resolveBody081 = stripComments((poeSrc081.match(/function resolvePayrollTxn\(pp\)\{[\s\S]*?\n\}/)||[''])[0]);
+check(/if\(cands\.length > 1\) return \{ ambiguous: true/.test(resolveBody081), 'more than one candidate yields an AMBIGUOUS result, never a guess');
+check(/cands\.length === 1 \? cands\[0\] : null/.test(resolveBody081), 'the reverse lookup resolves only when exactly one candidate exists');
+// (f) SCENARIO A — a retry can never create a second transaction.
+check(/const resolved = resolvePayrollTxn\(pp\);[\s\S]{0,400}if\(resolved\.ambiguous\)\{[\s\S]{0,600}continue;/.test(crpBody081),
+  'ambiguity is detected BEFORE any mutation and the row is skipped uncommitted');
+check(/PayrollTransactionAmbiguous/.test(crpBody081), 'the ambiguous skip reason uses the typed PayrollTransactionAmbiguous concept');
+check(/if\(txn && pp\.committedTxnId!==txn\.id && pp\.transactionId!==txn\.id\)\{[\s\S]{0,400}pp\.committedTxnId=txn\.id/.test(crpBody081),
+  'a reverse-matched transaction has its forward linkage restored instead of being duplicated');
+check(/let txn = resolved\.txn;/.test(crpBody081), 'the posting path uses the resolved transaction (no second lookup that could create one)');
+const createBlock081 = (crpBody081.match(/if\(!txn\)\{[\s\S]*?\}/)||[''])[0];
+check(createBlock081 !== '' && /payrollCommitTxn\(pp, mo\)/.test(createBlock081), 'a transaction is created ONLY when none resolved');
+check((crpBody081.match(/State\.txns\.push\(/g)||[]).length === 1, 'the posting path has exactly one transaction-creation site');
+
+// (g) INTEGRITY RULE A + RULE C — critical, read-only.
+check(/add\('critical','payroll-orphan-transaction'/.test(stabSrc081), 'Integrity Rule A (orphan payroll transaction) exists and is CRITICAL');
+check(/add\('critical','payroll-overtime-uncommitted'/.test(stabSrc081), 'Integrity Rule C (committed payroll, uncommitted overtime) exists and is CRITICAL');
+const ruleA081 = stripComments((stabSrc081.match(/const orphanPayrollTxns=\[\];[\s\S]*?\}\);\s*\n\s*orphanPayrollTxns\.forEach\([\s\S]*?\}\);/)||[''])[0]);
+check(ruleA081 !== '', 'Rule A body is resolvable');
+check(/t\.source!=='payroll'/.test(ruleA081) && /t\.payrollPlanId/.test(ruleA081), 'Rule A scans payroll transactions carrying a payrollPlanId');
+check(/pp\.committedTxnId===t\.id \|\| pp\.transactionId===t\.id/.test(ruleA081), 'Rule A checks the forward linkage back to the transaction');
+check(/isPayrollCommitted\(pp\)/.test(ruleA081), 'Rule A checks whether the payroll row is committed');
+// Findings must carry review identifiers.
+check(/Finance transaction \$\{t\.id\}[\s\S]{0,200}payroll row \$\{pp\.id\}/.test(stabSrc081), 'Rule A reports transaction id, amount, period, payroll row and employee');
+check(/its linked overtime \$\{o\.id\}/.test(stabSrc081), 'Rule C reports payroll row, period, overtime id, amount and status');
+// READ-ONLY: neither rule mutates or persists.
+[ruleA081, (stabSrc081.match(/State\.payrollPlans\.forEach\(pp=>\{\s*if\(!isPayrollCommitted\(pp\)\) return;[\s\S]*?\}\);\s*\n\s*\}\);/)||[''])[0]
+].forEach((body, i)=>{
+  const label = i===0 ? 'Rule A' : 'Rule C';
+  check(body !== '', label+' body is resolvable for the purity scan');
+  [['status mutation', /\.status\s*=[^=]/], ['link mutation', /committedTxnId\s*=[^=]/], ['persistence', /persist|StorageAdapter/],
+   ['deletion', /\.filter\(|splice\(/], ['snapshot rewrite', /committedSnapshot\s*=[^=]/]
+  ].forEach(([l,re])=> check(!re.test(body), label+' performs no '+l+' (read-only detection, not repair)'));
+});
+
+// (h) WRITE ORDER UNCHANGED + NO NEW ARCHITECTURE.
+const orderIdx081 = ['payrollPlans','monthlyPlans','overtime','transactions'].map(k=>crpBody081.indexOf("['"+k+"'"));
+check(orderIdx081.every((v,i)=> v > -1 && (i===0 || v > orderIdx081[i-1])), 'the payroll write order is unchanged (plans, monthlyPlans, overtime, transactions)');
+check(!/return \{ok:false[\s\S]{0,200}\}\s*steps\.push/.test(crpBody081), 'the attempt-all behaviour is preserved (no early abort between writes)');
+[['coordinator', /PostingCoordinator|PersistenceCoordinator/], ['unit of work', /unitOfWork|UnitOfWork/],
+ ['transaction abstraction', /beginTransaction|TransactionCoordinator/], ['journal', /writeAhead|journalWrite/],
+ // NOTE: `payrollTotalCompensation` is a pre-existing v2.7.3 read-model, so the
+ // probe targets compensation MACHINERY, never the word itself.
+ ['compensation framework', /compensationStep|runCompensation|compensator|CompensationRunner/],
+ ['batch persistence', /saveMany|StorageAdapter\.(setMany|batch)/]
+].forEach(([label,re])=> check(!re.test(poeSrc081) && !re.test(stabSrc081), 'SPR-081 introduces no '+label));
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'SCHEMA_VERSION remains 6');
+check(read(path.join(root,'js','core','storage-adapter.js')).indexOf('async set(key, value)') !== -1, 'StorageAdapter is unchanged');
+check(fs.existsSync(path.join(root,'tools','verify-payroll-posting-runtime.js')), 'SPR-081 runtime harness present: tools/verify-payroll-posting-runtime.js');
 
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
@@ -1561,7 +1674,7 @@ check(!/logActivity\(/.test(payrollRepoCode), 'the audit stays OUTSIDE PayrollRe
 // FENCED — every other persistPayrollPlans() call site remains DIRECT and unchanged.
 const poeCode = stripComments(poeSrc);
 check((poeCode.match(/persistPayrollPlans\(\)/g)||[]).length === 4, 'the four non-aggregate payroll-ops persistence sites remain direct (override clear/set, regeneration, compound posting)');
-check(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/.test(poeSrc), 'commitReadyPayroll compound posting remains direct and compound (4 stores, unchanged)');
+check(/steps\.push\(\['payrollPlans',\s+await persistPayrollPlans\(\)\]\);[\s\S]{0,400}steps\.push\(\['monthlyPlans',\s+await persistMonthlyPlans\(\)\]\);[\s\S]{0,400}steps\.push\(\['overtime',\s+await persistOvertime\(\)\]\);[\s\S]{0,400}steps\.push\(\['transactions',\s+await persist\(\)\]\);/.test(poeSrc), 'commitReadyPayroll compound posting remains direct and compound (4 stores, unchanged order)');
 const planSrc = read(path.join(root,'js','people','payroll-planning.js'));
 check(!/await persistPayrollPlans\(\)/.test(planSrc) && !/PayrollRepository/.test(planSrc), 'payroll-planning performs NO persistence at all (SPR-078 — posting path retired, not migrated)');
 const wsSrc = read(path.join(root,'js','people','payroll-workspace.js'));
@@ -1616,7 +1729,7 @@ check((poeCode.match(/persistPayrollPlans\(\)/g)||[]).length === 4, 'non-aggrega
 check(/await persistPayrollPlans\(\)/.test(wsSrc) && !/PayrollRepository/.test(wsSrc), 'non-aggregate Payroll generation remains direct (payroll-workspace.js)');
 // (c) THE BOUND: compound multi-store paths remain DIRECT and unexpressible in the contract.
 check(/renewedToId = nc\.id;[\s\S]{0,900}ContractRepository\.save\(\)/.test(ctSrc), 'Contract renewal create-successor is Repository-mediated in ONE collection write (SPR-077 — not compound)');
-check(/await persistPayrollPlans\(\); await persistMonthlyPlans\(\); await persistOvertime\(\); await persist\(\)/.test(poeSrc), 'compound Payroll posting remains direct (commitReadyPayroll — four stores in one operation)');
+check(/steps\.push\(\['payrollPlans',\s+await persistPayrollPlans\(\)\]\);[\s\S]{0,400}steps\.push\(\['monthlyPlans',\s+await persistMonthlyPlans\(\)\]\);[\s\S]{0,400}steps\.push\(\['overtime',\s+await persistOvertime\(\)\]\);[\s\S]{0,400}steps\.push\(\['transactions',\s+await persist\(\)\]\);/.test(poeSrc), 'compound Payroll posting remains direct (commitReadyPayroll — four stores in one operation)');
 check(!/persist/.test(planSrc), 'the second compound Payroll posting path no longer exists (SPR-078 retired payroll-planning posting)');
 // (d) THE DISCLAIMER, mechanically enforced: the Repository layer mediates only a
 //     MINORITY of the collection persist functions. 7 of 7 is adoption, not coverage.
