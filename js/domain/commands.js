@@ -41,6 +41,16 @@ const DOMAIN_COMMANDS = Object.freeze({
   // renewal workflow; creation/renewal status writes remain out of scope. Uses the
   // shared lifecycle contract (boundaryMethod/boundaryPayload = transition).
   'contract.status.transition': Object.freeze({ aggregate: 'Contract', boundary: 'ContractStatusAggregate', boundaryMethod: 'transition', boundaryPayload: 'transition', handler: 'transitionContractStatus', transition: 'controlled Contract status transition (Draft→Active/Cancelled, Active→Cancelled; Renewed/Cancelled terminal) — OPERATIONAL via Domain.command(); business authority = ContractStatusAggregate (PR-5K); Renewed is renewal-only, creation/renewal status writes out of scope' }),
+  // SPR-077 — eighth OPERATIONAL command, third Contract boundary. The Contract
+  // RENEWAL workflow: the predecessor moves to the terminal `Renewed` status and a
+  // successor Contract is created, both inside the ONE `contracts` collection (one
+  // storage-key write — ATR-011 confirmed this is NOT a compound-persistence
+  // operation). The aggregate is the business authority: it decides eligibility and
+  // AUTHORS the successor's shape, the predecessor's renewed status, and both
+  // history notes; the handler applies them, persists once through
+  // ContractRepository, and rolls back in memory on a failed persist. Uses the
+  // default boundaryMethod (prepare) with a dedicated boundaryPayload (`renewal`).
+  'contract.renewal.execute': Object.freeze({ aggregate: 'Contract', boundary: 'ContractRenewalAggregate', boundaryPayload: 'renewal', handler: 'renewContract', transition: 'Contract renewal (predecessor Draft/Active → Renewed, successor created as Active/Draft) — OPERATIONAL via Domain.command(); business authority = ContractRenewalAggregate (SPR-077); one collection, one persist, in-memory rollback' }),
   // Payroll
   'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
   // Finance

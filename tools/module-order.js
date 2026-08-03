@@ -90,6 +90,7 @@ module.exports = [
   'domain/contract-date-aggregate.js',
   'domain/payroll-lifecycle-aggregate.js',
   'domain/contract-status-aggregate.js',
+  'domain/contract-renewal-aggregate.js',
   'domain/domain-layer.js',
   // --- platform layer (Milestone Delta, PR-6A): the application boundary above
   //     the Domain. Loads AFTER the Domain facade (which it delegates to) and

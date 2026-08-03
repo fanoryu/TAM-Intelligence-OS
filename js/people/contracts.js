@@ -42,7 +42,7 @@ function contractRowsHTML(){
     <td>${hrActionsMenu('ct', c.id, [
       ['ct-detail','View Detail'],
       ['ct-edit','Edit'],
-      ['ct-renew','Renew'],
+      contractIsRenewable(c)?['ct-renew','Renew']:null,
       c.status==='Draft'?['ct-activate','Activate']:null,
       c.status!=='Cancelled'&&c.status!=='Renewed'?['ct-cancel','Cancel']:null,
       ['ct-delete','Delete']
@@ -229,10 +229,120 @@ async function deleteContract(id){
   toast('Contract deleted.'); render();
 }
 
+// Read-only UI eligibility mirror for renewal. Consults the SAME source of truth
+// the aggregate uses (CONTRACT_RENEWABLE_STATUSES — the non-terminal stored
+// statuses) so the menu/detail affordance and the business rule cannot drift.
+// Purely presentational: the aggregate remains the authority and re-checks.
+function contractIsRenewable(c){
+  if(!c) return false;
+  if(c.renewedToId) return false;
+  const renewable = (typeof CONTRACT_RENEWABLE_STATUSES !== 'undefined' && CONTRACT_RENEWABLE_STATUSES) || ['Draft','Active'];
+  return renewable.indexOf(c.status) !== -1;
+}
+
+/* ============================================================
+   SPR-077 "The Successor" — Contract renewal HANDLER.
+   The IMPLEMENTATION AUTHORITY for the contract.renewal.execute command. The
+   business authority is ContractRenewalAggregate (js/domain); this handler keeps
+   its own defense-in-depth eligibility check and owns id generation, timestamps,
+   the history APPEND, the single persistence invocation, rollback, and the typed
+   result. It receives the authored { predecessorStatus, predecessorNote,
+   successorNote, successor } decision from the aggregate (via Domain.command).
+
+   Before SPR-077 this workflow lived inline in the renewal form's submit handler:
+   it mutated the predecessor, pushed the successor, called persistContracts()
+   directly, DISCARDED the result, and then reported success and navigated — so a
+   failed write was shown to the user as a completed renewal. That is the defect
+   this slice closes (ATR-011 §4).
+
+   NOT a compound-persistence operation: the predecessor and the successor both
+   live in State.contracts, so ONE ContractRepository.save() -> persistContracts()
+   -> StorageAdapter.set() write covers both. Rollback is therefore strictly
+   IN-MEMORY — no coordinator, no unit of work, no compensation across keys.
+
+   AUDIT: the pre-SPR-077 renewal wrote no activity entry, so none is added here —
+   the same preservation rule PR-5K applied to transitionContractStatus. Adding
+   one would be a behavior change outside this slice's authority.
+   ============================================================ */
+async function renewContract(id, renewal){
+  const c = contractById(id);
+  if(!c) return { success:false, error:'ContractNotFound' };
+  renewal = renewal || {};
+  const successor = renewal.successor;
+  if(!successor) return { success:false, error:'RenewalNotAllowed' };
+  // Defense-in-depth (the aggregate decided first): the predecessor must still be
+  // in a renewable stored status and must not already point at a successor.
+  const renewable = (typeof CONTRACT_RENEWABLE_STATUSES !== 'undefined' && CONTRACT_RENEWABLE_STATUSES) || ['Draft','Active'];
+  if(renewable.indexOf(c.status) === -1) return { success:false, error:'RenewalNotAllowed' };
+  if(c.renewedToId) return { success:false, error:'ContractAlreadyRenewed' };
+
+  const now = new Date().toISOString();
+  // Successor: the aggregate-authored business shape plus handler-owned identity,
+  // timestamps, back-link, and the history entry built from the authored note.
+  const nc = {
+    id: uid('ct'),
+    employeeId: successor.employeeId, employeeName: successor.employeeName,
+    contractNumber: successor.contractNumber,
+    startDate: successor.startDate, durationMonths: successor.durationMonths,
+    monthlySalary: successor.monthlySalary,
+    status: successor.status, notes: successor.notes,
+    createdAt: now, updatedAt: now, renewedFromId: c.id,
+    history: [{event:'created', ts:now, note: renewal.successorNote}],
+  };
+  // Predecessor: snapshot exactly what changes, then apply the authored decision.
+  const prevStatus = c.status, prevRenewedToId = c.renewedToId, prevUpdatedAt = c.updatedAt;
+  c.status = renewal.predecessorStatus;
+  c.renewedToId = nc.id;
+  c.updatedAt = now;
+  (c.history=c.history||[]).push({event:'renewed', ts:now, note: renewal.predecessorNote});
+  State.contracts.push(nc);
+
+  // Persistence mechanics go through the Repository boundary (ContractRepository
+  // .save() -> persistContracts() -> StorageAdapter). ONE write covers both
+  // contracts. Strict persisted.ok handling — no truthy/falsy ambiguity.
+  const persisted = await ContractRepository.save();
+  if(persisted.ok !== true){
+    // In-memory rollback — drop the successor and restore every predecessor field
+    // so State.contracts matches the last successfully persisted state.
+    State.contracts = State.contracts.filter(x=>x.id!==nc.id);
+    c.status = prevStatus;
+    if(prevRenewedToId===undefined) delete c.renewedToId; else c.renewedToId = prevRenewedToId;
+    c.history.pop();
+    c.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
+  }
+  return { success:true, data:{ predecessor:c, successor:nc } };
+}
+
+// The ONE official UI seam for a Contract renewal. The renewal modal routes
+// through here; no UI calls the handler directly. Success actions (toast, modal
+// close, successor navigation, re-render) run ONLY after the Repository has
+// confirmed the write, and typed business failures are surfaced to the user.
+// Returns true only on success.
+async function requestContractRenewal(id, patch){
+  const outcome = await uiExecute('command', 'contract.renewal.execute', [id, patch]);
+  if(outcome && outcome.success){
+    const nc = outcome.data && outcome.data.successor;
+    closeModal();
+    toast('Contract renewed. Old contract marked Renewed; history preserved.');
+    if(nc) State.detailContractId = nc.id;
+    render();
+    return true;
+  }
+  const err = outcome && outcome.error;
+  toast(err==='PersistFailed'
+    ? 'Contract renewal could not be saved — nothing was changed. Free up storage and try again.'
+    : 'Could not renew this contract'+(err && err!=='ContractNotFound' ? ': '+err : '')+'.', 6000);
+  return false;
+}
+
 // Renewal: old → Renewed, new → Active (or Draft), history preserved, no
 // historical payroll/transactions touched.
 function openRenewModal(id){
   const c = contractById(id); if(!c){ toast('Contract not found.'); return; }
+  // Terminal statuses (Renewed/Cancelled) and contracts that already have a
+  // successor are not renewable — the aggregate rejects them; don't open the form.
+  if(!contractIsRenewable(c)){ toast(c.renewedToId||c.status==='Renewed' ? 'This contract has already been renewed.' : 'A '+String(c.status||'').toLowerCase()+' contract cannot be renewed.', 5000); return; }
   const prevEnd = contractCalc(c).endDate;
   const suggestedStart = prevEnd ? (()=>{ const d=new Date(prevEnd+'T00:00:00'); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })() : isoToday();
   openModalHTML(`
@@ -254,23 +364,19 @@ function openRenewModal(id){
       root.querySelector('#renewCancel').addEventListener('click', closeModal);
       root.querySelector('#renewForm').addEventListener('submit', async ev=>{
         ev.preventDefault();
+        // UI owns ONLY input collection. Business authority (eligibility, the
+        // successor's shape, the predecessor's renewed status, both history notes)
+        // belongs to ContractRenewalAggregate; mutation, persistence, rollback and
+        // the success actions belong to the handler/seam. On failure the modal is
+        // deliberately left open so the user can retry or cancel.
         const fd = new FormData(ev.target);
-        const now = new Date().toISOString();
-        const nc = {
-          id:uid('ct'), employeeId:c.employeeId, employeeName:c.employeeName,
-          contractNumber:(fd.get('contractNumber')||'').trim(),
-          startDate:fd.get('startDate'), durationMonths:Number(fd.get('durationMonths'))||0,
-          monthlySalary: fd.get('monthlySalary')===''?null:Number(fd.get('monthlySalary')),
-          status: fd.get('status'), notes:`Renewal of ${c.contractNumber||''}`,
-          createdAt:now, updatedAt:now, renewedFromId:c.id,
-          history:[{event:'created', ts:now, note:`Renewed from ${c.contractNumber||''}`}],
-        };
-        c.status='Renewed'; c.renewedToId=nc.id; c.updatedAt=now;
-        (c.history=c.history||[]).push({event:'renewed', ts:now, note:`Renewed into ${nc.contractNumber}`});
-        State.contracts.push(nc);
-        await persistContracts();
-        closeModal(); toast('Contract renewed. Old contract marked Renewed; history preserved.');
-        State.detailContractId = nc.id; render();
+        await requestContractRenewal(id, {
+          contractNumber: fd.get('contractNumber'),
+          startDate: fd.get('startDate'),
+          durationMonths: fd.get('durationMonths'),
+          monthlySalary: fd.get('monthlySalary'),
+          status: fd.get('status'),
+        });
       });
     }});
 }
@@ -389,7 +495,7 @@ function renderContractDetail(main){
         <button class="btn" id="backCt">← Contracts</button>
         <button class="btn" id="editCtD">Edit</button>
         <button class="btn" id="editDatesCtD">Dates</button>
-        <button class="btn btn-accent" id="renewCtD">Renew Contract</button>
+        ${contractIsRenewable(c)?'<button class="btn btn-accent" id="renewCtD">Renew Contract</button>':''}
       </div>
     </div>
     ${alerts.length?`<div class="insight-list" style="margin-bottom:14px;">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
@@ -435,7 +541,7 @@ function renderContractDetail(main){
   document.getElementById('backCt').addEventListener('click', ()=>hrNavTo('contracts'));
   document.getElementById('editCtD').addEventListener('click', ()=>openContractModal(c.id));
   document.getElementById('editDatesCtD').addEventListener('click', ()=>openContractDatesModal(c.id));
-  document.getElementById('renewCtD').addEventListener('click', ()=>openRenewModal(c.id));
+  { const rb=document.getElementById('renewCtD'); if(rb) rb.addEventListener('click', ()=>openRenewModal(c.id)); }
   const el = document.getElementById('ctEmpLink'); if(el && emp) el.addEventListener('click', ()=>hrNavTo('employeeDetail', {detailEmpId:emp.id}));
   main.querySelectorAll('[data-open-detail]').forEach(b=>b.addEventListener('click', ()=>openDetailModal(b.dataset.openDetail)));
 }

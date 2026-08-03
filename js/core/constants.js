@@ -26,8 +26,8 @@
 
 /* ---------- app identity ---------- */
 const APP_NAME = 'TAM Intelligence OS';
-const APP_VERSION = '2.7.3';
-const APP_RELEASE_NAME = 'Supplemental-Aware Payroll History';
+const APP_VERSION = '2.8.0';
+const APP_RELEASE_NAME = 'Aggregate-Owned Contract Renewal';
 const APP_TAGLINE = 'Finance Execution Engine';
 const FILE_BASE = 'tam-intelligence-os-v' + APP_VERSION; // versioned base for the file itself and every download
 const APP_POSITIONING = 'Integrated Management Intelligence for PT Total Asset Manajemen';
