@@ -66,7 +66,9 @@ and **no change to how or when data is written**.
 
 **What this release does not do.** It adds **no rollback and no all-or-nothing guarantee**. Saving
 several datasets is not an atomic operation in the browser, so a failure message means *the operation
-did not complete* — not *nothing was written*. Reloading returns you to the last saved state.
+did not complete* — not *nothing was written*. Reloading reloads whatever data was successfully
+persisted. Because a multi-dataset save may partially succeed, review the data or restore the
+pre-operation backup before continuing.
 
 **Known limitation — Payroll posting.** Posting payroll still writes four datasets one after another
 (payroll plans, monthly plan, overtime, finance transactions) with no coordinated rollback. If one of

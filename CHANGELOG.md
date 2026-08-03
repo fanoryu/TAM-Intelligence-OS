@@ -23,8 +23,9 @@ historical record is rewritten.
   Because that marker is also the batch selector, leaving it set previously blocked every further attempt
   for the rest of the session. Clearing it restores an honest in-memory state and allows an immediate
   retry. Only the marker is cleared — record removals stay applied and nothing is rolled back.
-- Failure messages state that the operation did not complete and point to the honest recovery path
-  (reload restores the last saved state). The verifier asserts that no failure message claims a rollback.
+- Failure messages state that the operation did not complete. Reloading reads whatever data was
+  successfully persisted; partial saves may still require manual review or restoration from the
+  pre-operation backup. The verifier asserts that no failure message claims a rollback.
 
 ### Added
 - `tools/verify-savealldata-runtime.js` (61 checks) — exercises all-succeed, first/middle/final/multiple
