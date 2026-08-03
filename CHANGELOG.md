@@ -1,5 +1,61 @@
 # Changelog
 
+## 2.8.3 — Payroll Posting Integrity
+
+**Type:** Correctness patch (SPR-081). **No** schema, storage-key, persisted-data, or
+persistence-mechanics change (still 15 keys, `SCHEMA_VERSION` 6); no migration added or re-run; no
+historical record is rewritten.
+
+> **No atomicity or rollback was introduced.** Payroll posting still writes four storage keys
+> sequentially and the browser is atomic per key only, so a failure means the posting did not complete —
+> not that nothing was written. No rollback or compensating action exists.
+
+### Changed
+- `commitReadyPayroll` captures and strictly inspects all four persistence results (payroll plans,
+  monthly plan, overtime, finance transactions). Success requires all four. Failure returns a typed
+  outcome naming the first failed step in the fixed write order, the completed steps, and that partial
+  persistence occurred. The write order and write mechanics are unchanged.
+- No success audit entry is written after a failed posting.
+- The workspace Post handler inspects the result before any completion behaviour. `sel.clear()` and
+  `closeModal()` previously ran on the same line as the posting call; the success toast, the
+  posted-vs-skipped summary, and the selection clear are now on the success path only.
+- The persistence-failure branch retains the selection, so the same rows stay checked after the
+  re-render and the user can see what was involved while being told to review manually. It closes the
+  modal explicitly because `render()` rebuilds the workspace beneath it. The locked branch is unchanged
+  and still emits exactly one warning.
+- `payrollTxnOf()` keeps its forward lookup and gains a narrow reverse fallback — payroll-sourced only,
+  exact `payrollPlanId`, exact period. Previously, when the payroll-plans write failed and the
+  transactions write succeeded, a reload left a real transaction that forward lookup could not resolve,
+  so a retry created a **second** transaction and doubled the payroll (measured: 1,020,000 became
+  2,040,000) with no integrity finding beforehand. A reverse-matched transaction now has its forward
+  linkage restored with a `transaction-relinked` history entry instead of being duplicated.
+- `resolvePayrollTxn()` distinguishes resolved / none / ambiguous so a caller that may **create** a
+  transaction can never mistake ambiguity for absence. `commitReadyPayroll` resolves before mutating, so
+  an ambiguous row is skipped uncommitted with a `PayrollTransactionAmbiguous` reason listing every
+  candidate. It never guesses and never adds a third transaction.
+
+### Added
+- Integrity Check rule: orphan Payroll transactions reported as **Critical** — a payroll-sourced Finance
+  transaction whose linked payroll plan is not committed.
+- Integrity Check rule: committed Payroll whose linked Overtime is still Approved reported as
+  **Critical**. When the overtime write failed after the plan and transaction writes landed, that
+  overtime stayed Approved and was runtime-proven to be re-included in the next month's generated
+  payroll. No rule previously detected it.
+- `tools/verify-payroll-posting-runtime.js` (106 checks) — all-succeed; each of the four writes failing;
+  the orphan-retry scenario proven not to duplicate; the overtime-still-Approved scenario proven
+  detected; ambiguous resolution proven to skip rather than guess; and workspace-caller coverage proving
+  failure retains the selection and emits only the manual-review error while success preserves the full
+  completion UX. Branch ordering is proven by index.
+
+### Known limitations
+- Posting remains **non-atomic**: four sequential writes, no rollback, no compensation. Checking results
+  makes failure visible; it does not make posting all-or-nothing.
+- Integrity Check **detects but does not repair**. The two new findings report that a partial state
+  exists and where — they do not fix it.
+- **Not every possible Payroll partial state is automatically repairable.** The two failure modes closed
+  here are those proven by SPR-080 discovery; this release does not claim to detect or remediate every
+  combination of the four writes failing. Manual review may still be required after partial persistence.
+
 ## 2.8.2 — Honest Persistence Results
 
 **Type:** Correctness patch (SPR-079). **No** schema, storage-key, persisted-data, or

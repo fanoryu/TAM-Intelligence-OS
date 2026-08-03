@@ -6,7 +6,7 @@ dependencies.
 
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.8.2-blue)
+![Version](https://img.shields.io/badge/version-2.8.3-blue)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
@@ -45,37 +45,47 @@ Design principles:
 
 ## Current release
 
-**v2.8.2 — Honest Persistence Results** · `SCHEMA_VERSION` 6
+**v2.8.3 — Payroll Posting Integrity** · `SCHEMA_VERSION` 6
 
-A correctness release for operations that save several datasets at once. Those operations previously
-reported success even when the browser rejected one or more writes. They now check every write and say
-plainly when the operation did not complete. No schema change, no new storage key, no data migration,
-and **no change to how or when data is written**.
+A correctness release for posting payroll. Posting previously ignored whether its writes actually
+succeeded, so a failed posting could still report success, and two failure modes could quietly cost or
+double real money. Posting now checks every write, reports failure honestly, and refuses to guess. No
+schema change, no new storage key, no data migration, and **no change to how or when data is written**.
 
-- **Multi-dataset saves report failure honestly** — the shared save routine used by Smart Import and
-  employee merge checks all 14 of its writes and reports success only when every one succeeded. It
-  previously discarded every result and always reported success.
-- **Employee merge no longer reports false success** — a failed save now shows a clear message instead
-  of "Merged…", and the pre-merge safety backup is kept.
-- **Smart Import records completion only when the save succeeds** — the import audit entry is written
-  only after every write succeeded. On failure the wizard stays on the review step with your parsed
-  file intact so you can retry, rather than jumping to the results screen.
-- **Smart Import undo stays retryable** — a failed undo no longer marks the batch as undone, which
-  previously made every further attempt report "No Smart Import batch available to undo" for the rest
-  of the session.
+- **Posting checks all four of its saves** — posting writes payroll plans, the monthly plan, overtime,
+  and finance transactions. It previously discarded those results; it now reports success only when all
+  four succeeded, and names the step that failed.
+- **A failed posting no longer records a success audit entry** — the audit trail reflects what actually
+  happened.
+- **A failed posting no longer shows success behavior** — no completion toast and no posted summary
+  when the posting did not complete.
+- **Your selected Payroll rows stay visible after a failed posting** — the selection is no longer
+  cleared, so you can see exactly which rows were involved while you review them.
+- **Retrying after the orphan-transaction failure reuses the existing Finance transaction** — it no
+  longer creates a second one. Previously, if the payroll-plan write failed after the transaction write
+  succeeded, a reload left a real transaction that the retry could not see, and retrying **doubled the
+  payroll amount**. Posting now finds that transaction, restores its link, and records a history entry.
+- **Integrity Check reports orphan Payroll transactions as Critical** — a Finance transaction left
+  behind by a partial posting is now surfaced instead of going unnoticed.
+- **Integrity Check reports committed Payroll whose linked Overtime is still Approved as Critical** —
+  previously, if the overtime write failed after the payroll and transaction writes landed, that
+  overtime stayed Approved and could be **paid again in the next month's payroll**, with nothing
+  detecting it.
+- **Ambiguous Finance matches are never guessed** — if more than one transaction could be the match,
+  posting skips that row uncommitted and tells you which candidates it found, rather than picking one
+  or adding a third transaction.
 
-**What this release does not do.** It adds **no rollback and no all-or-nothing guarantee**. Saving
-several datasets is not an atomic operation in the browser, so a failure message means *the operation
-did not complete* — not *nothing was written*. Reloading reloads whatever data was successfully
-persisted. Because a multi-dataset save may partially succeed, review the data or restore the
-pre-operation backup before continuing.
+**What this release does not do.** Posting **still writes four storage keys one after another, and it
+is not atomic.** No rollback and no compensating action were introduced. A failure message therefore
+means *the posting did not complete* — not *nothing was written*; earlier writes in the sequence may
+well have persisted, and reloading reloads whatever was successfully persisted.
 
-**Known limitation — Payroll posting.** Posting payroll still writes four datasets one after another
-(payroll plans, monthly plan, overtime, finance transactions) with no coordinated rollback. If one of
-those writes fails, the period can be left partially posted and may need manual review through
-Settings → Run Integrity Check. This is unchanged in v2.8.2 and is the subject of ongoing work.
+**Integrity Check detects; it does not repair.** The two new findings tell you a partial state exists
+and where it is — they do not fix it, and **not every possible partial posting state is automatically
+repairable.** After a failed posting, run Settings → Run Integrity Check, and expect that manual review
+— or restoration from the pre-operation backup — may still be required.
 
-Builds on the **v2.8.1 Single Payroll Posting Authority** release. See [`CHANGELOG.md`](CHANGELOG.md)
+Builds on the **v2.8.2 Honest Persistence Results** release. See [`CHANGELOG.md`](CHANGELOG.md)
 and [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
 
 Two supported outputs:
@@ -83,7 +93,7 @@ Two supported outputs:
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (64 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/ domain/ platform/ transport/ repository/ cli/`), one shared global scope, no ES modules | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.2.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.3.html` |
 
 ---
 
@@ -171,9 +181,9 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(1136 checks)"]
+    VERIFY["tools/verify-build.js<br/>(1212 checks)"]
   end
-  DIST["dist/tam-intelligence-os-v2.8.2.html<br/>(portable single file)"]
+  DIST["dist/tam-intelligence-os-v2.8.3.html<br/>(portable single file)"]
 
   IDX --> JS --> STATE --> LS
   CSS --> IDX
@@ -226,7 +236,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.8.2.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.8.3.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
@@ -402,6 +412,9 @@ changes. Browsing `docs/`? Start at the [`docs/` index](docs/README.md).
 Directions only — no release numbers are assigned unless already approved.
 
 **Released**
+- Payroll Posting Integrity — posting inspects all four save results, no false success audit or
+  completion UX, no duplicate Finance transaction on retry, no guessed ambiguous match, two new
+  Critical Integrity Check findings (v2.8.3)
 - Honest Persistence Results — multi-dataset saves report failure instead of unconditional success;
   no false completion, audit, or navigation after a failed write (v2.8.2)
 - Single Payroll Posting Authority — legacy Payroll Planning retired, one canonical committed-state
