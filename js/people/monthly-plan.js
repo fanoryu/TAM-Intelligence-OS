@@ -25,7 +25,7 @@ function buildMonthlyPreview(monthKey, opts){
     // Part 11: the Monthly Plan CONSUMES payroll committed in Payroll Planning —
     // it never generates payroll independently. Committed payroll already carries
     // its own planned Gaji transaction, so these rows are informational (locked).
-    const committed = State.payrollPlans.filter(p=>p.monthKey===monthKey && p.status==='Committed');
+    const committed = State.payrollPlans.filter(p=>p.monthKey===monthKey && isPayrollCommitted(p));
     committed.forEach(p=>{
       const txn = payrollTxnOf(p);
       rows.push({type:'payroll', label:`${p.employeeName}${p.contractNumber?' · '+p.contractNumber:''}${p.contractProgress?' · '+p.contractProgress:''}`, category:State.settings.defaultPayrollCategory||'Gaji', planned:num(p.plannedAmount), selected:false, dup:'committed', warn:null, committedTxnId: txn?txn.id:null});
@@ -99,7 +99,7 @@ function renderMonthlyPlanGenerator(main){
       <div class="card stat-card"><div class="stat-label">Committed Rows</div><div class="stat-value">${plan?plan.committedTxnIds.length:0}</div><div class="stat-sub dim">planned transactions in this month's plan</div></div>
       <div class="card stat-card"><div class="stat-label">Workflow</div><div class="stat-sub dim" style="margin-top:2px;line-height:1.8;">Draft → Reviewed → Committed<br><span class="faint">Approved &amp; Closed are future-ready</span></div></div>
     </div>
-    ${(()=>{ const cyc=payrollCycleStatus(monthKey); const committed=State.payrollPlans.filter(p=>p.monthKey===monthKey&&p.status==='Committed').length; const sect = cyc==='Not Generated'?'Missing':(committed?(State.payrollPlans.some(p=>p.monthKey===monthKey&&p.otChanged)?'Changed':'Committed'):(cyc==='In Review'?'Reviewed':'Generated'));
+    ${(()=>{ const cyc=payrollCycleStatus(monthKey); const committed=State.payrollPlans.filter(p=>p.monthKey===monthKey&&isPayrollCommitted(p)).length; const sect = cyc==='Not Generated'?'Missing':(committed?(State.payrollPlans.some(p=>p.monthKey===monthKey&&p.otChanged)?'Changed':'Committed'):(cyc==='In Review'?'Reviewed':'Generated'));
       return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
       <h3>Payroll Source <span class="tag">${escapeHtml(sect)}</span></h3>
       <p class="hint" style="margin:-6px 0 10px;">The Monthly Plan consumes payroll committed in Payroll Planning — it does not generate payroll here. ${committed?`${committed} committed payroll transaction(s) for ${escapeHtml(mo.month)}.`:'<b>Payroll has not been committed for this month.</b>'}</p>

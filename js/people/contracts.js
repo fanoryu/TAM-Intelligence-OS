@@ -206,9 +206,12 @@ async function transitionContractStatus(id, transition){
 // typed business failures. Returns true only on success.
 async function requestContractStatusTransition(id, targetStatus){
   const c = contractById(id); if(!c) return false;
-  // Preserve the existing committed-payroll cancellation behavior exactly (the
-  // p.status==='committed' comparison quirk is intentionally left unchanged).
-  if(targetStatus==='Cancelled' && payrollPlansForContract(id).some(p=>p.status==='committed')){
+  // Preserve the existing committed-payroll cancellation behavior. SPR-078: the
+  // former lowercase-only comparison is replaced by the shared canonical predicate,
+  // so this guard now fires for canonical 'Committed' rows too — previously it only
+  // saw rows written by the retired planning path, which means the warning did NOT
+  // fire for payroll posted through the live workspace path.
+  if(targetStatus==='Cancelled' && payrollPlansForContract(id).some(isPayrollCommitted)){
     if(!confirm('This contract has committed payroll. Cancelling it will NOT modify historical payroll or transactions. Continue?')) return false;
   }
   const outcome = await uiExecute('command', 'contract.status.transition', [id, targetStatus]);
@@ -524,7 +527,7 @@ function renderContractDetail(main){
       <h3>Linked Payroll Plans</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Month</th><th>Progress</th><th class="num">Planned Payroll</th><th>Status</th></tr></thead>
-        <tbody>${plans.map(p=>`<tr><td class="dim">${escapeHtml(p.month)} ${p.year}</td><td>${escapeHtml(p.contractProgress||'')}</td><td class="num">${fmtIDR(p.plannedAmount)}</td><td>${p.status==='committed'?'<span class="pill pill-status-completed">Committed</span>':'<span class="pill pill-status-planned">Draft</span>'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">No payroll plans yet.</td></tr>'}</tbody>
+        <tbody>${plans.map(p=>`<tr><td class="dim">${escapeHtml(p.month)} ${p.year}</td><td>${escapeHtml(p.contractProgress||'')}</td><td class="num">${fmtIDR(p.plannedAmount)}</td><td>${isPayrollCommitted(p)?'<span class="pill pill-status-completed">Committed</span>':'<span class="pill pill-status-planned">Draft</span>'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">No payroll plans yet.</td></tr>'}</tbody>
       </table></div>
     </div>
     <div class="card" style="margin-bottom:14px;">

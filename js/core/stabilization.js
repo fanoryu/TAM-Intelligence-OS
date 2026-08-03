@@ -235,7 +235,7 @@ function runIntegrityCheck(){
   if(otDoubleCommit) add('critical','overtime-double-commit',`${otDoubleCommit} overtime record(s) are committed to more than one payroll plan`);
   // payroll amount inconsistent with linked overtime
   let otMismatch=0;
-  State.payrollPlans.forEach(p=>{ if(p.status==='Committed' && Array.isArray(p.overtimeIds) && p.overtimeIds.length){ const sum=p.overtimeIds.map(id=>overtimeById(id)).filter(Boolean).reduce((s,o)=>s+num(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount),0); if(Math.abs(sum-num(p.overtimeAmount!=null?p.overtimeAmount:p.overtime))>1) otMismatch++; } });
+  State.payrollPlans.forEach(p=>{ if(isPayrollCommitted(p) && Array.isArray(p.overtimeIds) && p.overtimeIds.length){ const sum=p.overtimeIds.map(id=>overtimeById(id)).filter(Boolean).reduce((s,o)=>s+num(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount),0); if(Math.abs(sum-num(p.overtimeAmount!=null?p.overtimeAmount:p.overtime))>1) otMismatch++; } });
   if(otMismatch) add('warning','overtime-payroll-mismatch',`${otMismatch} payroll plan(s) have an overtime total that differs from their linked overtime records`);
 
   // ----- Smart Import integrity (v2.4.0) -----
@@ -272,7 +272,7 @@ function runIntegrityCheck(){
     if(computePayrollPlanned(p)<0) pNeg++;
     if(p.plannedAmount!=null && Math.abs(num(p.plannedAmount)-computePayrollPlanned(p))>1) pInconsistent++;
     if(p.monthlyPlanId && !State.monthlyPlans.some(m=>m.id===p.monthlyPlanId)) pMissingPlan++;
-    if(p.status==='Committed'){ const t=payrollTxnOf(p); if(!t) pMissingTxn++; else if(t.actual==null && Math.abs(num(t.planned)-num(p.plannedAmount))>1) pTxnMismatch++; }
+    if(isPayrollCommitted(p)){ const t=payrollTxnOf(p); if(!t) pMissingTxn++; else if(t.actual==null && Math.abs(num(t.planned)-num(p.plannedAmount))>1) pTxnMismatch++; }
     if(p.salaryOverride && !String(p.salaryOverride.reason||'').trim()) pOverrideNoReason++;
     const k=p.monthKey+'|'+p.employeeId; if(seenPM[k]) pDupMonth++; else seenPM[k]=1;
     (p.overtimeIds||[]).forEach(oid=>{ if(!overtimeById(oid)) pOtBroken++; });
@@ -325,7 +325,7 @@ function runIntegrityCheck(){
   let pPostedNoTxn=0, pTxnNoPlanId=0, pPlanTxnTotalDiff=0, pPlanTxnOtDiff=0, pMissingOtIds=0, pNewNoSnapshot=0, pSnapTxnDiff=0;
   State.payrollPlans.forEach(p=>{
     if(p.status==='Cancelled') return;
-    const stage = (typeof payrollStage==='function') ? payrollStage(p) : (p.status==='Committed'?'Posted':'Draft');
+    const stage = (typeof payrollStage==='function') ? payrollStage(p) : (isPayrollCommitted(p)?'Posted':'Draft');
     if(stage!=='Posted' && stage!=='Executed') return;
     const t = payrollTxnOf(p);
     if(!t){ pPostedNoTxn++; return; }

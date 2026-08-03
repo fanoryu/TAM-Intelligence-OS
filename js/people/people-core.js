@@ -7,6 +7,42 @@
    payrollPlanId / monthlyPlanId) — never description text alone.
    ============================================================ */
 
+/* ============================================================
+   CANONICAL PAYROLL COMMITTED-STATE PREDICATE (SPR-078)
+   ------------------------------------------------------------
+   ONE shared read predicate for "is this PayrollPlan committed?". It lives here,
+   in the shared people-domain read helpers, because it is consumed across
+   Contracts, the HR dashboard, reports, the monthly plan, the payroll engine, and
+   the integrity checker — and this module loads BEFORE every one of them, so no
+   consumer relies on cross-file hoisting.
+
+   CANONICAL stored value is 'Committed' (see PAYROLL_STATUSES in
+   payroll-ops-engine.js). It is the ONLY value any live writer may write.
+
+   'committed' (lowercase) is a LEGACY READ-COMPATIBILITY value only. It was
+   written by the retired Payroll Planning posting path (commitPayroll), which
+   SPR-078 removed. The v2.5.0 migration (migrateToPayrollOpsSchema) already maps
+   legacy lowercase forward, but it is one-time and flag-guarded, so rows written
+   by the retired path AFTER that flag was set are never revisited. Those rows are
+   real committed payroll with a real Finance transaction; before SPR-078 they read
+   as stage "Draft", were invisible to the integrity checker and HR reports, and
+   were rejected by PayrollLifecycleAggregate as an invalid state.
+
+   Treating the legacy value as committed is the SAFE direction: a committed row is
+   immutable (CLAUDE.md §8.1), so recognizing it PROTECTS it. Recognizing it is a
+   READ concern only — this predicate never writes, and no migration is added or
+   re-run (that remains separately authorized work).
+   ============================================================ */
+const PAYROLL_COMMITTED_STATUS = 'Committed';          // canonical — the only writable value
+const PAYROLL_COMMITTED_STATUS_LEGACY = 'committed';   // legacy read compatibility ONLY
+
+// Accepts a PayrollPlan record OR a bare status string. Read-only; never mutates.
+function isPayrollCommitted(planOrStatus){
+  if(planOrStatus == null) return false;
+  const s = (typeof planOrStatus === 'string') ? planOrStatus : planOrStatus.status;
+  return s === PAYROLL_COMMITTED_STATUS || s === PAYROLL_COMMITTED_STATUS_LEGACY;
+}
+
 /* ---------- month-key math ---------- */
 // Transactions key months as "YYYY-MM". These helpers keep contract
 // progress, payroll and planning consistent with that scheme.
