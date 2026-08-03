@@ -43,7 +43,7 @@
 | Latest release | `v2.7.3` (2026-07-31) — unchanged |
 | CI / CodeQL on `main` | Green / Green |
 | Repository modules | **3** |
-| Storage keys | Unchanged (13 asserted by the verifier) |
+| Storage keys | Unchanged (15 asserted by the verifier: 13 legacy + companyAccounts + supplementalPayments) |
 | Golden master | Unchanged |
 
 ## 2. Architecture
