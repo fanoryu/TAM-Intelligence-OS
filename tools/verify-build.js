@@ -382,7 +382,7 @@ check(/const EmployeeContactAggregate = Object\.freeze\(/.test(aggSrc2), 'Employ
 check(/prepare:\s*function/.test(aggSrc2), 'aggregate exposes prepare()');
 // Exactly one operational aggregate: only one *Aggregate object with a prepare() exists in js/domain.
 const aggregateDefs = (srcJs.match(/const \w*Aggregate = Object\.freeze\(\{\s*[\s\S]*?(?:prepare|transition):\s*function/g)||[]).length;
-check(aggregateDefs === 8, 'exactly eight operational aggregates defined (found '+aggregateDefs+')');
+check(aggregateDefs === 9, 'exactly nine operational aggregates defined (found '+aggregateDefs+')');
 // The command registry binds the aggregate as the boundary for the one command.
 check(/'employee\.contact\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'EmployeeContactAggregate'/.test(cmdSrc), 'employee.contact.update declares boundary EmployeeContactAggregate');
 // The facade routes a bounded command through the aggregate before the handler.
@@ -1044,7 +1044,7 @@ check(/filter\(p=>p\.monthKey===monthKey && isPayrollCommitted\(p\)\)/.test(read
 check(/isPayrollCommitted\(p\) && Array\.isArray\(p\.overtimeIds\)/.test(read(path.join(root,'js','core','stabilization.js'))), 'the integrity checker uses the shared predicate');
 // (g) SPR-078 INTRODUCES NO NEW ARCHITECTURE.
 check(!/PayrollPostingAggregate/.test(srcJs), 'SPR-078 introduces no PayrollPostingAggregate');
-check(aggregateDefs === 8, 'aggregate count is unchanged by SPR-078 (still eight)');
+check(aggregateDefs === 9, 'aggregate count is unchanged by SPR-078 (SPR-095 added the ninth: ContractCoreAggregate)');
 [['coordinator', /PostingCoordinator|PersistenceCoordinator/], ['unit of work', /unitOfWork|UnitOfWork/],
  ['transaction abstraction', /beginTransaction|TransactionCoordinator/], ['batch persistence', /saveMany|StorageAdapter\.(setMany|batch)/],
  ['journal/recovery record', /writeAhead|journalWrite|recoveryRecord/]
@@ -1148,7 +1148,7 @@ check(/State\.backups\.unshift\(\{[\s\S]{0,300}Pre-Smart-Import backup/.test(siC
 // (i) SPR-079 CHANGES NOTHING ELSE.
 check(read(path.join(root,'js','core','storage-adapter.js')).indexOf('async set(key, value)') !== -1, 'StorageAdapter still exposes its unchanged single-key set()');
 check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'SCHEMA_VERSION remains 6');
-check(aggregateDefs === 8, 'aggregate count is unchanged by SPR-079 (still eight)');
+check(aggregateDefs === 9, 'aggregate count is unchanged by SPR-079 (SPR-095 added the ninth: ContractCoreAggregate)');
 check(fs.existsSync(path.join(root,'tools','verify-savealldata-runtime.js')), 'SPR-079 runtime harness present: tools/verify-savealldata-runtime.js');
 
 // SPR-081 — PAYROLL POSTING RESULT INTEGRITY + PARTIAL-STATE DETECTION.
@@ -1522,7 +1522,7 @@ check(/employeeExists\(/.test(aggSrc2) && /normalizeAllowedFields\(/.test(aggSrc
 check(/employeeExists\(/.test(empAggSrc) && /normalizeAllowedFields\(/.test(empAggSrc) && /validateEnum\(/.test(empAggSrc), 'employment aggregate uses the shared helpers');
 // Operational surface is UNCHANGED by this refactor: still 2 aggregates, 2 commands, 1 query
 // (asserted above via aggregateDefs===2, migratedCmdIds.length===2, migratedQueryIds.length===1).
-check(aggregateDefs === 8, 'operational aggregate count remains exactly eight');
+check(aggregateDefs === 9, 'operational aggregate count remains exactly nine');
 check(migratedCmdIds.length === 8, 'operational command count remains exactly eight');
 check(migratedQueryIds.length === 1, 'operational query count remains exactly one');
 
@@ -1605,7 +1605,7 @@ check(!/Math\.random|Date\.now|new Date\(|Date\.now\(|crypto\./.test(gwCode), 'g
 check(!/ApplicationGateway|application-gateway|platform\//.test(facSrc), 'domain-layer.js has no dependency on the platform layer (one-way)');
 check(!/ApplicationGateway/.test(cmdSrc) && !/ApplicationGateway/.test(qrySrc) && !/ApplicationGateway/.test(aggSrc), 'domain registries have no dependency on the gateway');
 // Operational surface is UNCHANGED by PR-6A (infrastructure only).
-check(aggregateDefs === 8 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1, 'operational surface unchanged by the gateway (8 aggregates / 8 commands / 1 query)');
+check(aggregateDefs === 9 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1, 'operational surface unchanged by the gateway (9 aggregates / 8 seam-routed commands / 1 query)');
 
 // PR-7A "The Transport" — Transport Layer boundary (TransportAdapter), the first
 // operational Platform expansion. Infrastructure only: the canonical application
@@ -1662,11 +1662,11 @@ check(!/TransportAdapter|transport-adapter|transport\//.test(gwCode), 'applicati
 // Layer stays independent of the Transport Layer (no reverse dependency permitted).
 check(!/\bTransportAdapter\b/.test(gwCode), 'one-way invariant: Application Gateway never references TransportAdapter (Platform independent of Transport)');
 // Operational surface is UNCHANGED by PR-7A (infrastructure only).
-check(aggregateDefs === 8 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1, 'operational surface unchanged by the transport (8 aggregates / 8 aggregate-backed commands / 1 aggregate-backed query)');
+check(aggregateDefs === 9 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1, 'operational surface unchanged by the transport (9 aggregates / 8 seam-routed aggregate-backed commands / 1 aggregate-backed query)');
 // Registered executable surface (full registry, incl. multi-segment ids) is 13 commands / 4 queries.
 function allRegisteredIds(src){ return (src.match(/^\s*'([a-z][a-zA-Z]*(?:\.[a-zA-Z]+)+)':/gm)||[]).map(s=>s.match(/'([^']+)'/)[1]); }
 const allCmdIds = allRegisteredIds(cmdSrc), allQryIds = allRegisteredIds(qrySrc);
-check(allCmdIds.length === 14, 'registered command surface is exactly 14 (found '+allCmdIds.length+')');
+check(allCmdIds.length === 15, 'registered command surface is exactly 15 (found '+allCmdIds.length+')');
 check(allQryIds.length === 4, 'registered query surface is exactly 4 (found '+allQryIds.length+')');
 
 // PR-7B "The Conduit" — the browser UI now CONSUMES the canonical application path.
@@ -1709,7 +1709,7 @@ check((pwsSrc7b.match(/uiExecute\('command', 'payroll\.lifecycle\.transition'/g)
 check(!/uiExecute/.test(gwCode), 'Application Gateway is independent of the UI seam (never references uiExecute)');
 check(!/uiExecute|TransportAdapter/.test(facSrc), 'Domain is independent of the Transport/UI seam (never references uiExecute/TransportAdapter)');
 // Operational surface is UNCHANGED by PR-7B (consumption paths only; no Domain op added/removed).
-check(aggregateDefs === 8 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 14 && allQryIds.length === 4, 'operational surface unchanged by the conduit (8 aggregates / 8 aggregate-backed commands / 1 aggregate-backed query; 14 registered commands / 4 registered queries)');
+check(aggregateDefs === 9 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 15 && allQryIds.length === 4, 'operational surface unchanged by the conduit (9 aggregates / 8 seam-routed aggregate-backed commands / 1 aggregate-backed query; 15 registered commands / 4 registered queries)');
 
 // PR-8A "The Repository" — the first persistence-MECHANICS boundary, proven on one
 // bounded reference slice (Employee Identity / employee.contact.update). It isolates
@@ -1762,7 +1762,7 @@ check((stripComments(empSrc).match(/EmployeeRepository\.save\(\)/g)||[]).length 
 // The Domain facade has no dependency on the Repository (one-way).
 check(!/EmployeeRepository|repository\//.test(facSrc), 'domain-layer.js has no dependency on the repository layer (one-way)');
 // Operational surface is UNCHANGED by PR-8A (persistence infrastructure only).
-check(aggregateDefs === 8 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 14 && allQryIds.length === 4, 'operational surface unchanged by the repository (8 aggregates / 8 aggregate-backed commands / 1 query; 14 registered / 4 registered)');
+check(aggregateDefs === 9 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 15 && allQryIds.length === 4, 'operational surface unchanged by the repository (9 aggregates / 8 seam-routed commands / 1 query; 15 registered / 4 registered)');
 
 // PR-10A "The Contract Foundation" — the SECOND entity Repository (ContractRepository),
 // proving the Repository architecture generalizes to a second aggregate. Introduced on
@@ -1799,8 +1799,9 @@ check(/ok:\s*true/.test(contractRepoCode) && /ok:\s*false,\s*error:\s*'PersistFa
 ].forEach(([label,re])=>check(!re.test(contractRepoCode), 'ContractRepository never performs '+label));
 // The migrated handler still OWNS rollback (the repository does not roll back).
 check(/c\[k\] = before\[k\]/.test(udCode) && /c\.history\.pop\(\)/.test(udCode) && /c\.updatedAt = prevUpdatedAt/.test(udCode), 'contract-date handler still owns full rollback (fields + history.pop + updatedAt) on persistence failure');
-// PR-10B — exactly two ContractRepository call sites across contracts.js (dates + status).
-check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 3, 'exactly three ContractRepository.save() call sites in contracts.js (contract.dates.update + contract.status.transition + contract.renewal.execute)');
+// PR-10B / SPR-095 — exactly four ContractRepository call sites across contracts.js
+// (dates + status + renewal + the unrouted core handler).
+check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 4, 'exactly four ContractRepository.save() call sites in contracts.js (contract.dates.update + contract.status.transition + contract.renewal.execute + contract.core.update)');
 // Renewal is Repository-mediated (SPR-077). The former comment here said renewal "remains DIRECT and
 // out of scope", which contradicted the assertion below and predates SPR-077; corrected by ARCH-008.
 // Comment only — the check itself is unchanged.
@@ -1810,7 +1811,7 @@ check(!/ContractRepository/.test(repoSrc), 'EmployeeRepository has no dependency
 check(!/ContractRepository|contract-repository/.test(facSrc), 'domain-layer.js has no dependency on the contract repository (one-way)');
 check(!/ContractRepository|contract-repository/.test(storageSrc), 'StorageAdapter has no dependency on the contract repository (one-way)');
 // Operational surface is UNCHANGED by PR-10A.
-check(aggregateDefs === 8 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 14 && allQryIds.length === 4, 'operational surface unchanged by the contract repository (8 aggregates / 8 aggregate-backed commands / 1 query; 14 registered / 4 registered)');
+check(aggregateDefs === 9 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 15 && allQryIds.length === 4, 'operational surface unchanged by the contract repository (9 aggregates / 8 seam-routed commands / 1 query; 15 registered / 4 registered)');
 
 // PR-10B "The Contract Status Slice" — the SECOND Contract handler adopts the existing
 // ContractRepository, completing Repository adoption for the Contract aggregate
@@ -1827,8 +1828,8 @@ check(/persisted\.ok !== true/.test(udCode), 'contract-date handler still uses s
 check((udCode.match(/ContractRepository\.save\(\)/g)||[]).length === 1 && !/persistContracts\(/.test(udCode), 'updateContractDates() remains Repository-mediated');
 // Exactly two aggregate-backed Contract handlers use the Repository — the Contract
 // aggregate is now FULLY Repository-mediated (contract.dates.update + contract.status.transition).
-check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 3, 'exactly three aggregate-backed Contract handlers use ContractRepository (Contract aggregate fully Repository-mediated)');
-check(migratedCmdIds.filter(id=>/^contract\./.test(id)).length === 3, 'all three registered aggregate-backed Contract commands are Repository-mediated');
+check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 4, 'exactly four aggregate-backed Contract handlers use ContractRepository (dates + status + renewal + SPR-095 core; Contract aggregate fully Repository-mediated)');
+check(migratedCmdIds.filter(id=>/^contract\./.test(id)).length === 3, 'exactly three Contract commands are seam-routed and Repository-mediated (contract.core.update is Repository-mediated but deliberately NOT routed — SPR-095)');
 // Rollback remains HANDLER-owned (the Repository does not roll back).
 check(/c\.status = prevStatus/.test(tcCode) && /c\.history\.pop\(\)/.test(tcCode) && /c\.updatedAt = prevUpdatedAt/.test(tcCode), 'contract-status handler still owns full rollback (status + history.pop + updatedAt) on persistence failure');
 check(/error:'PersistFailed'/.test(tcCode), 'contract-status handler preserves the typed PersistFailed result');
@@ -1873,7 +1874,7 @@ check(/async save\(\)/.test(contractRepoSrc) && (contractRepoCode.match(/async \
 check(/ok === true/.test(contractRepoCode) && /ok:\s*false,\s*error:\s*'PersistFailed'/.test(contractRepoCode), 'ContractRepository result contract remains { ok:true } / { ok:false, error:"PersistFailed" }');
 check(!/ContractRepository/.test(poeSrc), 'payroll ops engine has no ContractRepository dependency (repositories stay independent)');
 // Operational + registered surface UNCHANGED by PR-10B.
-check(aggregateDefs === 8 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 14 && allQryIds.length === 4, 'operational + registered surface unchanged by the contract status slice');
+check(aggregateDefs === 9 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 15 && allQryIds.length === 4, 'operational + registered surface unchanged by the contract status slice (9 aggregates / 8 seam-routed / 15 registered)');
 
 // PR-11A "The Payroll Foundation" — the THIRD entity Repository (PayrollRepository),
 // completing aggregate-backed Repository adoption (7 of 7) across Employee, Contract,
@@ -1946,17 +1947,17 @@ check(!/PayrollRepository|payroll-repository/.test(facSrc), 'domain-layer.js has
 check(!/PayrollRepository|payroll-repository/.test(storageSrc), 'StorageAdapter has no dependency on the payroll repository (one-way)');
 // ADOPTION — 4 (Employee) + 2 (Contract) + 1 (Payroll) = 7 of 7 aggregate-backed handlers.
 check((stripComments(empSrc).match(/EmployeeRepository\.save\(\)/g)||[]).length === 4, 'Employee Repository adoption remains 4 of 4');
-check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 3, 'Contract Repository adoption is 3 of 3');
+check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 4, 'Contract Repository adoption is 4 of 4');
 check((poeCode.match(/PayrollRepository\.save\(\)/g)||[]).length === 1, 'Payroll Repository adoption becomes 1 of 1');
 check(((stripComments(empSrc).match(/EmployeeRepository\.save\(\)/g)||[]).length +
        (stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length +
-       (poeCode.match(/PayrollRepository\.save\(\)/g)||[]).length) === 8, 'overall aggregate-backed Repository adoption is 8 of 8 (aggregate-backed handlers only — NOT all persistence, NOT compound, NOT backend readiness)');
+       (poeCode.match(/PayrollRepository\.save\(\)/g)||[]).length) === 9, 'overall aggregate-backed Repository adoption is 9 of 9 (aggregate-backed handlers only — NOT all persistence, NOT compound, NOT backend readiness)');
 check(fs.readdirSync(path.join(root,'js','repository')).length === 3, 'exactly three Repository modules (Employee + Contract + Payroll); no generic repository added');
 // Existing Repository contracts are UNCHANGED by PR-11A.
 check(/async save\(\)/.test(contractRepoSrc) && (contractRepoCode.match(/async \w+\(/g)||[]).length === 1, 'ContractRepository contract unchanged by PR-11A');
 check(/async save\(\)/.test(repoSrc) && (stripComments(repoSrc).match(/async \w+\(/g)||[]).length === 1, 'EmployeeRepository contract unchanged by PR-11A');
 // Operational + registered surface UNCHANGED by PR-11A.
-check(aggregateDefs === 8 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 14 && allQryIds.length === 4, 'operational + registered surface unchanged by the payroll repository slice');
+check(aggregateDefs === 9 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 15 && allQryIds.length === 4, 'operational + registered surface unchanged by the payroll repository slice (9 aggregates / 8 seam-routed / 15 registered)');
 
 // ============================================================
 // ARCHITECTURAL MILESTONE — AGGREGATE-BACKED REPOSITORY ADOPTION COMPLETE (7 of 7).
@@ -1968,7 +1969,7 @@ check(aggregateDefs === 8 && migratedCmdIds.length === 8 && migratedQueryIds.len
 // adoption completeness and persistence abstraction are different things, and the
 // second is explicitly NOT claimed. See the DESIGN NOTE in payroll-repository.js.
 // ============================================================
-console.log('== AGGREGATE-BACKED REPOSITORY ADOPTION MILESTONE (8 of 8 — bounded claim) ==');
+console.log('== AGGREGATE-BACKED REPOSITORY ADOPTION MILESTONE (9 of 9 — bounded claim) ==');
 const empCode2 = stripComments(empSrc), ctCode2 = stripComments(ctSrc);
 const adoption = {
   Employee: (empCode2.match(/EmployeeRepository\.save\(\)/g)||[]).length,
@@ -1976,10 +1977,13 @@ const adoption = {
   Payroll:  (poeCode.match(/PayrollRepository\.save\(\)/g)||[]).length
 };
 // (a) THE MILESTONE: all seven aggregate-backed handlers are Repository-mediated.
-check(adoption.Employee === 4 && adoption.Contract === 3 && adoption.Payroll === 1 &&
-      (adoption.Employee + adoption.Contract + adoption.Payroll) === 8,
-      'MILESTONE: all eight aggregate-backed handlers are Repository-mediated through entity-named repositories (Employee 4 + Contract 3 + Payroll 1 = 8 of 8)');
-check(migratedCmdIds.length === 8, 'the milestone count matches the eight aggregate-backed commands routed through the seam');
+check(adoption.Employee === 4 && adoption.Contract === 4 && adoption.Payroll === 1 &&
+      (adoption.Employee + adoption.Contract + adoption.Payroll) === 9,
+      'MILESTONE: all nine aggregate-backed handlers are Repository-mediated through entity-named repositories (Employee 4 + Contract 4 + Payroll 1 = 9 of 9)');
+// SPR-095 separates ADOPTION from ROUTING: nine aggregate-backed handlers are
+// Repository-mediated, but only eight are reachable through the UI seam. The ninth
+// (contract.core.update) is domain preparation and is invoked by nothing.
+check(migratedCmdIds.length === 8, 'eight of the nine aggregate-backed commands are routed through the seam (contract.core.update is registered but unrouted — SPR-095)');
 check(fs.readdirSync(path.join(root,'js','repository')).length === 3, 'exactly three entity-named repositories back the milestone (no generic repository)');
 // (b) THE BOUND: non-aggregate paths remain DIRECT — adoption completeness is NOT
 //     persistence abstraction. Each entity keeps direct collection writes.
@@ -2041,7 +2045,109 @@ check(!/\brender\w*\s*\(|\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(|openModa
 check(!/\bshell\b|renderShell|hrNavTo\s*\(|State\.view\s*=|\.innerHTML/.test(cliCode), 'CLI performs no shell/navigation/DOM rendering (CLI is not a UI layer)');
 check(!/document\.(getElementById|querySelector|querySelectorAll|createElement|write)\s*\(|window\.(location|open)\b/.test(cliCode), 'CLI makes no real DOM/browser-UI calls (inert loader stubs only, never used to render)');
 // Operational surface is UNCHANGED by PR-8B (a new ingress adds no Domain operation).
-check(aggregateDefs === 8 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 14 && allQryIds.length === 4, 'operational surface unchanged by the CLI (8 aggregates / 8 aggregate-backed commands / 1 query; 14 registered / 4 registered)');
+check(aggregateDefs === 9 && migratedCmdIds.length === 8 && migratedQueryIds.length === 1 && allCmdIds.length === 15 && allQryIds.length === 4, 'operational surface unchanged by the CLI (9 aggregates / 8 seam-routed commands / 1 query; 15 registered / 4 registered)');
+
+/* SPR-095 — CONTRACT CORE DOMAIN PREPARATION (ADR-014 sequencing step 1).
+   The BEHAVIOUR of the aggregate, the command, the handler and its repository
+   mediation is proven by tools/verify-contract-core-runtime.js; this file only makes
+   that harness discoverable and asserts the production SHAPE, without executing it.
+   The bounded claim: the authority EXISTS and NOTHING invokes it. Editor routing is
+   ADR-014 step 2, gated on OQ-2, and is not authorized here. */
+console.log('== CONTRACT CORE AUTHORITY (SPR-095 — domain preparation, ADR-014) ==');
+const ccPath = path.join(root,'js','domain','contract-core-aggregate.js');
+check(fs.existsSync(ccPath), 'aggregate module present: js/domain/contract-core-aggregate.js');
+check(jsFiles.indexOf('domain/contract-core-aggregate.js') !== -1, 'module-order.js includes domain/contract-core-aggregate.js');
+check(indexHtml.includes('<script src="js/domain/contract-core-aggregate.js"></script>'), 'index.html includes domain/contract-core-aggregate.js');
+// Load order: after the Contract linkage helpers it reads and before the Domain facade that resolves it.
+check(jsFiles.indexOf('people/people-core.js') < jsFiles.indexOf('domain/contract-core-aggregate.js') &&
+      jsFiles.indexOf('domain/contract-core-aggregate.js') < jsFiles.indexOf('domain/domain-layer.js'), 'contract-core-aggregate.js loads after people-core.js and before domain-layer.js');
+const ccSrc = read(ccPath);
+const ccCode = stripComments(ccSrc);
+check(/const ContractCoreAggregate = Object\.freeze\(/.test(ccSrc), 'ContractCoreAggregate is a frozen object');
+check(/prepare:\s*function/.test(ccSrc), 'ContractCoreAggregate exposes prepare() (the DEFAULT prepare/patch entry contract)');
+check(dist.includes('const ContractCoreAggregate') && dist.includes('window.ContractCoreAggregate = ContractCoreAggregate'), 'ContractCoreAggregate present and exposed in dist');
+// OWNERSHIP — exactly the ten fields of the ADR-014 field-authority matrix, and no other.
+const ccFieldsDecl = (ccSrc.match(/const CONTRACT_CORE_FIELDS = \[([\s\S]*?)\];/)||[])[1] || '';
+const ccFields = (ccFieldsDecl.match(/'([^']+)'/g)||[]).map(s=>s.slice(1,-1));
+const ADR014_FIELDS = ['employeeId','employeeName','contractNumber','monthlySalary','notes',
+  'workHoursPerDay','workDaysPerWeek','weeksPerMonth','scheduleEffectiveDate','scheduleNotes'];
+check(ccFields.length === 10, 'the Core allowlist declares exactly ten fields (found '+ccFields.length+')');
+check(ADR014_FIELDS.every(f=>ccFields.indexOf(f)!==-1) && ccFields.every(f=>ADR014_FIELDS.indexOf(f)!==-1), 'the Core allowlist is exactly the ADR-014 field-authority matrix');
+['status','startDate','durationMonths','endDate','updatedAt','history','id','createdAt','renewedFromId','renewedToId'].forEach((f)=>
+  check(ccFields.indexOf(f) === -1, 'the Core aggregate does not own the field owned elsewhere by ADR-014: '+f));
+// AGGREGATE PURITY — a business authority with no side effects (comments stripped).
+[['State mutation', /State\s*[.[]/],
+ ['persistence', /\bpersist\w*\s*\(/],
+ ['repository access', /Repository\s*[.[]/],
+ ['history append', /\.history\b|history\s*=|\.push\(/],
+ ['updatedAt mutation', /updatedAt/],
+ ['UI render', /\brender\s*\(|innerHTML/],
+ ['toast/alert/confirm', /\btoast\s*\(|showWarning\s*\(|showSuccess\s*\(|\balert\s*\(|confirm\s*\(/],
+ ['localStorage', /localStorage/],
+ ['audit logging', /logActivity\s*\(/],
+ ['id/timestamp generation', /Math\.random|Date\.now|new Date\(|uid\s*\(/]
+].forEach(([label,re])=>check(!re.test(ccCode), 'ContractCoreAggregate never performs '+label));
+check(!/\w+Aggregate\s*[.[]/.test(ccCode), 'ContractCoreAggregate touches no other aggregate');
+cmdHandlers.forEach((h)=>check(!new RegExp('\\b'+h+'\\s*\\(').test(ccCode), 'ContractCoreAggregate does not call handler directly: '+h));
+// The aggregate returns typed decisions only — the existing { ok, patch } / { ok, error } contract.
+check(/return \{ ok: true, patch: clean \};/.test(ccSrc), 'the aggregate returns the standard { ok:true, patch } decision');
+['ContractNotFound','ForbiddenContractField','NoContractCoreFieldsProvided','IncompleteEmployeeLink',
+ 'EmployeeNotFound','EmployeeLinkMismatch','EmployeeReassignmentNotAllowed','InvalidContractNumber',
+ 'ContractNumberNotEditable','InvalidMonthlySalary','IncompleteScheduleGroup','InvalidScheduleComponent',
+ 'InvalidScheduleEffectiveDate'].forEach((e)=>
+  check(ccSrc.includes("error: '"+e+"'"), 'the aggregate returns the typed business failure: '+e));
+// The measured invariants ADR-014 records are enforced, not merely documented.
+check(/hasEmpId !== hasEmpName/.test(ccCode), 'ADR-014 §1: employeeId + employeeName are enforced as an atomic pair');
+check(/submittedSchedule\.length !== CONTRACT_CORE_SCHEDULE_FIELDS\.length/.test(ccCode), 'ADR-014 §2: a partial schedule group is refused');
+check(/provided !== 0 && provided !== CONTRACT_CORE_SCHEDULE_COMPONENTS\.length/.test(ccCode), 'ADR-014 §2: an internally incomplete schedule (the rate-zeroing shape) is refused');
+check(/c\.status !== 'Draft'/.test(ccCode) && /ContractNumberNotEditable/.test(ccCode), 'PD-1: contractNumber is constrained to Draft');
+check(/contractHasLinkedRecords\(c\.id\)/.test(ccCode) && /EmployeeReassignmentNotAllowed/.test(ccCode), 'PD-2: reassignment consults the linked-record guard');
+check(/payrollPlansForContract\(id\)/.test(ccCode) && /txnsForContract\(id\)/.test(ccCode) && /overtimeRecordsForContract\(id\)/.test(ccCode), 'PD-2 guard reads payroll, transactions AND overtime linkage');
+check(/function overtimeRecordsForContract\(ctId\)\{ return State\.overtimeRecords\.filter\(o=>o\.contractId===ctId\); \}/.test(read(path.join(root,'js','people','people-core.js'))), 'the overtime linkage helper is a read-only filter (no mutation)');
+// COMMAND REGISTRATION — registered, aggregate-backed, handler-bound.
+check(/'contract\.core\.update':\s*Object\.freeze\(\{[^}]*boundary:\s*'ContractCoreAggregate'/.test(cmdSrc), 'contract.core.update declares boundary ContractCoreAggregate');
+check(/'contract\.core\.update':\s*Object\.freeze\(\{[^}]*handler:\s*'updateContractCore'/.test(cmdSrc), 'contract.core.update is registered to handler updateContractCore');
+check(!/'contract\.core\.update':\s*Object\.freeze\(\{[^}]*boundaryMethod/.test(cmdSrc), 'contract.core.update uses the DEFAULT prepare/patch contract (no new convention)');
+// HANDLER — the implementation authority, Repository-mediated, with handler-owned rollback.
+const uccStart = ctSrc.indexOf('async function updateContractCore(');
+check(uccStart !== -1, 'updateContractCore handler present');
+const uccRest = uccStart!==-1 ? ctSrc.slice(uccStart+1) : '';
+const uccNext = uccRest.search(/\n(async function|function) /);
+const uccBody = uccNext>=0 ? uccRest.slice(0, uccNext) : uccRest;
+const uccCode = stripComments(uccBody);
+check((uccCode.match(/ContractRepository\.save\(\)/g)||[]).length === 1, 'updateContractCore persists exactly once, through ContractRepository.save()');
+check(!/persistContracts\(/.test(uccCode), 'updateContractCore never calls persistContracts() directly (repository-mediated)');
+check(/persisted\.ok !== true/.test(uccCode), 'updateContractCore uses strict persisted.ok handling (no truthy/falsy ambiguity)');
+check(/CONTRACT_CORE_FIELDS/.test(uccCode) && /ForbiddenContractField/.test(uccCode), 'updateContractCore re-checks the SAME allowlist (defense in depth, one source of truth)');
+check(/success:\s*true/.test(uccCode) && /success:\s*false/.test(uccCode) && /error:'PersistFailed'/.test(uccCode), 'updateContractCore returns the existing typed result convention');
+check(/if\(had\[k\]\) c\[k\] = before\[k\]; else delete c\[k\];/.test(uccCode) && /c\.history\.pop\(\);/.test(uccCode) && /c\.updatedAt = prevUpdatedAt;/.test(uccCode), 'updateContractCore owns full rollback (fields + history.pop + updatedAt) on persistence failure');
+check(/if\(!hadHistory\) delete c\.history;/.test(uccCode), 'rollback restores the ABSENCE of a history property it created');
+check(!/logActivity\(/.test(uccCode), 'updateContractCore adds no audit entry (matching the three existing Contract handlers)');
+['status','startDate','durationMonths','endDate','renewedFromId','renewedToId','createdAt'].forEach((f)=>
+  check(!uccCode.includes(f), 'contract-core handler does not touch forbidden field: '+f));
+// SCOPE — the authority EXISTS but NOTHING invokes it. This is the whole claim of SPR-095.
+check(!/uiExecute\('command',\s*'contract\.core\.update'/.test(srcJs), 'NO UI seam routes contract.core.update (registered but unrouted)');
+check(migratedCmdIds.indexOf('contract.core.update') === -1, 'contract.core.update is absent from the seam-routed command set');
+check((stripComments(srcJs).match(/updateContractCore\s*\(/g)||[]).length === 1, 'updateContractCore has exactly one occurrence in production source — its definition, with no call site');
+check(!/ContractCoreAggregate\s*[.[]/.test(stripComments(srcJs)), 'no module invokes ContractCoreAggregate directly (only the Domain facade resolves it, by name)');
+// The editor and the delete path are UNCHANGED by SPR-095.
+check(/rec\.status = fd\.get\('status'\)/.test(ctSrc), 'the Contract editor still writes status directly (authority NOT migrated)');
+check((stripComments(ctSrc).match(/const persisted = await persistContracts\(\);/g)||[]).length === 2, 'the editor and delete paths still persist directly through persistContracts() (exactly two direct sites)');
+check((stripComments(ctSrc).match(/uiExecute\('command'/g)||[]).length === 3, 'contracts.js still routes exactly three commands through the seam (dates + status + renewal)');
+// No schema, storage, or seeding implication.
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'SCHEMA_VERSION remains 6 (SPR-095 is not a migration)');
+check(!/ContractCoreAggregate|contract-core-aggregate/.test(facSrc), 'domain-layer.js has no hard dependency on the Core aggregate (resolved by name)');
+check(!/ContractCoreAggregate/.test(contractRepoSrc), 'ContractRepository has no dependency on the Core aggregate (one-way)');
+// The dedicated runtime harness is DISCOVERABLE and honest (not executed here).
+const ccrPath = path.join(root,'tools','verify-contract-core-runtime.js');
+check(fs.existsSync(ccrPath), 'SPR-095 runtime harness present: tools/verify-contract-core-runtime.js');
+const ccrSrc = read(ccrPath);
+check(/RUNTIME VERIFICATION PASSED/.test(ccrSrc) && /process\.exit\(1\)/.test(ccrSrc), 'SPR-095 harness fails non-zero on assertion failure');
+check(!/child_process|require\('http|require\("http/.test(ccrSrc), 'SPR-095 harness spawns no process and opens no network');
+check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rmSync|mkdir)/.test(ccrSrc), 'SPR-095 harness writes nothing to disk');
+check(/module-order\.js/.test(ccrSrc) && /vm\.runInContext/.test(ccrSrc), 'SPR-095 harness executes the REAL production modules in manifest order');
+check(/Domain\.command\('contract\.core\.update'/.test(ccrSrc), 'SPR-095 harness exercises the real Domain command path (aggregate then handler)');
+check(/const ADR014_CORE_FIELDS = \[/.test(ccrSrc), 'SPR-095 harness asserts ownership against its OWN copy of the ADR-014 matrix (not production'+"'"+'s)');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

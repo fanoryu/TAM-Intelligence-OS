@@ -345,8 +345,13 @@ const auditEntries = (rt, type)=>{ try{ return JSON.parse(rt.memStore[AUDIT_KEY]
     // comments legitimately MENTION ContractRepository.save() while describing the path.
     const ctSrc = ctRaw.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/.*/g,'');
     check(/rec\.status = fd\.get\('status'\)/.test(ctRaw), 'the editor still assigns status directly (residual authority NOT migrated)');
-    check((ctSrc.match(/ContractRepository\.save\(\)/g)||[]).length === 3, 'still exactly three ContractRepository.save() call sites (no repository mediation added)');
-    check((ctSrc.match(/uiExecute\('command'/g)||[]).length === 3, 'still exactly three command routes (no command introduced)');
+    /* SPR-095 added a FOURTH ContractRepository.save() — the unrouted contract.core.update
+       handler (domain preparation, ADR-014 step 1). That does not weaken this scope claim:
+       what SPR-093 pinned is that the EDITOR and DELETE paths gained no repository
+       mediation, which the persistContracts() assertions below still prove directly. */
+    check((ctSrc.match(/ContractRepository\.save\(\)/g)||[]).length === 4, 'exactly four ContractRepository.save() call sites (dates + status + renewal + the unrouted SPR-095 core handler)');
+    check(!/ContractRepository/.test(ctSrc.slice(ctSrc.indexOf("const EDITED_FIELDS = ["), ctSrc.indexOf("closeModal(); toast(isNew?'Contract created.'"))), 'the editor save path itself contains NO repository mediation (still persistContracts())');
+    check((ctSrc.match(/uiExecute\('command'/g)||[]).length === 3, 'still exactly three command routes (the SPR-095 command is registered but routed by nothing)');
     check(/const persisted = await persistContracts\(\);/.test(ctSrc), 'the editor and delete paths check the persistContracts() result');
     check((ctSrc.match(/persisted !== true/g)||[]).length >= 2, 'both paths use the strict persisted !== true check');
     check(!/\n\s*await persistContracts\(\);/.test(ctSrc), 'no persistContracts() call in contracts.js discards its result');

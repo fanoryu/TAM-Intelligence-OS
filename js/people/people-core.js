@@ -132,6 +132,10 @@ function payrollPlanById(id){ return State.payrollPlans.find(p=>p.id===id); }
 function txnsForEmployee(empId){ return State.txns.filter(t=>t.employeeId===empId); }
 function txnsForContract(ctId){ return State.txns.filter(t=>t.contractId===ctId); }
 function payrollPlansForContract(ctId){ return State.payrollPlans.filter(p=>p.contractId===ctId); }
+// SPR-095 — read-only sibling of the two helpers above, completing the linked-record
+// set ADR-014's PD-2 guard consults (payroll + transactions + overtime). Overtime rows
+// carry contractId from creation (overtime.js). Nothing else calls it yet.
+function overtimeRecordsForContract(ctId){ return State.overtimeRecords.filter(o=>o.contractId===ctId); }
 function payrollPlansForEmployee(empId){ return State.payrollPlans.filter(p=>p.employeeId===empId); }
 function empHasHistory(empId){ return txnsForEmployee(empId).length>0 || payrollPlansForEmployee(empId).length>0; }
 function empEligible(e){ return e && e.active!==false && e.employmentStatus==='Active'; }
