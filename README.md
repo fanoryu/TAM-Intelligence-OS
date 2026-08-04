@@ -6,7 +6,7 @@ dependencies.
 
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.8.3-blue)
+![Version](https://img.shields.io/badge/version-2.8.4-blue)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
@@ -38,54 +38,61 @@ Design principles:
   app. The only external network references are the XLSX parser and web fonts (CDN).
 - **Two shippable forms.** A modular development source and a single portable HTML file that behaves
   identically.
-- **Data-safety first.** A 188-check verifier guards the persisted-data schema, storage keys,
+- **Data-safety first.** A 1267-check verifier guards the persisted-data schema, storage keys,
   migration flags, and build fidelity on every change.
 
 ---
 
 ## Current release
 
-**v2.8.3 — Payroll Posting Integrity** · `SCHEMA_VERSION` 6
+**v2.8.4 — Monthly Plan Result Integrity** · `SCHEMA_VERSION` 6
 
-A correctness release for posting payroll. Posting previously ignored whether its writes actually
-succeeded, so a failed posting could still report success, and two failure modes could quietly cost or
-double real money. Posting now checks every write, reports failure honestly, and refuses to guess. No
-schema change, no new storage key, no data migration, and **no change to how or when data is written**.
+> **Release state.** v2.8.4 is the current **source state** on `main`. It has **not been tagged and not
+> been published** — **v2.8.3 — Payroll Posting Integrity** remains the latest published release. See
+> [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a release is cut.
 
-- **Posting checks all four of its saves** — posting writes payroll plans, the monthly plan, overtime,
-  and finance transactions. It previously discarded those results; it now reports success only when all
-  four succeeded, and names the step that failed.
-- **A failed posting no longer records a success audit entry** — the audit trail reflects what actually
-  happened.
-- **A failed posting no longer shows success behavior** — no completion toast and no posted summary
-  when the posting did not complete.
-- **Your selected Payroll rows stay visible after a failed posting** — the selection is no longer
-  cleared, so you can see exactly which rows were involved while you review them.
-- **Retrying after the orphan-transaction failure reuses the existing Finance transaction** — it no
-  longer creates a second one. Previously, if the payroll-plan write failed after the transaction write
-  succeeded, a reload left a real transaction that the retry could not see, and retrying **doubled the
-  payroll amount**. Posting now finds that transaction, restores its link, and records a history entry.
-- **Integrity Check reports orphan Payroll transactions as Critical** — a Finance transaction left
-  behind by a partial posting is now surfaced instead of going unnoticed.
-- **Integrity Check reports committed Payroll whose linked Overtime is still Approved as Critical** —
-  previously, if the overtime write failed after the payroll and transaction writes landed, that
-  overtime stayed Approved and could be **paid again in the next month's payroll**, with nothing
-  detecting it.
-- **Ambiguous Finance matches are never guessed** — if more than one transaction could be the match,
-  posting skips that row uncommitted and tells you which candidates it found, rather than picking one
-  or adding a third transaction.
+A correctness release for committing a Monthly Plan. The commit previously ignored whether its two saves
+actually succeeded, so a failed commit could still report success and leave a partial state that nothing
+detected. The commit now checks both writes, reports failure honestly, keeps your preview on screen, and
+Integrity Check surfaces the partial state. No schema change, no new storage key, no data migration, and
+**no change to how or when data is written**.
 
-**What this release does not do.** Posting **still writes four storage keys one after another, and it
+- **The commit checks both of its saves** — it writes finance transactions, then the monthly plan. It
+  previously discarded both results; it now reports success only when both succeeded, and names the step
+  that failed along with the steps that completed.
+- **A failed commit no longer shows success behavior** — no completion toast when the commit did not
+  complete.
+- **Your preview rows stay on screen after a failed commit** — they are no longer discarded, so you can
+  see exactly what was involved while you review it.
+- **The failure message tells you what to do** — it states that the commit did not complete, that some
+  data may already have been saved, and that you should run Integrity Check and review the Monthly Plan
+  and Finance transaction before retrying. It never claims your data was rolled back.
+- **Integrity Check reports orphaned Monthly Plan transactions as Critical** — a planned transaction
+  whose Monthly Plan is **missing entirely**, or which **exists but does not list that transaction**, is
+  now surfaced instead of going unnoticed. The existing `corrupt-plan-ref` warning still covers the
+  opposite direction (a plan pointing at transactions that no longer exist).
+- **Retrying does not create duplicate planned transactions** — rebuilding the preview after a failure
+  still recognises rows that already exist and skips them.
+
+**What this release does not do.** The commit **still writes two storage keys one after another, and it
 is not atomic.** No rollback and no compensating action were introduced. A failure message therefore
-means *the posting did not complete* — not *nothing was written*; earlier writes in the sequence may
-well have persisted, and reloading reloads whatever was successfully persisted.
+means *the commit did not complete* — not *nothing was written*; the earlier write may well have
+persisted, and reloading reads whatever was successfully persisted.
 
-**Integrity Check detects; it does not repair.** The two new findings tell you a partial state exists
-and where it is — they do not fix it, and **not every possible partial posting state is automatically
-repairable.** After a failed posting, run Settings → Run Integrity Check, and expect that manual review
-— or restoration from the pre-operation backup — may still be required.
+**Integrity Check detects; it does not repair.** The findings tell you a partial state exists and where
+it is — they do not fix it.
 
-Builds on the **v2.8.2 Honest Persistence Results** release. See [`CHANGELOG.md`](CHANGELOG.md)
+**Retry prevents duplicates; it does not reconcile linkage.** Two residual states remain, and **manual
+review is the current operational response** to both. If the plan was created by the failing commit and
+only the transactions were saved, a retry creates no duplicate — but because those rows are skipped as
+duplicates they are never linked to the new plan, so the Critical finding **remains** after the retry
+succeeds. If only the plan was saved, a retry creates the missing transaction under a new id, but the
+stale references on the plan are **not removed**, so `corrupt-plan-ref` **remains** and the commit
+reports success while that finding still stands. After a failed commit, run Settings → Run Integrity
+Check and expect that manual review — or restoration from the pre-operation backup — may still be
+required.
+
+Builds on the **v2.8.3 Payroll Posting Integrity** release. See [`CHANGELOG.md`](CHANGELOG.md)
 and [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
 
 Two supported outputs:
@@ -93,7 +100,7 @@ Two supported outputs:
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (64 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/ domain/ platform/ transport/ repository/ cli/`), one shared global scope, no ES modules | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.3.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.4.html` |
 
 ---
 
@@ -181,9 +188,9 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(1212 checks)"]
+    VERIFY["tools/verify-build.js<br/>(1267 checks)"]
   end
-  DIST["dist/tam-intelligence-os-v2.8.3.html<br/>(portable single file)"]
+  DIST["dist/tam-intelligence-os-v2.8.4.html<br/>(portable single file)"]
 
   IDX --> JS --> STATE --> LS
   CSS --> IDX
@@ -195,7 +202,7 @@ flowchart LR
   BUILD --> VERIFY
 ```
 
-The 45 modules are **classic scripts** sharing one global scope; their **load order** is the single
+The 64 browser-loaded modules are **classic scripts** sharing one global scope; their **load order** is the single
 critical invariant and lives once in `tools/module-order.js` (mirrored by `index.html`). The build
 inlines CSS + JS into one portable file; the verifier asserts the dist equals the concatenated
 source and that the version identity, schema, storage keys, and decomposition are all consistent.
@@ -236,7 +243,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.8.3.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.8.4.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
@@ -298,7 +305,7 @@ Build the portable single file from the modular source:
 node tools/build-single-file.js
 ```
 
-Verify (188 checks):
+Verify (1267 checks):
 
 ```bash
 node tools/verify-build.js
@@ -341,7 +348,7 @@ Releases are tag-driven and guarded end-to-end (see [`docs/RELEASE-PROCESS.md`](
 
 ```mermaid
 flowchart LR
-  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (188)"]
+  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1267)"]
   V --> C["commit source + dist"] --> T["push tag vX.Y.Z"]
   T --> GA["GitHub Actions: Release"]
   GA --> GATE{"tag matches<br/>v-APP_VERSION?"}
@@ -412,6 +419,10 @@ changes. Browsing `docs/`? Start at the [`docs/` index](docs/README.md).
 Directions only — no release numbers are assigned unless already approved.
 
 **Released**
+- Monthly Plan Result Integrity — the commit inspects both save results, no false success, preview
+  retained on failure, Critical Integrity Check finding for absent-plan and missing-backlink states;
+  retry prevents duplicate transactions but does not reconcile linkage (v2.8.4 — merged on `main`, not
+  yet tagged or published)
 - Payroll Posting Integrity — posting inspects all four save results, no false success audit or
   completion UX, no duplicate Finance transaction on retry, no guessed ambiguous match, two new
   Critical Integrity Check findings (v2.8.3)
