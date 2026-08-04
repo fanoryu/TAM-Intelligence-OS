@@ -137,6 +137,22 @@ function openContractModal(id, presetEmpId){
         const emp = empById(fd.get('employeeId'));
         if(!emp){ toast('Please select an employee.'); return; }
         const rec = c || {id:uid('ct'), createdAt:new Date().toISOString(), history:[]};
+        /* SPR-093 — persistence honesty. This editor is still the residual direct-write
+           path recorded by ARCH-006/ARCH-008; SPR-093 does NOT migrate its authority.
+           It only stops the save from CLAIMING success when the write failed. An edit
+           snapshots exactly the fields it is about to change so a failed persist can
+           restore the last successfully persisted state; a creation needs no snapshot
+           because the whole record is dropped. */
+        const EDITED_FIELDS = ['employeeId','employeeName','contractNumber','startDate',
+          'durationMonths','monthlySalary','status','notes','workHoursPerDay','workDaysPerWeek',
+          'weeksPerMonth','scheduleEffectiveDate','scheduleNotes','updatedAt'];
+        const before = {};
+        if(!isNew) EDITED_FIELDS.forEach(k=>{ before[k] = rec[k]; });
+        // `history` is mutated in place rather than reassigned, so it is snapshotted
+        // separately. An OWN-property check, not a truthiness check: a record restored
+        // from a legacy backup may carry no history at all, and `rec.history=rec.history||[]`
+        // below would then CREATE the property. A failed edit must leave no trace of it.
+        const hadHistory = !isNew && Object.prototype.hasOwnProperty.call(rec, 'history');
         rec.employeeId = emp.id;
         rec.employeeName = emp.fullName;
         rec.contractNumber = (fd.get('contractNumber')||'').trim();
@@ -149,7 +165,26 @@ function openContractModal(id, presetEmpId){
         rec.updatedAt = new Date().toISOString();
         (rec.history=rec.history||[]).push({event:isNew?'created':'edited', ts:rec.updatedAt, note:isNew?`Contract created (${rec.durationMonths} months from ${rec.startDate})`:'Contract edited'});
         if(isNew) State.contracts.push(rec);
-        await persistContracts();
+        // persistContracts() returns a strict boolean; treat anything other than true
+        // as a failed write. Success actions run ONLY after the write is confirmed.
+        const persisted = await persistContracts();
+        if(persisted !== true){
+          // Roll back to the last successfully persisted state so in-memory and stored
+          // data cannot diverge silently. Creation: drop the record. Edit: restore every
+          // snapshotted field (delete keys that did not previously exist) and the history.
+          if(isNew) State.contracts = State.contracts.filter(x=>x!==rec);
+          else EDITED_FIELDS.forEach(k=>{ if(before[k]===undefined) delete rec[k]; else rec[k]=before[k]; });
+          // Drop the entry this failed save added. If the record owned no history
+          // before the edit, the push above CREATED the property — remove it, so
+          // own-property absence is restored exactly like every other field.
+          rec.history.pop();
+          if(!isNew && !hadHistory) delete rec.history;
+          // The modal is deliberately left open so the user can retry or cancel.
+          toast(isNew
+            ? 'Contract could not be saved — nothing was created. Free up storage and try again.'
+            : 'Contract changes could not be saved — nothing was changed. Free up storage and try again.', 6000);
+          return;
+        }
         closeModal(); toast(isNew?'Contract created.':'Contract updated.'); render();
       });
     }});
@@ -226,8 +261,21 @@ async function deleteContract(id){
     return;
   }
   if(c.status!=='Draft' && !confirm('Permanently delete this contract? Only unused records should be deleted.')) return;
+  /* SPR-093 — persistence honesty. Deletion remains a direct path (ARCH-008 §5); its
+     authority is unchanged and all validation and confirmation above is untouched.
+     What changes: the removal is only ANNOUNCED and only written to the activity log
+     once the write is confirmed. The record's original position is captured so a
+     failed persist restores the collection exactly as it was. */
+  const prevIndex = State.contracts.findIndex(x=>x.id===id);
   State.contracts = State.contracts.filter(x=>x.id!==id);
-  await persistContracts();
+  const persisted = await persistContracts();
+  if(persisted !== true){
+    // Restore the record at its original position — nothing was deleted, so nothing
+    // is announced and no activity entry is written for a deletion that did not happen.
+    if(prevIndex >= 0) State.contracts.splice(prevIndex, 0, c); else State.contracts.push(c);
+    toast('Contract could not be deleted — nothing was changed. Free up storage and try again.', 6000);
+    return;
+  }
   logActivity({type:'contract.delete', module:'Contracts', entity:c.contractNumber||c.employeeName||'Contract', entityId:c.id, desc:`Contract "${c.contractNumber||'—'}"${c.employeeName?' ('+c.employeeName+')':''} deleted`, refs:{contractId:c.id, employeeId:c.employeeId||null}});
   toast('Contract deleted.'); render();
 }
