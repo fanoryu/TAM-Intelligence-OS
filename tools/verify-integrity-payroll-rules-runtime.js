@@ -65,6 +65,50 @@ function check(cond, label){
 /* The 25 rule identifiers this harness is responsible for, grouped by family.
    Every id here must be exercised by a real fixture — asserted mechanically at
    the end against what the rule() calls actually ran. */
+/* INTEGRITY-COVERAGE-BEGIN
+   Machine-readable coverage ownership (GOV-007 / SPR-092). tools/verify-build.js
+   parses THIS block — bounded by the sentinels — and compares it against the rule
+   identifiers and severities actually emitted by runIntegrityCheck(). A rule added
+   to production without an entry here, a stale entry for a rule production no
+   longer emits, or a severity that disagrees with production, all fail the
+   verifier. The list is not a second source of truth: it is checked against the
+   source on every build and cannot drift silently.
+   Severities are the EXPECTED production severities, asserted per fixture below. */
+const INTEGRITY_COVERAGE = {
+  harness: 'verify-integrity-payroll-rules-runtime.js',
+  rules: {
+    'payroll-without-employee': 'warning',
+    'payroll-no-employee': 'warning',
+    'payroll-no-contract': 'warning',
+    'payroll-outside-contract': 'warning',
+    'payroll-overtime-broken': 'warning',
+    'payroll-total-inconsistent': 'warning',
+    'payroll-missing-monthlyplan': 'warning',
+    'payroll-override-no-reason': 'warning',
+    'payroll-missing-transaction': 'warning',
+    'payroll-txn-mismatch': 'warning',
+    'payroll-txn-missing-planid': 'warning',
+    'payroll-plan-txn-total-diff': 'warning',
+    'payroll-plan-txn-overtime-diff': 'warning',
+    'payroll-missing-overtime-ids': 'warning',
+    'payroll-missing-committed-snapshot': 'warning',
+    'payroll-snapshot-txn-diff': 'warning',
+    'duplicate-employee': 'warning',
+    'duplicate-employee-id': 'warning',
+    'payroll-split-across-duplicates': 'warning',
+    'overtime-split-across-duplicates': 'warning',
+    'duplicate-contact-conflict': 'info',
+    'orphan-duplicate-employee': 'info',
+    'supplemental-missing-source-snapshot': 'warning',
+    'supplemental-missing-source-snapshot-legacy': 'info',
+    'supplemental-amount-drift': 'warning'
+  }
+};
+/* INTEGRITY-COVERAGE-END */
+
+/* The same 25 identifiers grouped by fixture family, for the per-family roll-up
+   below. Derived from the declaration above — the family map may not introduce
+   an identifier the declaration does not carry, asserted in the roll-up. */
 const COVERED = {
   F5: ['payroll-without-employee','payroll-no-employee','payroll-no-contract',
        'payroll-outside-contract','payroll-overtime-broken','payroll-total-inconsistent',
@@ -445,6 +489,9 @@ function rule(family, id, sev, label, expected, mutate){
     const flat = Object.keys(COVERED).reduce((a,f)=>a.concat(COVERED[f]), []);
     check(flat.length === 25, 'coverage contract names exactly 25 rule identifiers (found ' + flat.length + ')');
     check(new Set(flat).size === 25, 'the 25 rule identifiers are distinct');
+    // The family map and the machine-readable declaration must name the same set.
+    const declared = Object.keys(INTEGRITY_COVERAGE.rules).sort();
+    check(eqSet(flat.slice().sort(), declared), 'family map matches the INTEGRITY_COVERAGE declaration exactly');
     Object.keys(COVERED).forEach((fam)=>{
       COVERED[fam].forEach((id)=>{
         check(exercised.has(id), fam + ' exercised by a real fixture: ' + id);

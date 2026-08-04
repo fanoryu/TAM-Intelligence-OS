@@ -69,6 +69,49 @@ function check(cond, label){
 /* The 24 rule identifiers this harness is responsible for, grouped by fixture
    family. This list is the harness's coverage contract: every id here must be
    exercised by at least one rule() call, asserted mechanically at the end. */
+/* INTEGRITY-COVERAGE-BEGIN
+   Machine-readable coverage ownership (GOV-007 / SPR-092). tools/verify-build.js
+   parses THIS block — bounded by the sentinels — and compares it against the rule
+   identifiers and severities actually emitted by runIntegrityCheck(). A rule added
+   to production without an entry here, a stale entry for a rule production no
+   longer emits, or a severity that disagrees with production, all fail the
+   verifier. The list is not a second source of truth: it is checked against the
+   source on every build and cannot drift silently.
+   Severities are the EXPECTED production severities, asserted per fixture below. */
+const INTEGRITY_COVERAGE = {
+  harness: 'verify-integrity-warning-rules-runtime.js',
+  rules: {
+    'broken-employee-link': 'warning',
+    'broken-contract-link': 'warning',
+    'broken-payroll-link': 'warning',
+    'corrupt-plan-ref': 'warning',
+    'orphan-transaction': 'warning',
+    'broken-import-link': 'warning',
+    'invalid-date': 'warning',
+    'invalid-amount': 'warning',
+    'overlapping-contracts': 'warning',
+    'invalid-contract-evidence': 'warning',
+    'duplicate-payroll': 'warning',
+    'duplicate-payroll-plan': 'warning',
+    'payroll-duplicate-month': 'warning',
+    'duplicate-payroll-txn': 'warning',
+    'overtime-broken-employee': 'warning',
+    'overtime-broken-contract': 'warning',
+    'overtime-broken-payroll': 'warning',
+    'overtime-bad-snapshot': 'warning',
+    'overtime-outside-contract': 'warning',
+    'overtime-payroll-mismatch': 'warning',
+    'import-multiple-employees-per-candidate': 'warning',
+    'rollback-preserved': 'info',
+    'adjustment-invalid-period': 'warning',
+    'schema-warning': 'info'
+  }
+};
+/* INTEGRITY-COVERAGE-END */
+
+/* The same 24 identifiers grouped by fixture family, for the per-family roll-up
+   below. Derived from the declaration above — the family map may not introduce
+   an identifier the declaration does not carry, asserted in the roll-up. */
 const COVERED = {
   F1: ['broken-employee-link','broken-contract-link','broken-payroll-link',
        'corrupt-plan-ref','orphan-transaction','broken-import-link'],
@@ -419,6 +462,9 @@ function rule(family, id, sev, label, expected, mutate){
     const flat = Object.keys(COVERED).reduce((a,f)=>a.concat(COVERED[f]), []);
     check(flat.length === 24, 'coverage contract names exactly 24 rule identifiers (found ' + flat.length + ')');
     check(new Set(flat).size === 24, 'the 24 rule identifiers are distinct');
+    // The family map and the machine-readable declaration must name the same set.
+    const declared = Object.keys(INTEGRITY_COVERAGE.rules).sort();
+    check(eqSet(flat.slice().sort(), declared), 'family map matches the INTEGRITY_COVERAGE declaration exactly');
     Object.keys(COVERED).forEach((fam)=>{
       COVERED[fam].forEach((id)=>{
         check(exercised.has(id), fam + ' exercised by a real fixture: ' + id);

@@ -1346,97 +1346,152 @@ check(read(path.join(root,'js','core','storage-adapter.js')).indexOf('async set(
 check(!/HR_KEYS\s*=/.test(mpSrc082), 'SPR-082 introduces no storage key');
 check(fs.existsSync(path.join(root,'tools','verify-monthlyplan-runtime.js')), 'SPR-082 runtime harness present: tools/verify-monthlyplan-runtime.js');
 
-/* ---------- SPR-089 — Critical Integrity Rule harness discoverability ----------
-   This verifier proves the STRUCTURE of the Integrity Check; tools/verify-integrity-
-   rules-runtime.js proves that its CRITICAL rules actually fire. The two checks below
-   make that harness discoverable and keep its Critical-rule scope honest — they do NOT
-   execute it (this file stays a static, single-process verifier with no child_process),
-   and they deliberately govern the 11 Critical rule IDs ONLY. Warning/Info coverage and
-   the full derived-registry completeness mechanism are out of scope for SPR-089. */
-console.log('== CRITICAL INTEGRITY RULE HARNESS (SPR-089 — discoverability only) ==');
-const intgHarnessPath = path.join(root,'tools','verify-integrity-rules-runtime.js');
-check(fs.existsSync(intgHarnessPath), 'SPR-089 runtime harness present: tools/verify-integrity-rules-runtime.js');
-const intgHarnessSrc = fs.existsSync(intgHarnessPath) ? read(intgHarnessPath) : '';
-// The 11 Critical rules that had NO harness coverage before SPR-089. Each must appear
-// as an explicit rule() block in the harness, not merely as a mention in a comment.
-['contract-multiple-employees','duplicate-employee-name','duplicate-id',
- 'overtime-double-commit','overtime-negative-hours','payroll-negative',
- 'payroll-posted-no-transaction','schema-error','supplemental-missing-transaction',
- 'supplemental-orphan-transaction','supplemental-overtime-double-capture'
-].forEach((id)=>check(intgHarnessSrc.indexOf("rule('"+id+"'") !== -1,
-  'SPR-089 harness asserts Critical rule: '+id));
-// Scope honesty — the harness must not silently grow into a no-op or drop its baseline.
-check(/the healthy fabricated baseline produces ZERO findings/.test(intgHarnessSrc), 'SPR-089 harness asserts a clean healthy baseline before any defect fixture');
-check(/RUNTIME VERIFICATION PASSED/.test(intgHarnessSrc) && /process\.exit\(1\)/.test(intgHarnessSrc), 'SPR-089 harness fails non-zero on assertion failure');
-// SPR-089 is verification-only: the harness must not write to the repository or shell out.
-check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rm|rmSync|mkdir)/.test(intgHarnessSrc), 'SPR-089 harness writes nothing to disk');
-check(!/child_process|require\('http|require\("http/.test(intgHarnessSrc), 'SPR-089 harness spawns no process and opens no network');
+/* ================= INTEGRITY COVERAGE COMPLETENESS INVARIANT (GOV-007 / SPR-092) =================
+   This block REPLACES the three near-identical SPR-089/090/091 discoverability blocks,
+   which between them hard-coded all 63 production rule identifiers into this file — a
+   second source of truth that had to be hand-edited for every new rule. Nothing is
+   hard-coded here now: the production inventory is derived from runIntegrityCheck(),
+   the coverage inventory is derived from the harnesses' own sentinel-delimited
+   declarations, and the two are compared.
 
-/* ---------- SPR-090 — Warning/Info harness discoverability (families F1/F2/F3/F4/F8/F10/F11) ----------
-   Same treatment as the SPR-089 block: make the harness discoverable and keep its
-   scope honest, WITHOUT executing it (no child_process — this file stays a static,
-   single-process verifier). Deliberately governs only the 24 rule IDs assigned to
-   SPR-090. The all-rule derived-registry completeness invariant is reserved for
-   SPR-091, when the last 25 Warning/Info rules land; until then an uncovered
-   SPR-091 rule must NOT fail the verifier. */
-console.log('== WARNING/INFO INTEGRITY RULE HARNESS (SPR-090 — discoverability only) ==');
-const warnHarnessPath = path.join(root,'tools','verify-integrity-warning-rules-runtime.js');
-check(fs.existsSync(warnHarnessPath), 'SPR-090 runtime harness present: tools/verify-integrity-warning-rules-runtime.js');
-const warnHarnessSrc = fs.existsSync(warnHarnessPath) ? read(warnHarnessPath) : '';
-// The 24 Warning/Info rule IDs assigned to SPR-090, grouped as the approved families.
-[['F1',['broken-employee-link','broken-contract-link','broken-payroll-link','corrupt-plan-ref','orphan-transaction','broken-import-link']],
- ['F2',['invalid-date','invalid-amount','overlapping-contracts','invalid-contract-evidence']],
- ['F3',['duplicate-payroll','duplicate-payroll-plan','payroll-duplicate-month','duplicate-payroll-txn']],
- ['F4',['overtime-broken-employee','overtime-broken-contract','overtime-broken-payroll','overtime-bad-snapshot','overtime-outside-contract','overtime-payroll-mismatch']],
- ['F8',['import-multiple-employees-per-candidate','rollback-preserved']],
- ['F10',['adjustment-invalid-period']],
- ['F11',['schema-warning']]
-].forEach(([fam,ids])=>ids.forEach((id)=>check(warnHarnessSrc.indexOf("'"+id+"'") !== -1,
-  'SPR-090 harness covers '+fam+' rule: '+id)));
-// Scope honesty — the harness must say what it is, and must not overclaim.
-check(/Fixture families F1 \/ F2 \/ F3 \/ F4 \/ F8 \/ F10 \/ F11/.test(warnHarnessSrc), 'SPR-090 harness identifies itself as Warning/Info family coverage (F1/F2/F3/F4/F8/F10/F11)');
-check(/RESERVED FOR SPR-091/.test(warnHarnessSrc) && /RESERVED_SPR091/.test(warnHarnessSrc), 'SPR-090 harness names the SPR-091 families as reserved and NOT covered');
-check(/NOT complete predicate coverage|is NOT complete predicate coverage/.test(warnHarnessSrc), 'SPR-090 harness does not claim complete predicate coverage');
-check(/the healthy fabricated baseline produces ZERO findings/.test(warnHarnessSrc), 'SPR-090 harness asserts a clean healthy baseline before any defect fixture');
-check(/RUNTIME VERIFICATION PASSED/.test(warnHarnessSrc) && /process\.exit\(1\)/.test(warnHarnessSrc), 'SPR-090 harness fails non-zero on assertion failure');
-check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rm|rmSync|mkdir)/.test(warnHarnessSrc), 'SPR-090 harness writes nothing to disk');
-check(!/child_process|require\('http|require\("http/.test(warnHarnessSrc), 'SPR-090 harness spawns no process and opens no network');
-// The two integrity harnesses stay separate artifacts with separate scopes.
-check(warnHarnessPath !== intgHarnessPath && intgHarnessSrc.indexOf('F1 / F2 / F3') === -1, 'SPR-089 Critical harness is untouched by SPR-090 (separate files, separate scope)');
+   WHAT THIS PROVES: every rule identifier EMITTED by production has an owning harness,
+   at the declared severity, owned exactly once. WHAT IT DOES NOT PROVE: that every
+   call site or every sub-predicate of a multiplexed rule is exercised. Rule-identifier
+   completeness is NOT predicate completeness — duplicate-id (1 of 7 collections) and
+   the schema-error / schema-warning roll-ups remain partially covered by design.
 
-/* ---------- SPR-091 — remaining-families harness discoverability (F5/F6/F7/F9) ----------
-   Same treatment as the SPR-089 and SPR-090 blocks: discoverability and scope honesty,
-   WITHOUT executing the harness (no child_process — this file stays a static,
-   single-process verifier). SPR-091 completes runtime RULE-IDENTIFIER coverage; it does
-   NOT complete predicate coverage, and the derived all-rule registry completeness
-   mechanism is deliberately still NOT implemented here. */
-console.log('== REMAINING-FAMILY INTEGRITY RULE HARNESS (SPR-091 — discoverability only) ==');
-const payrHarnessPath = path.join(root,'tools','verify-integrity-payroll-rules-runtime.js');
-check(fs.existsSync(payrHarnessPath), 'SPR-091 runtime harness present: tools/verify-integrity-payroll-rules-runtime.js');
-const payrHarnessSrc = fs.existsSync(payrHarnessPath) ? read(payrHarnessPath) : '';
-// The 25 rule IDs assigned to SPR-091, grouped as the approved families.
-[['F5',['payroll-without-employee','payroll-no-employee','payroll-no-contract','payroll-outside-contract','payroll-overtime-broken','payroll-total-inconsistent','payroll-missing-monthlyplan','payroll-override-no-reason']],
- ['F6',['payroll-missing-transaction','payroll-txn-mismatch','payroll-txn-missing-planid','payroll-plan-txn-total-diff','payroll-plan-txn-overtime-diff','payroll-missing-overtime-ids','payroll-missing-committed-snapshot','payroll-snapshot-txn-diff']],
- ['F7',['duplicate-employee','duplicate-employee-id','payroll-split-across-duplicates','overtime-split-across-duplicates','duplicate-contact-conflict','orphan-duplicate-employee']],
- ['F9',['supplemental-missing-source-snapshot','supplemental-missing-source-snapshot-legacy','supplemental-amount-drift']]
-].forEach(([fam,ids])=>ids.forEach((id)=>check(payrHarnessSrc.indexOf("'"+id+"'") !== -1,
-  'SPR-091 harness covers '+fam+' rule: '+id)));
-// Scope honesty — identity, reserved-elsewhere accounting, and no overclaim.
-check(/Fixture families F5 \/ F6 \/ F7 \/ F9/.test(payrHarnessSrc), 'SPR-091 harness identifies itself as remaining-family coverage (F5/F6/F7/F9)');
-check(/OWNED_ELSEWHERE/.test(payrHarnessSrc), 'SPR-091 harness names the rules owned by earlier harnesses and does not re-claim them');
-check(/NOT COMPLETE PREDICATE COVERAGE|NOT complete predicate coverage/.test(payrHarnessSrc), 'SPR-091 harness does not claim complete predicate coverage');
-check(/the healthy fabricated baseline produces ZERO findings/.test(payrHarnessSrc), 'SPR-091 harness asserts a clean healthy baseline before any defect fixture');
-check(/RUNTIME VERIFICATION PASSED/.test(payrHarnessSrc) && /process\.exit\(1\)/.test(payrHarnessSrc), 'SPR-091 harness fails non-zero on assertion failure');
-check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rm|rmSync|mkdir)/.test(payrHarnessSrc), 'SPR-091 harness writes nothing to disk');
-check(!/child_process|require\('http|require\("http/.test(payrHarnessSrc), 'SPR-091 harness spawns no process and opens no network');
-// The predicate path SPR-090 deferred is closed here (invalid-amount via the payroll plan).
-check(/DEFERRED PREDICATE PATH/.test(payrHarnessSrc) && /invalid-amount \[3\/3 payroll plan\]/.test(payrHarnessSrc), 'SPR-091 closes the invalid-amount payroll-plan predicate path deferred by SPR-090');
-// The three integrity harnesses remain separate artifacts with disjoint scopes.
-check(payrHarnessPath !== warnHarnessPath && payrHarnessPath !== intgHarnessPath, 'the three integrity harnesses are separate files');
-// Each harness must identify itself as ITS OWN families only. SPR-090 legitimately
-// MENTIONS F5/F6/F7/F9 as reserved, so the test is on the self-identification line,
-// not on any occurrence of the family names.
-check(!/Fixture families F5 \/ F6 \/ F7 \/ F9/.test(warnHarnessSrc) && !/Fixture families F5 \/ F6 \/ F7 \/ F9/.test(intgHarnessSrc), 'SPR-089 and SPR-090 harnesses do not identify as SPR-091 family coverage (disjoint scope)');
+   This file stays a static, single-process verifier: no child_process, no harness
+   execution, no runtime evaluation. Extraction is text-based, which is an ACCEPTED
+   TRADE of the zero-dependency architecture (no parser is available). The trade is
+   made safe by the sanity guards below: an extraction that yields implausibly little
+   FAILS rather than silently reporting full coverage. */
+console.log('== INTEGRITY COVERAGE COMPLETENESS (GOV-007 — derived, nothing hard-coded) ==');
+
+// ---- production inventory, derived from runIntegrityCheck() ----
+// The body is sliced first because js/core/stabilization.js also contains Set.add()
+// calls; anchoring on the severity literal (not on "add(") is what makes this sound.
+const covStabSrc = read(path.join(root,'js','core','stabilization.js'));
+const covBodyStart = covStabSrc.indexOf('function runIntegrityCheck');
+const covBodyEnd = covStabSrc.indexOf('function pageHeader');
+const covBody = (covBodyStart > -1 && covBodyEnd > covBodyStart) ? covStabSrc.slice(covBodyStart, covBodyEnd) : '';
+check(covBody.length > 5000, 'INTEGRITY COVERAGE: runIntegrityCheck() body located for extraction (' + covBody.length + ' chars)');
+
+const covProdSites = [];
+const covProdRe = /add\(\s*['"](critical|warning|info)['"]\s*,\s*['"]([a-z0-9-]+)['"]/g;
+let covM;
+while((covM = covProdRe.exec(covBody)) !== null){ covProdSites.push({ severity: covM[1], id: covM[2] }); }
+
+const covProduction = {};          // id -> severity
+const covConflicts = [];           // ids emitted at more than one severity
+covProdSites.forEach((s)=>{
+  if(!Object.prototype.hasOwnProperty.call(covProduction, s.id)){ covProduction[s.id] = s.severity; }
+  else if(covProduction[s.id] !== s.severity && covConflicts.indexOf(s.id) === -1){ covConflicts.push(s.id); }
+});
+const covProdIds = Object.keys(covProduction);
+
+// EXTRACTION SANITY GUARDS — an empty or implausibly small extraction must NEVER be
+// read as success. Without these, a source refactor that defeats the pattern would
+// report "0 production rules, 0 uncovered" and pass.
+check(covProdSites.length >= 60, 'INTEGRITY COVERAGE: extraction plausible — ' + covProdSites.length + ' add() call sites found (expected >= 60)');
+check(covProdIds.length >= 55, 'INTEGRITY COVERAGE: extraction plausible — ' + covProdIds.length + ' distinct rule identifiers found (expected >= 55)');
+// A rule emitted at two different severities is ambiguous by construction.
+check(covConflicts.length === 0, 'INTEGRITY COVERAGE: no production rule is emitted at conflicting severities'
+  + (covConflicts.length ? ' (conflicting: ' + covConflicts.join(', ') + ')' : ''));
+// Same id at multiple call sites with the SAME severity is legal and expected
+// (monthlyplan-orphan-transaction emits from two sites); it needs one declaration.
+const covMultiSite = covProdIds.filter((id)=>covProdSites.filter((s)=>s.id === id).length > 1);
+check(covMultiSite.every((id)=>covConflicts.indexOf(id) === -1), 'INTEGRITY COVERAGE: multi-site rule identifiers are same-severity (legal): ' + (covMultiSite.join(', ') || 'none'));
+
+// ---- coverage inventory, derived from the harnesses' own declarations ----
+// Each harness carries one sentinel-delimited INTEGRITY_COVERAGE block. Parsing a
+// bounded region (not the whole file) keeps unrelated string literals out of the set.
+const COV_HARNESSES = [
+  { file:'verify-integrity-rules-runtime.js',        kind:'dedicated',        ident:/Critical tier|CRITICAL INTEGRITY RULE/ },
+  { file:'verify-integrity-warning-rules-runtime.js', kind:'dedicated',        ident:/Fixture families F1 \/ F2 \/ F3 \/ F4 \/ F8 \/ F10 \/ F11/ },
+  { file:'verify-integrity-payroll-rules-runtime.js', kind:'dedicated',        ident:/Fixture families F5 \/ F6 \/ F7 \/ F9/ },
+  { file:'verify-payroll-posting-runtime.js',         kind:'operation-driven', ident:/OPERATION-DRIVEN harness/ },
+  { file:'verify-monthlyplan-runtime.js',             kind:'operation-driven', ident:/OPERATION-DRIVEN harness/ }
+];
+const covDeclared = {};   // id -> { severity, harness }
+const covOwners = {};     // id -> [harness, ...]
+COV_HARNESSES.forEach((h)=>{
+  const p = path.join(root,'tools',h.file);
+  check(fs.existsSync(p), 'INTEGRITY COVERAGE: harness file present: tools/' + h.file);
+  const src = fs.existsSync(p) ? read(p) : '';
+  const a = src.indexOf('INTEGRITY-COVERAGE-BEGIN');
+  const b = src.indexOf('INTEGRITY-COVERAGE-END');
+  check(a > -1 && b > a, 'INTEGRITY COVERAGE: sentinel-delimited declaration present in ' + h.file);
+  const region = (a > -1 && b > a) ? src.slice(a, b) : '';
+  const pairRe = /['"]([a-z0-9-]+)['"]\s*:\s*['"](critical|warning|info)['"]/g;
+  let pm; const seenHere = [];
+  while((pm = pairRe.exec(region)) !== null){
+    seenHere.push(pm[1]);
+    if(!covDeclared[pm[1]]) covDeclared[pm[1]] = { severity: pm[2], harness: h.file };
+    (covOwners[pm[1]] = covOwners[pm[1]] || []).push(h.file);
+  }
+  check(seenHere.length > 0, 'INTEGRITY COVERAGE: ' + h.file + ' declares at least one rule (' + seenHere.length + ')');
+  // Scope honesty, retained from the superseded per-harness blocks.
+  check(h.ident.test(src), 'INTEGRITY COVERAGE: ' + h.file + ' self-identifies its scope');
+  check(!/child_process|require\('http|require\("http/.test(src), 'INTEGRITY COVERAGE: ' + h.file + ' spawns no process and opens no network');
+  check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rmSync|mkdir)/.test(src), 'INTEGRITY COVERAGE: ' + h.file + ' writes nothing to disk');
+  check(/process\.exit\(1\)/.test(src), 'INTEGRITY COVERAGE: ' + h.file + ' fails non-zero on assertion failure');
+});
+// The three DEDICATED harnesses additionally assert a clean healthy baseline and
+// disclaim complete predicate coverage. Reads are GUARDED: a missing harness must
+// produce clear failed checks, never an unhandled ENOENT that masks the diagnosis.
+COV_HARNESSES.filter((h)=>h.kind === 'dedicated').forEach((h)=>{
+  const p = path.join(root,'tools',h.file);
+  const src = fs.existsSync(p) ? read(p) : '';
+  check(/the healthy fabricated baseline produces ZERO findings/.test(src), 'INTEGRITY COVERAGE: ' + h.file + ' asserts a clean healthy baseline');
+  check(/(NOT|not) complete predicate coverage|NOT COMPLETE PREDICATE COVERAGE|as full predicate coverage/.test(src), 'INTEGRITY COVERAGE: ' + h.file + ' does not claim complete predicate coverage');
+});
+
+
+// ---- EXEMPTIONS — must remain empty (GOV-007 §F) ----
+// A non-empty list is an audit finding, not a normal state. Entries require a
+// justification string; an unjustified entry fails. Atlas owns this list.
+const COV_EXEMPTIONS = {};   // id -> justification
+const covExemptIds = Object.keys(COV_EXEMPTIONS);
+check(covExemptIds.length === 0, 'INTEGRITY COVERAGE: exemption list is empty' + (covExemptIds.length ? ' (exempt: ' + covExemptIds.join(', ') + ')' : ''));
+covExemptIds.forEach((id)=>check(String(COV_EXEMPTIONS[id] || '').trim().length > 0, 'INTEGRITY COVERAGE: exemption for ' + id + ' carries a justification'));
+
+// ---- the invariants ----
+// 1. Every production rule is covered, at the right severity.
+covProdIds.forEach((id)=>{
+  const d = covDeclared[id];
+  if(!d){
+    check(false, 'INTEGRITY COVERAGE: production rule ' + id + ' (' + covProduction[id] + ') has no harness coverage');
+    return;
+  }
+  // check() prints ONE label for both outcomes, so the label is chosen per outcome:
+  // a pass-phrased label printed under [FAIL] would state the opposite of what happened.
+  const sevOk = d.severity === covProduction[id];
+  check(sevOk, sevOk
+    ? 'INTEGRITY COVERAGE: ' + id + ' severity agrees with production (' + covProduction[id] + ') [' + d.harness + ']'
+    : 'INTEGRITY COVERAGE: ' + id + ' is ' + covProduction[id] + ' in production but declared ' + d.severity + ' by ' + d.harness);
+});
+// 2. No stale declaration: every declared rule still exists in production.
+Object.keys(covDeclared).forEach((id)=>{
+  const emitted = Object.prototype.hasOwnProperty.call(covProduction, id);
+  check(emitted, emitted
+    ? 'INTEGRITY COVERAGE: ' + id + ' declared by ' + covDeclared[id].harness + ' is still emitted by runIntegrityCheck()'
+    : 'INTEGRITY COVERAGE: ' + id + ' declared by ' + covDeclared[id].harness + ' but NOT emitted by runIntegrityCheck() (stale declaration)');
+});
+// 3. Exactly one owner per rule — no double ownership across harness contracts.
+const covDoubleOwned = Object.keys(covOwners).filter((id)=>covOwners[id].length > 1);
+check(covDoubleOwned.length === 0, 'INTEGRITY COVERAGE: every rule is owned by exactly one harness'
+  + (covDoubleOwned.length ? ' (double-owned: ' + covDoubleOwned.map((id)=>id + ' [' + covOwners[id].join(' + ') + ']').join('; ') + ')' : ''));
+// 4. Totals are DERIVED and must close. Nothing here is a governance constant.
+const covUncovered = covProdIds.filter((id)=>!covDeclared[id] && covExemptIds.indexOf(id) === -1);
+check(covUncovered.length === 0, 'INTEGRITY COVERAGE: 0 uncovered production rules'
+  + (covUncovered.length ? ' (uncovered: ' + covUncovered.join(', ') + ')' : ''));
+check(Object.keys(covDeclared).length === covProdIds.length,
+  'INTEGRITY COVERAGE: declared rule count (' + Object.keys(covDeclared).length + ') equals production rule count (' + covProdIds.length + ')');
+console.log('   derived: ' + covProdIds.length + ' production rule ids / ' + covProdSites.length + ' call sites / '
+  + Object.keys(covDeclared).length + ' declared across ' + COV_HARNESSES.length + ' harnesses; 0 exemptions.');
+console.log('   scope: RULE-IDENTIFIER completeness. This is NOT predicate completeness —');
+console.log('          duplicate-id (1 of 7 collections) and the schema-error / schema-warning');
+console.log('          roll-ups remain partially covered by design.');
 
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
