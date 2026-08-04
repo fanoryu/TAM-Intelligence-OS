@@ -91,6 +91,10 @@ module.exports = [
   'domain/payroll-lifecycle-aggregate.js',
   'domain/contract-status-aggregate.js',
   'domain/contract-renewal-aggregate.js',
+  // --- SPR-095: the fourth Contract aggregate (ADR-014 Contract Core field
+  //     authority). Purely declarative like its siblings — it defines a frozen
+  //     object and invokes nothing at load time. Registered but NOT routed. ---
+  'domain/contract-core-aggregate.js',
   'domain/domain-layer.js',
   // --- platform layer (Milestone Delta, PR-6A): the application boundary above
   //     the Domain. Loads AFTER the Domain facade (which it delegates to) and

@@ -51,6 +51,17 @@ const DOMAIN_COMMANDS = Object.freeze({
   // ContractRepository, and rolls back in memory on a failed persist. Uses the
   // default boundaryMethod (prepare) with a dedicated boundaryPayload (`renewal`).
   'contract.renewal.execute': Object.freeze({ aggregate: 'Contract', boundary: 'ContractRenewalAggregate', boundaryPayload: 'renewal', handler: 'renewContract', transition: 'Contract renewal (predecessor Draft/Active → Renewed, successor created as Active/Draft) — OPERATIONAL via Domain.command(); business authority = ContractRenewalAggregate (SPR-077); one collection, one persist, in-memory rollback' }),
+  // SPR-095 — ninth aggregate-backed command, fourth Contract boundary. The Contract
+  // CORE field set ADR-014 assigns to one authority: identity/link (employeeId +
+  // employeeName), contractNumber, monthlySalary, notes and the five-field schedule
+  // group. It owns NO lifecycle field — status, startDate and durationMonths stay with
+  // their specialized aggregates. Uses the DEFAULT prepare/patch contract.
+  //
+  // DOMAIN PREPARATION ONLY (ADR-014 sequencing step 1): this command is registered,
+  // aggregate-backed and Repository-mediated, but NOTHING invokes it. The full Contract
+  // editor still writes these fields directly through persistContracts(). Editor routing
+  // is step 2, is gated on OQ-2, and is not authorized. Runtime behaviour is unchanged.
+  'contract.core.update': Object.freeze({ aggregate: 'Contract', boundary: 'ContractCoreAggregate', handler: 'updateContractCore', transition: 'controlled update of the Contract core fields (employee link pair, contractNumber, monthlySalary, notes, atomic schedule group) — business authority = ContractCoreAggregate (ADR-014 / SPR-095); REGISTERED BUT NOT ROUTED: no UI seam invokes it and the editor is not migrated' }),
   // Payroll
   'payroll.commit':        Object.freeze({ aggregate: 'PayrollPlan',          handler: 'commitReadyPayroll',        transition: 'Ready -> Committed (freezes snapshots)' }),
   // Finance

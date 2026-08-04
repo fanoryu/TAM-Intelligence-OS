@@ -525,6 +525,64 @@ function openContractDatesModal(id){
     }});
 }
 
+/* ============================================================
+   SPR-095 — Contract CORE field update HANDLER (ADR-014 sequencing step 1).
+   The IMPLEMENTATION AUTHORITY for the contract.core.update command; the business
+   authority is ContractCoreAggregate (js/domain). It receives the sanitized patch
+   from the aggregate (via Domain.command) and owns mutation, updatedAt, Contract
+   history, the single persistence invocation through ContractRepository, rollback,
+   and the typed result — the same shape as updateContractDates,
+   transitionContractStatus and renewContract.
+
+   DOMAIN PREPARATION ONLY. Nothing invokes this handler: no UI seam routes
+   contract.core.update, and the full Contract editor above still writes these ten
+   fields directly and still persists through persistContracts() exactly as it did
+   before this sprint. Migrating the editor is ADR-014 step 2, is gated on OQ-2, and
+   is NOT authorized here. This function therefore changes NO runtime behaviour.
+
+   It writes ONLY the fields ADR-014 assigns to the Core aggregate. It never touches
+   status, startDate, durationMonths, the derived endDate, id, createdAt, the renewal
+   back-links, sibling contracts, the employee record, payroll, or finance. Atomic:
+   on a failed persist it restores every changed field — deleting keys that did not
+   previously exist — reverts updatedAt, and drops the history entry.
+   ============================================================ */
+async function updateContractCore(id, patch){
+  const c = contractById(id);
+  if(!c) return { success:false, error:'ContractNotFound' };
+  patch = patch || {};
+  const keys = Object.keys(patch);
+  // Defense-in-depth (the aggregate decided first): reuse the SAME allowlist so
+  // there is one source of truth for what this command owns. A patch naming any
+  // other field is refused, never partially applied.
+  const owned = (typeof CONTRACT_CORE_FIELDS !== 'undefined' && CONTRACT_CORE_FIELDS) || [];
+  if(keys.some(k=>owned.indexOf(k)===-1)) return { success:false, error:'ForbiddenContractField' };
+  if(!keys.length) return { success:false, error:'NoContractCoreFieldsProvided' };
+  // Snapshot exactly what is about to change. An OWN-property check, not a
+  // truthiness check: a record restored from a legacy backup may not carry the
+  // schedule keys at all, and a failed save must leave no trace of them.
+  const before = {}, had = {};
+  keys.forEach(k=>{ had[k] = Object.prototype.hasOwnProperty.call(c, k); before[k] = c[k]; });
+  const hadHistory = Object.prototype.hasOwnProperty.call(c, 'history');
+  const prevUpdatedAt = c.updatedAt;
+  keys.forEach(k=>{ c[k] = patch[k]; });
+  c.updatedAt = new Date().toISOString();
+  (c.history=c.history||[]).push({ event:'contract-core-edited', ts:c.updatedAt, note:'Contract core fields updated ('+keys.join(', ')+')' });
+  // Persistence mechanics go through the Repository boundary (ContractRepository
+  // .save() -> persistContracts() -> StorageAdapter), matching the three existing
+  // Contract handlers. Strict persisted.ok handling — no truthy/falsy ambiguity.
+  const persisted = await ContractRepository.save();
+  if(persisted.ok !== true){
+    // Atomic rollback — restore every changed field (removing keys the save
+    // created), the timestamp, and the history entry this save added.
+    keys.forEach(k=>{ if(had[k]) c[k] = before[k]; else delete c[k]; });
+    c.history.pop();
+    if(!hadHistory) delete c.history;
+    c.updatedAt = prevUpdatedAt;
+    return { success:false, error:'PersistFailed' };
+  }
+  return { success:true, data:c };
+}
+
 function renderContractDetail(main){
   const c = contractById(State.detailContractId);
   if(!c){ main.innerHTML = emptyState('Contract not found','It may have been deleted.'); return; }
