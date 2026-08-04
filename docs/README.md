@@ -54,7 +54,9 @@ number or overlap in scope. Domain ADRs may be **Accepted** (authoritative) or *
 (ADR-008 through ADR-012 — open questions from the PR-5G, PR-5H, and PR-5I reviews that record no
 decision and authorize no implementation); the paired non-blocking backlog items live in the
 [Architecture Evolution Backlog](02-architecture/Architecture_Evolution_Backlog.md). The Repository layer
-is recorded in [ADR-013](03-adr/ADR-013-Repository-Layer.md) (Accepted).
+is recorded in [ADR-013](03-adr/ADR-013-Repository-Layer.md) (Accepted), and Contract field ownership in
+[ADR-014](03-adr/ADR-014-Contract-Core-Field-Authority.md) (Accepted — resolves ARCH-008 OQ-1; OQ-2 and
+OQ-3 remain open; authorizes no implementation).
 
 Decision records are immutable once Accepted and are **superseded**, never rewritten
 (`CLAUDE.md` §14.4, §16.2). Point-in-time audit records live under [`../audit/`](../audit/).

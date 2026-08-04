@@ -390,8 +390,16 @@ Directions (no committed release numbers unless already approved):
 - **Open architecture question — Contract editor and delete authority (ARCH-008 M-5).** The full editor
   and `deleteContract` remain direct writers, bypassing `ContractStatusAggregate`, `ContractDateAggregate`
   and `ContractRepository`. M-5 is now **entirely an authority question** — its persistence-honesty
-  component was closed by SPR-093. Status: *Requires additional discovery*, Medium, non-controlling,
-  blocked on ARCH-008's OQ-1 (which authority owns the editor's non-aggregate fields). **Not scheduled
+  component was closed by SPR-093. **Field ownership is decided:
+  [ADR-014 — Contract Core Field Authority](docs/03-adr/ADR-014-Contract-Core-Field-Authority.md) is
+  Accepted**, establishing one `ContractCoreAggregate` behind one `contract.core.update` command owning
+  `employeeId`, `employeeName`, `contractNumber`, `monthlySalary`, `notes` and the five schedule fields,
+  with status, the date extent and renewal unchanged. Approved policy: `contractNumber` editable only
+  while `Draft` (PD-1); employee reassignment only while `Draft` and only with no linked payroll,
+  overtime or transactions (PD-2). Smart Import, Backup Restore, Demo Seed and the Employee Dedup relink
+  are permanent bounded exemptions. **ADR-014 authorizes no implementation** — no aggregate, command,
+  handler, or editor routing exists yet, and the runtime is unchanged. OQ-2 (editor status control) and
+  OQ-3 (delete as a command) **remain open**, and editor routing stays blocked on OQ-2. **Not scheduled
   and not authorized.**
 - **Deferred architecture** — considered only if evidence justifies it, never pre-emptively:
   operation-specific compensation (only where a concrete failure mode warrants it); a persisted recovery
