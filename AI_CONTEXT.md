@@ -6,7 +6,10 @@ AI assistants get productive quickly. It is descriptive (what *is*), whereas
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
 there rather than duplicating it.
 
-**As of the current release:** v2.8.3 — "Payroll Posting Integrity"; `SCHEMA_VERSION` 6.
+**As of the current source state:** v2.8.4 — "Monthly Plan Result Integrity"; `SCHEMA_VERSION` 6.
+v2.8.4 is **merged on `main` (`969913b`) but not tagged and not published** — the latest *published*
+release remains v2.8.3. The current distributable is `dist/tam-intelligence-os-v2.8.4.html`
+(914,409 bytes; SHA-256 `09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`).
 When these change, update this document (not `CLAUDE.md`).
 
 **Current baseline (aggregate-backed Repository adoption complete):**
@@ -54,8 +57,8 @@ logical unit, which the collection-grained contract cannot express. This is the 
 work. It is now the **only** compound operation in the Payroll domain: Contract renewal was shown to be
 single-collection (SPR-077, ATR-011 §4) and payroll-planning posting was retired as dead code (SPR-078).
 
-SPR-079 and SPR-081 changed how compound persistence is **reported and detected**, not how it is
-performed. Multi-key writes remain sequential and non-atomic; see *Known Limitations* for the standing
+SPR-079, SPR-081 and SPR-082 changed how compound persistence is **reported and detected**, not how it
+is performed. Multi-key writes remain sequential and non-atomic; see *Known Limitations* for the standing
 residuals and *Future Roadmap* for what is and is not authorised.
 
 `commitReadyPayroll` is the **sole live Payroll posting path**. The legacy Payroll Planning screen and its
@@ -85,6 +88,37 @@ posting, and therefore re-payable) is **detected as a Critical integrity finding
 **not automatically repaired, and not universally blocked**. Nothing prevents that overtime from being
 included in a later payroll; the finding is advisory and requires a human to act on it.
 
+**Monthly Plan result integrity (SPR-082, v2.8.4).** `commitMonthlyPlan` (`js/people/monthly-plan.js`)
+now captures and strictly inspects **both** persistence results — transactions first, monthly plans
+second. The two writes keep their existing order and attempt-all behaviour; success requires both, and
+failure returns a typed `MonthlyPlanPersistenceFailed` outcome naming the first failed step in the fixed
+write order, the completed steps, and that partial persistence occurred. The failure branch **keeps the
+preview** (so the user retains the rows they were committing), shows no success toast, and states plainly
+that some data may already have been saved and that Integrity Check should be run before retrying.
+**This added no atomicity and no rollback** — the two writes are still sequential, and a failure means
+the commit did not complete, **not** that nothing was written.
+
+The partial states are now **detectable**, not prevented and not repaired. A new **Critical** rule,
+`monthlyplan-orphan-transaction`, fires for a non-payroll Finance transaction carrying a `monthlyPlanId`
+when either the referenced monthly plan is **absent entirely** or the plan exists but **does not list the
+transaction** in `committedTxnIds`. The pre-existing `corrupt-plan-ref` **warning** still covers the
+opposite direction — a plan whose `committedTxnIds` point at transactions that do not exist. Payroll-sourced
+transactions stay out of scope of the new rule; they are owned by `payroll-orphan-transaction` and
+`payroll-missing-monthlyplan`.
+
+**Retry is idempotent for transaction creation only — it does not reconcile linkage.** Two residual
+states are documented and proven by the runtime harness, and both require **manual review**:
+
+- **Scenario A2** (the monthly plan was created by the failing commit; only the transactions write
+  landed). After reload the transactions return with a `monthlyPlanId` pointing at nothing, and
+  `monthlyplan-orphan-transaction` fires. The retry **creates no duplicate transaction** — the reloaded
+  rows are recognised as duplicates and skipped — but because they are skipped they are **never linked**
+  to the newly created plan, so the Critical finding **remains** after a successful retry.
+- **Scenario B** (only the monthly plans write landed). After reload the plan is `Committed` with
+  **dangling** `committedTxnIds` and `corrupt-plan-ref` fires. The retry creates the missing transaction
+  under a **new id**; the stale dangling ids **stay on the plan** — nothing removes them — so
+  `corrupt-plan-ref` **remains** and the commit **reports success while that finding still stands**.
+
 **Multi-dataset persistence (SPR-079, v2.8.2).** `saveAllData()` inspects every one of its 14 writes and
 returns `true` only when all succeed; Employee Merge and Smart Import no longer report false success.
 Multi-key saves remain non-atomic: a failure means the operation did not complete, **not** that nothing
@@ -95,9 +129,11 @@ prior state.**
 when a payroll-sourced Finance transaction references a `PayrollPlan` that is **either not `Committed`
 or does not link back to that transaction** (both broken-linkage directions, not only the uncommitted
 case), and `payroll-overtime-uncommitted` (committed payroll whose linked overtime is still `Approved`,
-which was runtime-proven to be re-payable in the next month). Both are **read-only detection**: they
-report that a partial state exists and where — they do **not** repair it and do **not** block the
-underlying operation.
+which was runtime-proven to be re-payable in the next month). SPR-082 added a third **Critical** rule,
+`monthlyplan-orphan-transaction` (a non-payroll transaction whose referenced monthly plan is absent, or
+exists but does not list it), alongside the pre-existing `corrupt-plan-ref` **warning** for the reverse
+direction. All of these are **read-only detection**: they report that a partial state exists and where —
+they do **not** repair it and do **not** block the underlying operation.
 
 Operational surface: 8 aggregates / 8 aggregate-backed commands / 1 aggregate-backed query; 14 registered
 commands / 4 registered queries — unchanged by every Repository slice. Business authority remains
@@ -162,8 +198,8 @@ workflow, release pipeline) live in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1212** at v2.8.3), joined
-  by four runtime harnesses (**306** checks). PowerShell fallbacks exist for machines without Node.
+  the portable single file, and a verifier runs a suite of invariant checks (**1267** at v2.8.4), joined
+  by five runtime harnesses (**424** checks). PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
 - **Version is derived** from a single source constant; the portable filename follows it
@@ -238,8 +274,9 @@ detailed layout is in [`README.md`](README.md#project-structure) and
 
 Bump the version constants, add release notes, build + verify, present a Release Candidate, and — on
 approval — commit, tag, push, and let the tag-triggered workflow publish the GitHub Release and
-portable asset (guarded so it publishes only when the tag matches the source version). **v2.8.3 is the
-current published release and is marked Latest.** Detailed steps:
+portable asset (guarded so it publishes only when the tag matches the source version). **v2.8.4 is merged on `main`
+but has not been tagged or published; v2.8.3 remains the latest published release and is marked
+Latest.** Detailed steps:
 [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md). History: [`CHANGELOG.md`](CHANGELOG.md); latest
 summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
@@ -264,13 +301,20 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   failure *visible* — it does not make the operation all-or-nothing. **No coordinated rollback and no
   compensating action exist for Payroll posting.** A failure means the posting did not complete, not
   that nothing was written.
-- **Integrity Check detects but does not repair.** `payroll-orphan-transaction` and
-  `payroll-overtime-uncommitted` report that a partial state exists and where it is; neither fixes it.
-  **Some partial states may still require manual review** or restoration from the pre-operation backup,
-  and not every possible partial state is automatically detectable or repairable.
-- **`commitMonthlyPlan` still has unchecked multi-key persistence.** In `js/people/monthly-plan.js` it
-  awaits `persist()` and `persistMonthlyPlans()` without inspecting either result — the same class of
-  defect SPR-079 fixed elsewhere. This is a known, unaddressed residual.
+- **Integrity Check detects but does not repair.** `payroll-orphan-transaction`,
+  `payroll-overtime-uncommitted`, `monthlyplan-orphan-transaction` and `corrupt-plan-ref` report that a
+  partial state exists and where it is; none of them fixes it. **Some partial states may still require
+  manual review** or restoration from the pre-operation backup, and not every possible partial state is
+  automatically detectable or repairable.
+- **Monthly Plan commit is not atomic.** `commitMonthlyPlan` writes **two storage keys sequentially** and
+  retains attempt-all behaviour. Both results are now checked (SPR-082), which makes failure *visible* —
+  it does not make the commit all-or-nothing. **No coordinated rollback and no compensating action exist.**
+- **Monthly Plan retry does not reconcile transaction–plan linkage.** Retry is idempotent for
+  *transaction creation* only. In **Scenario A2** the retry creates no duplicate transaction but never
+  links the pre-existing rows to the new plan, so `monthlyplan-orphan-transaction` **remains**. In
+  **Scenario B** the stale dangling `committedTxnIds` are never removed, so `corrupt-plan-ref` **remains**
+  and the retry **reports success while that finding still stands**. Both are documented residual states
+  whose current operational response is **manual review**.
 - **Smart Import undo has an unresolved partial-persistence case.** The undo sets its `undone` completion
   marker *before* the write, because the marker is part of the `importBatches` payload. If the
   `importBatches` write **succeeds** but another required dataset write **fails**, reload may preserve
@@ -287,9 +331,9 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1212** checks) plus four
-  Node runtime harnesses (**306** checks total: payroll posting 106, `saveAllData` 61, contract renewal
-  67, payroll committed state 72) plus manual browser validation. The runtime harnesses drive real
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1267** checks) plus five
+  Node runtime harnesses (**424** checks total: monthly plan 118, payroll posting 106, `saveAllData` 61,
+  contract renewal 67, payroll committed state 72) plus manual browser validation. The runtime harnesses drive real
   behaviour against the live engine and UI seams, but they are not a general test suite.
 - **External CDN references** for the spreadsheet parser and fonts mean the fully offline experience
   depends on those assets (no user data is sent to them).
@@ -306,9 +350,12 @@ Directions (no committed release numbers unless already approved):
 - **Released:** Supplemental Payroll Engine (v2.7.0); Payroll Integrity & Reporting Foundation (v2.7.1);
   Persistence & Transactional Integrity (v2.7.2); Supplemental-Aware Payroll History (v2.7.3);
   Aggregate-Owned Contract Renewal + Single Payroll Posting Authority (v2.8.1); Honest Persistence
-  Results (v2.8.2); **Payroll Posting Integrity (v2.8.3 — current)**.
-- **Immediate residuals** (evidence-backed, not yet scheduled): `commitMonthlyPlan` result integrity;
-  the Smart Import undo in-memory/storage divergence described under *Known Limitations*.
+  Results (v2.8.2); Payroll Posting Integrity (v2.8.3 — **latest published release**).
+- **Merged, not yet released:** **Monthly Plan Result Integrity (v2.8.4 — current source state**, on
+  `main` but not tagged or published).
+- **Immediate residuals** (evidence-backed, not yet scheduled): Monthly Plan retry linkage reconciliation
+  (Scenarios A2 and B); the Smart Import undo in-memory/storage divergence — both described under
+  *Known Limitations*, and both answered today by **manual review** only.
 - **Deferred architecture** — considered only if evidence justifies it, never pre-emptively:
   operation-specific compensation (only where a concrete failure mode warrants it); a persisted recovery
   marker (only if runtime evidence requires one); a generic coordination mechanism (only after a
@@ -325,13 +372,13 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
 
 ## 18. Technical Debt
 
-- No general automated regression suite; coverage is the invariant verifier plus four targeted runtime
+- No general automated regression suite; coverage is the invariant verifier plus five targeted runtime
   harnesses, with the remaining behavioural coverage manual.
 - Heavy use of direct DOM string rendering — safe today because user data is escaped, but a
   standing reason to keep escaping disciplined.
 - Some persisted records carry legacy/compatibility fields retained to avoid migrations.
-- Compound (multi-key) persistence is checked and reported but not coordinated; see *Known Limitations*
-  for the two outstanding residuals.
+- Compound (multi-key) persistence is checked and reported but not coordinated, and detected partial
+  states are not repaired; see *Known Limitations* for the outstanding residuals.
 
 ## 19. Important Design Decisions
 

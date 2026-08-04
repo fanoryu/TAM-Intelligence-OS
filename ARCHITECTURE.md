@@ -1,6 +1,10 @@
 # TAM Intelligence OS — Architecture
 
-**Current release:** v2.8.3 — Payroll Posting Integrity (published, marked Latest)
+**Current source state:** v2.8.4 — Monthly Plan Result Integrity (merged on `main` at
+`969913beb1b864d4dec0ed960f95516dff9d9889`; **not tagged, not published**)
+**Latest published release:** v2.8.3 — Payroll Posting Integrity (marked Latest)
+**Current distributable:** `dist/tam-intelligence-os-v2.8.4.html` — 914,409 bytes, SHA-256
+`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
 CSS/data-safety invariants)
 **Shape today:** a modular source of **65 classic-script JS modules** (in `core/ ui/ finance/ people/
@@ -9,8 +13,9 @@ portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **64 of the 65 are bro
 load-order manifest and `index.html` agree on all 64 — and `js/cli/cli.js` is the CLI-only ingress,
 deliberately outside the browser load order. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
-**Verification:** `tools/verify-build.js` — **1212** checks; four Node runtime harnesses — **306**
-checks (payroll posting 106, `saveAllData` 61, contract renewal 67, payroll committed state 72).
+**Verification:** `tools/verify-build.js` — **1267** checks; five Node runtime harnesses — **424**
+checks (monthly plan 118, payroll posting 106, `saveAllData` 61, contract renewal 67, payroll committed
+state 72).
 
 > **How to read this document.** The header block above and **§18** (Repository layer) describe the
 > architecture **as it stands today**; start there. Everything below §18 is a dated release record,
@@ -28,7 +33,7 @@ checks (payroll posting 106, `saveAllData` 61, contract renewal 67, payroll comm
 > Engine). Where an early section says "20 files" or "44 modules", the header block above is the
 > current count.
 >
-> **Releases after v2.7.0 (v2.7.1 → v2.8.3) have no dedicated section here.** Their architectural
+> **Releases after v2.7.0 (v2.7.1 → v2.8.4) have no dedicated section here.** Their architectural
 > substance is folded into the header block and §18; their per-release detail lives in
 > [`CHANGELOG.md`](CHANGELOG.md) and [`RELEASE_NOTES.md`](RELEASE_NOTES.md), which are the source of
 > truth for release-by-release history.
@@ -69,7 +74,7 @@ flowchart TD
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>1212 invariant checks"]
+  VERIFY["tools/verify-build.js<br/>1267 invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX
@@ -197,8 +202,9 @@ best-effort audit also stays with the handler: after successful persistence, suc
 - **Compound persistence remains outside this contract.** `commitReadyPayroll` writes four stores in one
   logical unit and stays direct by design. Non-aggregate writes (whole-record editors, deletes,
   generation, regeneration, salary overrides, onboarding reset, the v2.5 migration) also stay direct.
-  SPR-079 and SPR-081 changed how compound writes are **reported and detected**, not how they are
-  performed — see *Compound persistence: current state* below.
+  `commitMonthlyPlan` likewise writes two stores directly. SPR-079, SPR-081 and SPR-082 changed how
+  compound writes are **reported and detected**, not how they are performed — see *Compound persistence:
+  current state* below.
 - **Two operations previously listed here are no longer compound.** Contract renewal is single-collection
   (predecessor and successor both live in `contracts`, so one write covers both) and is Repository-mediated
   since SPR-077. Payroll-planning posting was **retired in SPR-078**: its screen had been unreachable since
@@ -296,31 +302,67 @@ prior state.**
 Employee Merge and Smart Import **commit** each snapshot a pre-operation safety backup before writing.
 **Smart Import undo does not** take an equivalent pre-operation snapshot.
 
+### Monthly Plan commit result integrity (SPR-082)
+
+`commitMonthlyPlan` (`js/people/monthly-plan.js`) writes **two storage keys sequentially** —
+transactions first, monthly plans second. Since SPR-082 it:
+
+- **captures and strictly inspects both persistence results.** The write order and the attempt-all
+  behaviour are unchanged (a failing first write does not abort the second), so the failure matrix is
+  the same; what changed is that neither result is discarded. Success requires both; failure returns a
+  typed `MonthlyPlanPersistenceFailed` outcome carrying `failedStep` (deterministic — the first failure
+  in the fixed write order), `failedSteps`, `completedSteps`, `partialPersistence` and a
+  `recoveryHint` of `RunIntegrityCheckAndReview`;
+- **inspects the result before any completion behaviour.** The failure branch **retains the preview**
+  (clearing it would discard exactly the rows the user needs in order to review manually), emits no
+  success toast, and shows a message stating that some data may already have been saved and that
+  Integrity Check should be run before retrying. The message never claims a rollback, because none
+  happened.
+
+**No atomicity and no rollback were introduced.** A failure means the commit did not complete — **not**
+that nothing was written. The harness asserts the module implements no snapshot/restore, no Unit of
+Work, no coordinator, no journal, and no schema change.
+
+**Retry is idempotent for transaction creation only; it reconciles no linkage.** Both residual states
+below are reload-state proven by `tools/verify-monthlyplan-runtime.js`, and the current operational
+response to each is **manual review**:
+
+| Residual | Reloaded state | What retry does — and does not do |
+|---|---|---|
+| **Scenario A2** — the monthly plan was created by the failing commit and only the transactions write landed | The transactions return carrying a `monthlyPlanId` that points at **no existing plan**; `monthlyplan-orphan-transaction` fires as **Critical**. `corrupt-plan-ref` cannot see this state — it walks `committedTxnIds`, and these ids were never added to any list | The reloaded rows are recognised as duplicates, so **no duplicate transaction is created** (`created === 0`). Because they are skipped, they are **never linked** to the newly created plan, which lists no transactions — so the Critical finding **remains after a successful retry** |
+| **Scenario B** — only the monthly plans write landed | No transactions exist; the plan is `Committed` with **dangling** `committedTxnIds`; `corrupt-plan-ref` fires. The new orphan rule does **not** fire — there is no transaction to carry a `monthlyPlanId` | The row is `new` again, so retry is reachable and creates the missing transaction under a **new id**. The stale dangling ids **stay on the plan** — nothing removes them — so `corrupt-plan-ref` **remains** and the commit **reports success while that finding still stands** |
+
 ### Integrity checker
 
 `runIntegrityCheck` (`js/core/stabilization.js`) is **read-only detection**. Two rules were added in
-SPR-081, both **Critical**:
+SPR-081 and one in SPR-082, all three **Critical**:
 
 | Rule | Detects |
 |---|---|
 | `payroll-orphan-transaction` | a payroll-sourced Finance transaction whose referenced `PayrollPlan` is **either not `Committed`** — the residue of a partial posting — **or does not link back to that transaction**. Both broken-linkage directions fire the rule; a row is healthy only when it is committed **and** linked back |
 | `payroll-overtime-uncommitted` | committed payroll whose linked Overtime is still `Approved`, which was runtime-proven to be re-included in the next month's generated payroll |
+| `monthlyplan-orphan-transaction` (SPR-082) | a **non-payroll** Finance transaction carrying a `monthlyPlanId` whose referenced monthly plan is **absent entirely** (Scenario A2 — the plan write never landed) **or** exists but **does not list the transaction** in `committedTxnIds`. Payroll-sourced rows are deliberately out of scope: they are owned by `payroll-orphan-transaction` and `payroll-missing-monthlyplan` |
 
-Both **detect only and repair nothing.** They report that a partial state exists and where it is, and
-neither blocks the underlying operation.
+The pre-existing `corrupt-plan-ref` **warning** covers the opposite direction — a monthly plan whose
+`committedTxnIds` point at transactions that do not exist (Scenario B).
+
+All of these **detect only and repair nothing.** They report that a partial state exists and where it
+is, and none of them blocks the underlying operation.
 
 ### Compound persistence: current state
 
 | Property | Status |
 |---|---|
 | Payroll posting write count | **four storage keys, written sequentially** |
+| Monthly Plan commit write count | **two storage keys, written sequentially** |
 | Atomicity | **none** — the browser is atomic per key only |
 | Attempt-all behaviour | **retained** — a failing write does not abort the remaining writes |
-| Result inspection | **complete** — all four results checked (SPR-081) |
+| Result inspection | **complete** — all four payroll-posting results checked (SPR-081); both Monthly Plan results checked (SPR-082) |
 | Coordinated rollback | **none** |
 | Compensating action | **none** |
-| Detection of partial states | two Critical Integrity Check rules |
+| Detection of partial states | three Critical Integrity Check rules + the `corrupt-plan-ref` warning |
 | Repair of partial states | **none** — manual review may still be required |
+| Retry idempotency | prevents duplicate transaction creation; **does not reconcile transaction–plan linkage** |
 
 Not every possible partial Payroll state is automatically detectable or repairable. The two failure modes
 **addressed** in SPR-081 are the two proven by SPR-080 runtime discovery — one **prevented on retry**
@@ -329,8 +371,12 @@ sense of being made impossible.
 
 **Known residuals.**
 
-- `commitMonthlyPlan` (`js/people/monthly-plan.js`) still awaits `persist()` and `persistMonthlyPlans()`
-  **without inspecting either result** — the same class of defect SPR-079 fixed elsewhere. Unaddressed.
+- **Monthly Plan retry reconciles no linkage.** SPR-082 made `commitMonthlyPlan`'s partial states
+  *reported and detectable*, not prevented or repaired. **Scenario A2** leaves
+  `monthlyplan-orphan-transaction` standing after a successful retry (the duplicate rows are skipped and
+  therefore never linked to the new plan); **Scenario B** leaves the stale dangling `committedTxnIds` on
+  the plan, so `corrupt-plan-ref` stands and the retry **reports success while a finding remains**.
+  Current operational response: **manual review**. Unresolved.
 - **Smart Import undo has an unresolved partial-persistence case.** The `undone` marker is set *before*
   the write, because it is part of the `importBatches` payload. If the `importBatches` write **succeeds**
   but another required dataset write **fails**, reload may preserve `undone:true` while some record
@@ -357,7 +403,7 @@ nothing below should be read as scheduled work.
   envelope; any backend assumption.
 
 Generic compound-persistence coordination has **not** been approved. The verifier actively asserts that
-SPR-077, SPR-078, SPR-079 and SPR-081 each introduced no transaction abstraction.
+SPR-077, SPR-078, SPR-079, SPR-081 and SPR-082 each introduced no transaction abstraction.
 
 ### Release engineering
 
@@ -367,7 +413,9 @@ refreshes the GitHub Release idempotently and uploads the portable asset. The po
 **reproducible** — the same source yields a byte-identical artifact, so the published SHA-256 verifies any
 downloaded copy. Shipped releases are never rewritten. The workflow titles a Release
 `TAM Intelligence OS <tag>` — the short convention — which is why the published v2.8.3 Release is titled
-`TAM Intelligence OS v2.8.3` rather than carrying the release name. `ci.yml` builds and verifies every
+`TAM Intelligence OS v2.8.3` rather than carrying the release name. **No `v2.8.4` tag exists and no
+v2.8.4 Release has been published** — the v2.8.4 source and its portable build are merged on `main`
+only, so the latest published release is still v2.8.3. `ci.yml` builds and verifies every
 push/PR to `main`; `codeql.yml` runs code scanning with two Analyze jobs (`javascript-typescript`,
 `actions`).
 
