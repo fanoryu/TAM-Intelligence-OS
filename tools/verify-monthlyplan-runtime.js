@@ -37,6 +37,23 @@ function check(cond, label){
   else { failures.push(label); console.log('  [FAIL] ' + label); }
 }
 
+/* INTEGRITY-COVERAGE-BEGIN
+   Machine-readable coverage ownership (GOV-007 / SPR-092). This is an
+   OPERATION-DRIVEN harness: it proves this rule fires from a genuine partial
+   write rather than from a hand-built state, which is strictly stronger evidence
+   than a state-shaped fixture. That is why this rule is deliberately NOT
+   re-covered by the dedicated integrity harnesses. The declaration below makes
+   that ownership machine-readable so tools/verify-build.js can account for every
+   production rule identifier without duplicating a single fixture.
+   Severity is the EXPECTED production severity, bound per finding below. */
+const INTEGRITY_COVERAGE = {
+  harness: 'verify-monthlyplan-runtime.js',
+  rules: {
+    'monthlyplan-orphan-transaction': 'critical'
+  }
+};
+/* INTEGRITY-COVERAGE-END */
+
 const KEYS = { txns:'tam_txns_v1', monthlyPlans:'tam_monthly_plans_v1' };
 
 // `preset` pre-populates the storage backend BEFORE the app loads, so a fresh
@@ -283,7 +300,16 @@ function preview(rt, monthKey){
     const all = [].concat(findings.critical||[], findings.warning||[], findings.info||[], findings.issues||[]);
     const flat = JSON.stringify(findings);
     check(/monthlyplan-orphan-transaction/.test(flat), 'the orphan monthly-plan transaction is detected');
-    check(/critical/i.test(flat) && flat.indexOf('monthlyplan-orphan-transaction') > -1, 'the finding is raised at Critical severity');
+    /* SPR-092 (GOV-007 D1) — severity is now BOUND TO THE FINDING.
+       The previous form tested /critical/i against JSON.stringify(result), which is
+       satisfied by the always-present `counts.critical` key and was therefore true
+       even for a result with zero findings. It could not have detected a downgrade
+       of this rule from critical to warning. This reads the finding's own severity
+       field, so a production severity change fails here. Detection behaviour and
+       production code are unchanged; only the assertion is repaired. */
+    const orphanFindings = (findings.findings || []).filter((f)=>f.category === 'monthlyplan-orphan-transaction');
+    check(orphanFindings.length > 0 && orphanFindings.every((f)=>f.severity === INTEGRITY_COVERAGE.rules['monthlyplan-orphan-transaction']),
+      'the finding is raised at Critical severity (bound to the finding, not to counts.critical)');
     check(/tx_fake_1/.test(flat), 'the finding names the transaction id');
     check(/mp_fake_1/.test(flat), 'the finding names the monthly plan id');
     check(/review/i.test(flat), 'the finding gives an actionable manual-review instruction');

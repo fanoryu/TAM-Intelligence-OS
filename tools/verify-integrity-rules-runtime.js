@@ -52,6 +52,33 @@ function check(cond, label){
   else { failures.push(label); console.log('  [FAIL] ' + label); }
 }
 
+/* INTEGRITY-COVERAGE-BEGIN
+   Machine-readable coverage ownership (GOV-007 / SPR-092). tools/verify-build.js
+   parses THIS block — bounded by the sentinels — and compares it against the rule
+   identifiers and severities actually emitted by runIntegrityCheck(). A rule added
+   to production without an entry here, an entry here for a rule production no
+   longer emits, or a severity that disagrees with production, all fail the
+   verifier. The list is not a second source of truth: it is checked against the
+   source on every build and cannot drift silently.
+   Severities are the EXPECTED production severities, asserted per fixture below. */
+const INTEGRITY_COVERAGE = {
+  harness: 'verify-integrity-rules-runtime.js',
+  rules: {
+    'contract-multiple-employees': 'critical',
+    'duplicate-employee-name': 'critical',
+    'duplicate-id': 'critical',
+    'overtime-double-commit': 'critical',
+    'overtime-negative-hours': 'critical',
+    'payroll-negative': 'critical',
+    'payroll-posted-no-transaction': 'critical',
+    'schema-error': 'critical',
+    'supplemental-missing-transaction': 'critical',
+    'supplemental-orphan-transaction': 'critical',
+    'supplemental-overtime-double-capture': 'critical'
+  }
+};
+/* INTEGRITY-COVERAGE-END */
+
 /* ---------- runtime loader ----------
    Loads the REAL production modules in the manifest order, excluding the only
    DOM-executing load-time module. Browser infrastructure is stubbed; no business
@@ -348,15 +375,15 @@ function rule(id, label, expected, mutate){
   console.log('');
   console.log('-- coverage roll-up --');
   {
-    const REQUIRED = ['contract-multiple-employees','duplicate-employee-name','duplicate-id',
-      'overtime-double-commit','overtime-negative-hours','payroll-negative',
-      'payroll-posted-no-transaction','schema-error','supplemental-missing-transaction',
-      'supplemental-orphan-transaction','supplemental-overtime-double-capture'];
+    // The declaration above is the single in-file contract; the roll-up walks it
+    // rather than a second literal list, so the two cannot disagree.
+    const REQUIRED = Object.keys(INTEGRITY_COVERAGE.rules);
     const self = fs.readFileSync(__filename,'utf8');
     REQUIRED.forEach((id)=>{
       check(self.indexOf("rule('" + id + "'") > -1, 'covered by an explicit rule() block: ' + id);
     });
     check(REQUIRED.length === 11, 'exactly 11 Critical rule IDs are in scope for this harness');
+    check(REQUIRED.every((id)=>INTEGRITY_COVERAGE.rules[id] === 'critical'), 'every declared rule in this harness is declared critical');
     // The three already-covered Critical rules are deliberately NOT re-covered here.
     ['payroll-orphan-transaction','payroll-overtime-uncommitted','monthlyplan-orphan-transaction']
       .forEach((id)=>{

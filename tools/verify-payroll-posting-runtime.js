@@ -29,6 +29,24 @@ function check(cond, label){
   else { failures.push(label); console.log('  [FAIL] ' + label); }
 }
 
+/* INTEGRITY-COVERAGE-BEGIN
+   Machine-readable coverage ownership (GOV-007 / SPR-092). This is an
+   OPERATION-DRIVEN harness: it proves these rules fire from a genuine partial
+   write rather than from a hand-built state, which is strictly stronger evidence
+   than a state-shaped fixture. That is why these two rules are deliberately NOT
+   re-covered by the dedicated integrity harnesses. The declaration below makes
+   that ownership machine-readable so tools/verify-build.js can account for every
+   production rule identifier without duplicating a single fixture.
+   Severities are the EXPECTED production severities, bound per finding below. */
+const INTEGRITY_COVERAGE = {
+  harness: 'verify-payroll-posting-runtime.js',
+  rules: {
+    'payroll-orphan-transaction': 'critical',
+    'payroll-overtime-uncommitted': 'critical'
+  }
+};
+/* INTEGRITY-COVERAGE-END */
+
 function loadRuntime(){
   const root = path.resolve(__dirname, '..');
   const jsFiles = require(path.join(root,'tools','module-order.js')).filter(f => f !== 'core/app-bootstrap.js');
