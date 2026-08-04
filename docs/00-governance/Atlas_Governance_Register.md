@@ -24,6 +24,7 @@ fabricated.
 | [DPR-005](../DPR/DPR-005-delta-completion-report.md) | Delta Completion Report | `docs/DPR/` | Accepted — official Milestone Delta completion report (superseded as current by DPR-009) |
 | [DPR-009](../DPR/DPR-009-epsilon-repository-adoption-completion.md) | Epsilon Repository Adoption Completion Report | `docs/DPR/` | **Accepted — current progress report** |
 | [ADR-013](../03-adr/ADR-013-Repository-Layer.md) | Repository Layer (entity-named, collection-grained) | `docs/03-adr/` | **Accepted — Repository architecture decision** |
+| [ADR-014](../03-adr/ADR-014-Contract-Core-Field-Authority.md) | Contract Core Field Authority | `docs/03-adr/` | **Accepted — resolves ARCH-008 OQ-1; authorizes no implementation** |
 | [ECR-001](../ECR/ECR-001-milestone-epsilon-closure-record.md) | Milestone Epsilon Closure Record | `docs/ECR/` | **Accepted — Milestone Epsilon closed** (`0ad8150`) |
 | [GHA-001](../../audit/github-audit-2026-08-02/GHA-001-github-repository-comprehensive-audit.md) | GitHub & Repository Comprehensive Audit | `audit/` | Complete — recorded |
 | [SDR-0001](../security/SDR-0001-codeql-baseline-disposition.md) | CodeQL Baseline Disposition | `docs/security/` | Accepted (dispositions CodeQL #1–5) |

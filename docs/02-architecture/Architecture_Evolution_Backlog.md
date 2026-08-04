@@ -469,8 +469,9 @@ own sprint authorization — see the current-state box at the head of this secti
 | Status | **Requires additional discovery** |
 | Severity | **Medium** |
 | Controlling | **No** |
-| Implementation readiness — editor-authority migration | **Not ready** (blocked on OQ-1) |
+| Implementation readiness — editor-authority migration | **Domain preparation ready** (OQ-1 closed by ADR-014); **editor routing still blocked on OQ-2** |
 | Persistence-honesty gaps | **Closed** — implemented by SPR-093, no longer in scope |
+| Field ownership (OQ-1) | **Closed** — decided by [ADR-014](../03-adr/ADR-014-Contract-Core-Field-Authority.md) (Accepted) |
 
 M-5 is **not** Closed, Ready, Accepted, or Scheduled. What remains is entirely the unresolved
 ownership question: which authority should own the editor's fields, and whether deletion should become
@@ -478,9 +479,20 @@ a canonical command. **Nothing in M-5 now concerns failure reporting or rollback
 
 ### 9. Open architecture questions
 
+> **OQ-1 is RESOLVED and CLOSED by [ADR-014 — Contract Core Field Authority](../03-adr/ADR-014-Contract-Core-Field-Authority.md)
+> (Accepted).** One `ContractCoreAggregate` behind one `contract.core.update` command owns `employeeId`,
+> `employeeName`, `contractNumber`, `monthlySalary`, `notes` and the five schedule fields; status, the
+> date extent and renewal stay with their existing aggregates; `endDate` stays derived; `updatedAt`,
+> `history` and the renewal references are system-authored; `id` and `createdAt` are immutable. Product
+> decisions **PD-1** (`contractNumber` editable only while `Draft`) and **PD-2** (employee reassignment
+> only while `Draft` and only with no linked payroll, overtime or transactions) are approved. Smart
+> Import, Backup Restore, Demo Seed and the Employee Dedup relink are permanent, bounded exemptions.
+> **ADR-014 authorizes no implementation.** OQ-2 and OQ-3 below remain **OPEN**.
+
 - **OQ-1 — Which authority owns the editor's non-aggregate fields** (`contractNumber`, `employeeId`,
   `employeeName`, `notes`, schedule fields)? A new aggregate, an extension of an existing one, or a
-  deliberate decision to leave them direct. **This blocks editor-authority migration readiness.**
+  deliberate decision to leave them direct. ~~**This blocks editor-authority migration readiness.**~~
+  **CLOSED by [ADR-014](../03-adr/ADR-014-Contract-Core-Field-Authority.md).**
 - **OQ-2 — Should the editor's status control be removed, constrained to legal transitions, or routed
   through `ContractStatusAggregate`?** **Potentially requires a product decision:** aggregate routing
   would reject status changes the editor currently permits, so the migration is not behaviour-neutral.
@@ -495,7 +507,8 @@ Recorded as a recommendation only. **No step below is authorized by this record.
 2. ~~A narrow implementation sprint for the editor and delete **persistence-honesty gaps** (§7) — no ADR
    required, no aggregate decision required.~~ **Done — SPR-093** (`e22e4c04`), documentation reconciled
    by SPR-094.
-3. An architecture decision or ADR resolving **OQ-1** (editor field authority). ← **next open step**
+3. ~~An architecture decision or ADR resolving **OQ-1** (editor field authority).~~ **Done —
+   [ADR-014](../03-adr/ADR-014-Contract-Core-Field-Authority.md) (Accepted).**
 4. Targeted discovery and an implementation charter for **editor-authority migration**, gated on OQ-1
    and OQ-2.
 5. A separate decision for **delete authority** (OQ-3) if not resolved by the OQ-1 ADR.
