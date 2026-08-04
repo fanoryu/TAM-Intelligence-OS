@@ -1404,6 +1404,40 @@ check(!/child_process|require\('http|require\("http/.test(warnHarnessSrc), 'SPR-
 // The two integrity harnesses stay separate artifacts with separate scopes.
 check(warnHarnessPath !== intgHarnessPath && intgHarnessSrc.indexOf('F1 / F2 / F3') === -1, 'SPR-089 Critical harness is untouched by SPR-090 (separate files, separate scope)');
 
+/* ---------- SPR-091 — remaining-families harness discoverability (F5/F6/F7/F9) ----------
+   Same treatment as the SPR-089 and SPR-090 blocks: discoverability and scope honesty,
+   WITHOUT executing the harness (no child_process — this file stays a static,
+   single-process verifier). SPR-091 completes runtime RULE-IDENTIFIER coverage; it does
+   NOT complete predicate coverage, and the derived all-rule registry completeness
+   mechanism is deliberately still NOT implemented here. */
+console.log('== REMAINING-FAMILY INTEGRITY RULE HARNESS (SPR-091 — discoverability only) ==');
+const payrHarnessPath = path.join(root,'tools','verify-integrity-payroll-rules-runtime.js');
+check(fs.existsSync(payrHarnessPath), 'SPR-091 runtime harness present: tools/verify-integrity-payroll-rules-runtime.js');
+const payrHarnessSrc = fs.existsSync(payrHarnessPath) ? read(payrHarnessPath) : '';
+// The 25 rule IDs assigned to SPR-091, grouped as the approved families.
+[['F5',['payroll-without-employee','payroll-no-employee','payroll-no-contract','payroll-outside-contract','payroll-overtime-broken','payroll-total-inconsistent','payroll-missing-monthlyplan','payroll-override-no-reason']],
+ ['F6',['payroll-missing-transaction','payroll-txn-mismatch','payroll-txn-missing-planid','payroll-plan-txn-total-diff','payroll-plan-txn-overtime-diff','payroll-missing-overtime-ids','payroll-missing-committed-snapshot','payroll-snapshot-txn-diff']],
+ ['F7',['duplicate-employee','duplicate-employee-id','payroll-split-across-duplicates','overtime-split-across-duplicates','duplicate-contact-conflict','orphan-duplicate-employee']],
+ ['F9',['supplemental-missing-source-snapshot','supplemental-missing-source-snapshot-legacy','supplemental-amount-drift']]
+].forEach(([fam,ids])=>ids.forEach((id)=>check(payrHarnessSrc.indexOf("'"+id+"'") !== -1,
+  'SPR-091 harness covers '+fam+' rule: '+id)));
+// Scope honesty — identity, reserved-elsewhere accounting, and no overclaim.
+check(/Fixture families F5 \/ F6 \/ F7 \/ F9/.test(payrHarnessSrc), 'SPR-091 harness identifies itself as remaining-family coverage (F5/F6/F7/F9)');
+check(/OWNED_ELSEWHERE/.test(payrHarnessSrc), 'SPR-091 harness names the rules owned by earlier harnesses and does not re-claim them');
+check(/NOT COMPLETE PREDICATE COVERAGE|NOT complete predicate coverage/.test(payrHarnessSrc), 'SPR-091 harness does not claim complete predicate coverage');
+check(/the healthy fabricated baseline produces ZERO findings/.test(payrHarnessSrc), 'SPR-091 harness asserts a clean healthy baseline before any defect fixture');
+check(/RUNTIME VERIFICATION PASSED/.test(payrHarnessSrc) && /process\.exit\(1\)/.test(payrHarnessSrc), 'SPR-091 harness fails non-zero on assertion failure');
+check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rm|rmSync|mkdir)/.test(payrHarnessSrc), 'SPR-091 harness writes nothing to disk');
+check(!/child_process|require\('http|require\("http/.test(payrHarnessSrc), 'SPR-091 harness spawns no process and opens no network');
+// The predicate path SPR-090 deferred is closed here (invalid-amount via the payroll plan).
+check(/DEFERRED PREDICATE PATH/.test(payrHarnessSrc) && /invalid-amount \[3\/3 payroll plan\]/.test(payrHarnessSrc), 'SPR-091 closes the invalid-amount payroll-plan predicate path deferred by SPR-090');
+// The three integrity harnesses remain separate artifacts with disjoint scopes.
+check(payrHarnessPath !== warnHarnessPath && payrHarnessPath !== intgHarnessPath, 'the three integrity harnesses are separate files');
+// Each harness must identify itself as ITS OWN families only. SPR-090 legitimately
+// MENTIONS F5/F6/F7/F9 as reserved, so the test is on the self-identification line,
+// not on any occurrence of the family names.
+check(!/Fixture families F5 \/ F6 \/ F7 \/ F9/.test(warnHarnessSrc) && !/Fixture families F5 \/ F6 \/ F7 \/ F9/.test(intgHarnessSrc), 'SPR-089 and SPR-090 harnesses do not identify as SPR-091 family coverage (disjoint scope)');
+
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
 const helpPath = path.join(root,'js','domain','aggregate-helpers.js');
