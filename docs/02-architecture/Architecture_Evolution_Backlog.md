@@ -397,7 +397,27 @@ directly. They are **batch/portability paths, outside the per-operation aggregat
 and they are **not automatically part of an editor-authority migration**. They are recorded here only so
 that "residual Contract authority" is not read as covering them.
 
-### 7. Persistence-honesty findings (new, not previously recorded)
+### 7. Persistence-honesty findings — CLOSED by SPR-093
+
+> **Current state (SPR-094, 2026-08-04). Both findings below are IMPLEMENTED and CLOSED.**
+> SPR-093 landed on `main` at merge commit `e22e4c04ab66ff4541879d3e850d5c9cd41dc1cf`. The editor save
+> and `deleteContract` now check the `persistContracts()` result and roll back in memory on failure, so
+> neither can report success after a failed write. **They are no longer active components of M-5**
+> (§8). The findings are retained below as the record of what was found and why.
+>
+> What SPR-093 changed, and nothing more:
+> - a failed editor **create** leaves no new record;
+> - a failed editor **edit** restores every mutated field, and restores `history` both in contents and
+>   in prior own-property absence — a record carrying no `history` (reachable via legacy backup restore)
+>   is left with none;
+> - a failed **delete** restores the record at its exact original index and writes **no** activity entry;
+> - failure produces failure feedback, never success feedback, and the editor modal stays open for retry.
+>
+> Verified by `tools/verify-contract-persistence-runtime.js` (73 checks) and by real-browser QA against
+> the actual submit handler and the actual `deleteContract`, with the storage layer forced to fail.
+> **SPR-093 migrated no authority** — the editor still assigns `status` directly, both paths still
+> persist through `persistContracts()`, and no command, aggregate, or repository mediation was
+> introduced. §4 and §5 below remain accurate as the current residual description.
 
 Two findings surfaced during the ARCH-008 discovery that neither ARCH-006 nor the GHA records had
 captured. Both are about **honest reporting on a failure path**, not about aggregate authority:
@@ -422,20 +442,23 @@ Classification for both:
   `persisted.ok !== true` checks and rollback; this is the same class of gap SPR-079 closed for
   `saveAllData`.
 
-**Recorded, not implemented.** ARCH-008 does not fix, schedule, or authorize fixing them.
+*(Historical note, accurate when ARCH-008 was published: "**Recorded, not implemented.** ARCH-008 does
+not fix, schedule, or authorize fixing them." Both were subsequently implemented by SPR-093 under its
+own sprint authorization — see the current-state box at the head of this section.)*
 
 ### 8. Narrowed M-5 scope and status
 
-**Active M-5 consists of exactly four items:**
+**Active M-5 consists of exactly three items — all of them AUTHORITY questions:**
 
 1. Full Contract editor direct authority over fields that **overlap existing aggregates** (`status`,
    `startDate`, `durationMonths`).
-2. **Undefined authority** for the remaining non-aggregate editor fields.
-3. Direct **deletion** authority.
-4. **Persistence-honesty gaps** for editor save and delete (§7).
+2. **Undefined authority** for the remaining non-aggregate editor fields (OQ-1).
+3. Direct **deletion** authority (OQ-3).
 
 **Explicitly excluded from M-5:**
 
+- **Persistence honesty** — closed by SPR-093 (§7). It was never an authority question; it is no longer
+  an M-5 component in any form.
 - **Contract renewal** — closed (§3).
 - **Bulk paths** — Smart Import, restore, seed, reset (§6).
 - M-5 is **not** "all Contract writes." Three of the six single-record Contract operations are already
@@ -447,9 +470,11 @@ Classification for both:
 | Severity | **Medium** |
 | Controlling | **No** |
 | Implementation readiness — editor-authority migration | **Not ready** (blocked on OQ-1) |
-| Implementation readiness — persistence-honesty gaps | **Ready** for a separate narrow sprint |
+| Persistence-honesty gaps | **Closed** — implemented by SPR-093, no longer in scope |
 
-M-5 is **not** Closed, Ready, Accepted, or Scheduled.
+M-5 is **not** Closed, Ready, Accepted, or Scheduled. What remains is entirely the unresolved
+ownership question: which authority should own the editor's fields, and whether deletion should become
+a canonical command. **Nothing in M-5 now concerns failure reporting or rollback.**
 
 ### 9. Open architecture questions
 
@@ -466,10 +491,11 @@ M-5 is **not** Closed, Ready, Accepted, or Scheduled.
 
 Recorded as a recommendation only. **No step below is authorized by this record.**
 
-1. Publication of ARCH-008 (this record).
-2. A narrow implementation sprint for the editor and delete **persistence-honesty gaps** (§7) — no ADR
-   required, no aggregate decision required.
-3. An architecture decision or ADR resolving **OQ-1** (editor field authority).
+1. ~~Publication of ARCH-008 (this record).~~ **Done.**
+2. ~~A narrow implementation sprint for the editor and delete **persistence-honesty gaps** (§7) — no ADR
+   required, no aggregate decision required.~~ **Done — SPR-093** (`e22e4c04`), documentation reconciled
+   by SPR-094.
+3. An architecture decision or ADR resolving **OQ-1** (editor field authority). ← **next open step**
 4. Targeted discovery and an implementation charter for **editor-authority migration**, gated on OQ-1
    and OQ-2.
 5. A separate decision for **delete authority** (OQ-3) if not resolved by the OQ-1 ADR.
@@ -491,3 +517,25 @@ Established read-only at the evidence baseline: verifier **1443 checks**; runtim
 `09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`. No production behaviour, rule
 identifier, severity, schema, workflow, tag, or Release was changed by the discovery that produced this
 record, or by the record itself.
+
+### 13. Repository state after SPR-093 (added by SPR-094)
+
+Repository `main` now contains truthful editor persistence and truthful delete persistence. It does
+**not** contain any aggregate migration, repository migration, or command migration for those paths —
+the editor and `deleteContract` remain direct writers through `persistContracts()`, exactly as §4 and
+§5 describe.
+
+Because production source changed, the portable artifact was regenerated from it (`CLAUDE.md` §10, §19).
+`APP_VERSION` remains 2.8.4, `APP_RELEASE_NAME` remains *Monthly Plan Result Integrity*, and
+`SCHEMA_VERSION` remains 6, so the artifact filename is unchanged.
+
+| | Repository `main` | Published v2.8.4 Release asset |
+|---|---|---|
+| `dist/tam-intelligence-os-v2.8.4.html` | **917,969 bytes** | 914,409 bytes |
+| SHA-256 | `66509d25971e603f54f17051471f7dcf4de0009ff778bae5134d43d5ce70b509` | `09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6` |
+
+**Repository `main` therefore contains production changes beyond the published v2.8.4 Release
+artifact.** This is a recorded fact about the current repository state, not a defect and not a release
+recommendation. The tag `v2.8.4`, the GitHub Release, and its published asset are **unchanged and were
+not republished**. No version has been assigned to the divergence, and this record neither recommends
+nor authorizes a release.
