@@ -7,7 +7,9 @@ are made, verified, and released.
 ## Golden rules
 
 1. **Never commit real company data** — no employee names, salaries, contracts, bank details, or
-   Complete Backup JSON. Use fabricated placeholder data for testing.
+   Complete Backup JSON. **The repository contains no real company workbook or confidential
+   operational dataset.** Development, examples, and testing must use fabricated or appropriately
+   sanitized data. Never commit confidential company information.
 2. **Never hand-edit `dist/`.** The portable HTML is generated. Edit the modular source, then build.
 3. **Preserve data-safety invariants.** Do not change `SCHEMA_VERSION`, storage keys, migration
    flags, calculations, or the backup format unless the change is an intentional, documented
@@ -33,8 +35,7 @@ Do **not** do any of the following without the maintainer's explicit approval:
 
 - `git commit`, `git push`, `git tag`, or creating/editing a GitHub Release;
 - rewriting Git history (rebase, amend of pushed commits, force-push);
-- removing or moving a tracked file — including the tracked company workbook, which is a documented,
-  accepted exception and must not be inspected, exposed, moved, untracked, or deleted;
+- removing or moving a tracked file;
 - changing `APP_VERSION`, `APP_RELEASE_NAME`, `SCHEMA_VERSION`, storage keys, or migration flags
   outside an intentional, approved release/migration.
 
