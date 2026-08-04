@@ -1,5 +1,63 @@
 # Changelog
 
+## 2.8.4 — Monthly Plan Result Integrity
+
+**Type:** Correctness patch (SPR-082). **No** schema, storage-key, persisted-data, or
+persistence-mechanics change (still 15 keys, `SCHEMA_VERSION` 6); no migration added or re-run; no
+historical record is rewritten.
+
+> **No atomicity or rollback was introduced.** The Monthly Plan commit still writes two storage keys
+> sequentially — transactions, then monthly plans — and the browser is atomic per key only, so a failure
+> means the commit did not complete — not that nothing was written. No rollback, compensating action, or
+> transaction abstraction exists.
+
+### Changed
+- `commitMonthlyPlan` captures and strictly inspects both persistence results (finance transactions,
+  then monthly plans). It previously awaited both writes and discarded both results, marking the plan
+  committed and reporting success without looking at either. Success now requires both. Failure returns
+  a typed `MonthlyPlanPersistenceFailed` outcome naming the first failed step in the fixed write order,
+  every failed step, the steps that completed, whether partial persistence occurred, and a
+  `RunIntegrityCheckAndReview` recovery hint.
+- The write order and attempt-all behaviour are unchanged — transactions are still written first, and a
+  failing first write still does not abort the second — so the failure matrix is unchanged.
+- Success behaviour is gated on complete persistence. The commit handler inspects the result before any
+  completion behaviour; the success toast runs on the success path only.
+- The persistence-failure branch retains the preview, so the rows the user was committing stay on screen
+  while they are told to review the data manually. Clearing the preview was completion behaviour that
+  discarded exactly the context needed for that review.
+- The failure message states that the commit did not complete and that some data may already have been
+  saved, and directs the user to run Integrity Check and review the Monthly Plan and Finance transaction
+  before retrying. It never claims a rollback. The harness asserts no user-facing message in the module
+  claims rollback, compensation, or that nothing was saved.
+
+### Added
+- Integrity Check rule: `monthlyplan-orphan-transaction` reported as **Critical** — a non-payroll Finance
+  transaction carrying a `monthlyPlanId` whose referenced monthly plan is **absent entirely**, or which
+  **exists but does not list the transaction** in `committedTxnIds`. Both broken-linkage directions fire
+  the rule. Payroll-sourced transactions stay out of scope and remain owned by
+  `payroll-orphan-transaction` and `payroll-missing-monthlyplan`. `corrupt-plan-ref` is unchanged and
+  still covers the opposite direction (dangling `committedTxnIds`), which it could see and the new rule
+  cannot, and vice versa.
+- `tools/verify-monthlyplan-runtime.js` (118 checks) — all-succeed; each of the two writes failing; both
+  partial states rebuilt from only the keys that actually persisted, through the app's own `loadState()`,
+  so retry is a genuine reload path; and proof that the slice introduces no snapshot, restore, unit of
+  work, coordinator, journal, or schema change.
+
+### Known limitations
+- The commit remains **non-atomic**: two sequential writes, no rollback, no compensation. Checking
+  results makes failure visible; it does not make the commit all-or-nothing.
+- Integrity Check **detects but does not repair**. The new finding reports that a partial state exists
+  and where — it does not fix it and does not block the underlying operation.
+- **Retry prevents duplicate transaction creation but does not repair linkage.** Two residual states
+  remain, both reload-state proven, and both requiring **manual review**:
+  - **Scenario A2** (the plan was created by the failing commit; only the transactions write landed) —
+    the retry creates no duplicate transaction, but the reloaded rows are skipped as duplicates and are
+    therefore never linked to the newly created plan, so `monthlyplan-orphan-transaction` **remains**
+    after a successful retry.
+  - **Scenario B** (only the monthly plans write landed) — the retry creates the missing transaction
+    under a new id, but the stale dangling `committedTxnIds` are never removed, so `corrupt-plan-ref`
+    **remains** and the commit **reports success while that finding still stands**.
+
 ## 2.8.3 — Payroll Posting Integrity
 
 **Type:** Correctness patch (SPR-081). **No** schema, storage-key, persisted-data, or
