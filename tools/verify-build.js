@@ -1372,6 +1372,38 @@ check(/RUNTIME VERIFICATION PASSED/.test(intgHarnessSrc) && /process\.exit\(1\)/
 check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rm|rmSync|mkdir)/.test(intgHarnessSrc), 'SPR-089 harness writes nothing to disk');
 check(!/child_process|require\('http|require\("http/.test(intgHarnessSrc), 'SPR-089 harness spawns no process and opens no network');
 
+/* ---------- SPR-090 — Warning/Info harness discoverability (families F1/F2/F3/F4/F8/F10/F11) ----------
+   Same treatment as the SPR-089 block: make the harness discoverable and keep its
+   scope honest, WITHOUT executing it (no child_process — this file stays a static,
+   single-process verifier). Deliberately governs only the 24 rule IDs assigned to
+   SPR-090. The all-rule derived-registry completeness invariant is reserved for
+   SPR-091, when the last 25 Warning/Info rules land; until then an uncovered
+   SPR-091 rule must NOT fail the verifier. */
+console.log('== WARNING/INFO INTEGRITY RULE HARNESS (SPR-090 — discoverability only) ==');
+const warnHarnessPath = path.join(root,'tools','verify-integrity-warning-rules-runtime.js');
+check(fs.existsSync(warnHarnessPath), 'SPR-090 runtime harness present: tools/verify-integrity-warning-rules-runtime.js');
+const warnHarnessSrc = fs.existsSync(warnHarnessPath) ? read(warnHarnessPath) : '';
+// The 24 Warning/Info rule IDs assigned to SPR-090, grouped as the approved families.
+[['F1',['broken-employee-link','broken-contract-link','broken-payroll-link','corrupt-plan-ref','orphan-transaction','broken-import-link']],
+ ['F2',['invalid-date','invalid-amount','overlapping-contracts','invalid-contract-evidence']],
+ ['F3',['duplicate-payroll','duplicate-payroll-plan','payroll-duplicate-month','duplicate-payroll-txn']],
+ ['F4',['overtime-broken-employee','overtime-broken-contract','overtime-broken-payroll','overtime-bad-snapshot','overtime-outside-contract','overtime-payroll-mismatch']],
+ ['F8',['import-multiple-employees-per-candidate','rollback-preserved']],
+ ['F10',['adjustment-invalid-period']],
+ ['F11',['schema-warning']]
+].forEach(([fam,ids])=>ids.forEach((id)=>check(warnHarnessSrc.indexOf("'"+id+"'") !== -1,
+  'SPR-090 harness covers '+fam+' rule: '+id)));
+// Scope honesty — the harness must say what it is, and must not overclaim.
+check(/Fixture families F1 \/ F2 \/ F3 \/ F4 \/ F8 \/ F10 \/ F11/.test(warnHarnessSrc), 'SPR-090 harness identifies itself as Warning/Info family coverage (F1/F2/F3/F4/F8/F10/F11)');
+check(/RESERVED FOR SPR-091/.test(warnHarnessSrc) && /RESERVED_SPR091/.test(warnHarnessSrc), 'SPR-090 harness names the SPR-091 families as reserved and NOT covered');
+check(/NOT complete predicate coverage|is NOT complete predicate coverage/.test(warnHarnessSrc), 'SPR-090 harness does not claim complete predicate coverage');
+check(/the healthy fabricated baseline produces ZERO findings/.test(warnHarnessSrc), 'SPR-090 harness asserts a clean healthy baseline before any defect fixture');
+check(/RUNTIME VERIFICATION PASSED/.test(warnHarnessSrc) && /process\.exit\(1\)/.test(warnHarnessSrc), 'SPR-090 harness fails non-zero on assertion failure');
+check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rm|rmSync|mkdir)/.test(warnHarnessSrc), 'SPR-090 harness writes nothing to disk');
+check(!/child_process|require\('http|require\("http/.test(warnHarnessSrc), 'SPR-090 harness spawns no process and opens no network');
+// The two integrity harnesses stay separate artifacts with separate scopes.
+check(warnHarnessPath !== intgHarnessPath && intgHarnessSrc.indexOf('F1 / F2 / F3') === -1, 'SPR-089 Critical harness is untouched by SPR-090 (separate files, separate scope)');
+
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
 const helpPath = path.join(root,'js','domain','aggregate-helpers.js');
