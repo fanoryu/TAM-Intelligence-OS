@@ -241,7 +241,7 @@ if (fs.existsSync(prevDist)) {
 // dist/ holds exactly one release artifact — the current version (release dist-swap invariant).
 const distArtifacts = fs.readdirSync(path.join(root, 'dist')).filter((f)=>/^tam-intelligence-os-v[\d.]+\.html$/.test(f));
 check(distArtifacts.length === 1 && distArtifacts[0] === 'tam-intelligence-os-v' + meta.version + '.html', 'dist/ holds exactly one release artifact — the current v' + meta.version);
-check(meta.version === '2.8.3', 'APP_VERSION is 2.8.3 (this development release)');
+check(meta.version === '2.8.4', 'APP_VERSION is 2.8.4 (this development release)');
 // v2.7.1 polishing pass — snapshot metadata, single historical API, compact integrity badge.
 check(dist.includes('function overtimeSnapshotMeta('), 'overtime snapshot audit metadata helper present');
 check((dist.match(/overtimeSnapshotMeta:\s*overtimeSnapshotMeta\(/g)||[]).length === 1, 'the ONE remaining commit pipeline stores overtimeSnapshotMeta {recordCount,totalHours}');
@@ -1263,6 +1263,88 @@ check(!/return \{ok:false[\s\S]{0,200}\}\s*steps\.push/.test(crpBody081), 'the a
 check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'SCHEMA_VERSION remains 6');
 check(read(path.join(root,'js','core','storage-adapter.js')).indexOf('async set(key, value)') !== -1, 'StorageAdapter is unchanged');
 check(fs.existsSync(path.join(root,'tools','verify-payroll-posting-runtime.js')), 'SPR-081 runtime harness present: tools/verify-payroll-posting-runtime.js');
+
+// SPR-082 — MONTHLY PLAN COMMIT RESULT INTEGRITY + PARTIAL-STATE DETECTION.
+console.log('== SPR-082 MONTHLY PLAN RESULT INTEGRITY (result checking + orphan detection) ==');
+const mpSrc082 = read(path.join(root,'js','people','monthly-plan.js'));
+const cmpBody082 = stripComments((mpSrc082.match(/async function commitMonthlyPlan\(preview\)\{[\s\S]*?\n\}/)||[''])[0]);
+const stabSrc082 = read(path.join(root,'js','core','stabilization.js'));
+check(cmpBody082 !== '', 'commitMonthlyPlan body is resolvable for the scan');
+
+// (a) BOTH RESULTS CAPTURED AND STRICTLY INSPECTED.
+check(/const txnsOk = await persist\(\)/.test(cmpBody082), 'the transactions write result is captured');
+check(/const plansOk = await persistMonthlyPlans\(\)/.test(cmpBody082), 'the monthlyPlans write result is captured');
+check(!/await persist\(\); await persistMonthlyPlans\(\)/.test(cmpBody082), 'the old fire-and-forget write pair is gone');
+check(/ok:\s*txnsOk===true/.test(cmpBody082) && /ok:\s*plansOk===true/.test(cmpBody082), 'both results are inspected strictly (=== true)');
+check(/const completedSteps = steps\.filter\(s=>s\.ok\)/.test(cmpBody082), 'completed steps are derived from the captured results');
+check(/const failedSteps = steps\.filter\(s=>!s\.ok\)/.test(cmpBody082), 'failed steps are derived from the captured results');
+
+// (b) TYPED FAILURE / SUCCESS CONTRACT.
+check(/error:\s*'MonthlyPlanPersistenceFailed'/.test(cmpBody082), 'the typed MonthlyPlanPersistenceFailed outcome is returned');
+check(/failedStep: failedSteps\[0\]/.test(cmpBody082), 'the failed step is the FIRST failure in the fixed write order (deterministic)');
+check(/partialPersistence: completedSteps\.length > 0/.test(cmpBody082), 'partialPersistence is true only when at least one write succeeded');
+check(/recoveryHint:'RunIntegrityCheckAndReview'/.test(cmpBody082), 'the failure result carries an actionable recovery hint');
+check(/return \{ok:true, created/.test(cmpBody082), 'success returns ok:true');
+check(/monthlyPlanId:plan\.id/.test(cmpBody082), 'the result identifies the monthly plan');
+
+// (c) SUCCESS REQUIRES BOTH WRITES — the failure return precedes the success return.
+check(cmpBody082.indexOf("error:'MonthlyPlanPersistenceFailed'") < cmpBody082.indexOf('return {ok:true'),
+  'the failure branch precedes the success return (success requires both writes)');
+check(/if\(failedSteps\.length\)\{[\s\S]*?return \{ok:false/.test(cmpBody082), 'any failed step short-circuits to the typed failure result');
+
+// (d) SUCCESS UI UNREACHABLE AFTER FAILURE (single live caller, same module).
+const caller082 = stripComments((mpSrc082.match(/#commitPlan'\)\.addEventListener[\s\S]*?\n  \}\);/)||[''])[0]);
+check(caller082 !== '', 'the commit caller body is resolvable for the scan');
+check(/if\(!res\.ok\)\{[\s\S]*?return;\s*\}/.test(caller082), 'the caller inspects the result before any completion behaviour');
+check(caller082.indexOf('if(!res.ok)') < caller082.indexOf('State.planPreview=null'),
+  'the failure branch precedes clearing the preview (completion behaviour is gated)');
+check(caller082.indexOf('if(!res.ok)') < caller082.indexOf('Monthly plan committed:'),
+  'the failure branch precedes the success toast');
+const failBranch082 = (caller082.match(/if\(!res\.ok\)\{[\s\S]*?return;\s*\}/)||[''])[0];
+check(!/State\.planPreview\s*=\s*null/.test(failBranch082), 'the failure branch does NOT clear the preview (review context is retained)');
+check(!/toast\(/.test(failBranch082), 'the failure branch shows no success toast');
+check(/showError\(/.test(failBranch082), 'the failure branch shows an explicit error');
+check(/did not complete successfully/.test(failBranch082), 'the failure message states the commit did not complete');
+check(/Some data may already have been saved/.test(failBranch082), 'the failure message admits partial persistence');
+check(/Run Integrity Check/.test(failBranch082), 'the failure message directs the user to Integrity Check');
+check(!/localStorage|browser storage|developer tools/i.test(failBranch082), 'the failure message never tells the user to edit browser storage');
+
+// (e) NO AUDIT REGRESSION — the module wrote no success audit before SPR-082 and still writes none.
+check(!/logActivity\(/.test(mpSrc082), 'the monthly-plan module emits no activity audit entry (unchanged by SPR-082)');
+
+// (f) NEW INTEGRITY RULE — read-only detection of the reverse-linkage break.
+const ruleM082 = (stabSrc082.match(/State\.txns\.filter\(t=>t\.source!=='payroll' && t\.monthlyPlanId\)\.forEach\(t=>\{[\s\S]*?\n  \}\);/)||[''])[0];
+check(ruleM082 !== '', 'Rule M body is resolvable for the purity scan');
+check(/add\('critical','monthlyplan-orphan-transaction'/.test(stabSrc082), 'monthlyplan-orphan-transaction exists and is CRITICAL');
+check(/t\.source!=='payroll'/.test(ruleM082), 'Rule M excludes payroll-sourced transactions (SPR-081 rules own those)');
+// Reload evidence proved the plan can be ABSENT after a failed first commit of a
+// month, so the rule must report that case rather than skip it.
+check(/no such monthly plan exists/.test(ruleM082), 'Rule M reports an ABSENT monthly plan (the reloaded first-commit failure state)');
+check(!/if\(!mp\) return;/.test(ruleM082), 'Rule M no longer silently skips a missing plan');
+check((ruleM082.match(/add\('critical','monthlyplan-orphan-transaction'/g)||[]).length === 2,
+  'Rule M raises Critical for BOTH the absent-plan and the not-linked-back cases');
+check(/if\(\(mp\.committedTxnIds\|\|\[\]\)\.includes\(t\.id\)\) return;/.test(ruleM082), 'Rule M treats a linked-back transaction as healthy');
+check(/Finance transaction \$\{t\.id\}/.test(ruleM082), 'Rule M reports the transaction id');
+check(/monthly plan \$\{mp\.id\}/.test(ruleM082), 'Rule M reports the monthly plan id');
+check(/Review the plan and this transaction/.test(ruleM082), 'Rule M gives an actionable manual-review instruction');
+[['status mutation', /\.status\s*=[^=]/], ['link mutation', /committedTxnIds\s*=[^=]/], ['persistence', /persist|StorageAdapter/],
+ ['deletion', /\.splice\(/], ['push mutation', /committedTxnIds\.push/]
+].forEach(([l,re])=> check(!re.test(ruleM082), 'Rule M performs no '+l+' (read-only detection, not repair)'));
+
+// (g) WRITE ORDER UNCHANGED + ATTEMPT-ALL PRESERVED + NO NEW ARCHITECTURE.
+check(cmpBody082.indexOf('await persist()') < cmpBody082.indexOf('await persistMonthlyPlans()'),
+  'the write order is unchanged (transactions, then monthlyPlans)');
+check(!/if\(!txnsOk\)[\s\S]{0,80}return/.test(cmpBody082), 'the attempt-all behaviour is preserved (no early abort between the two writes)');
+check(!/rolled back|rollback/i.test((cmpBody082.match(/'[^'\n]*'|`[^`]*`/g)||[]).join(' ')), 'no user-facing message in the slice claims a rollback');
+[['coordinator', /PlanCoordinator|PersistenceCoordinator/], ['unit of work', /unitOfWork|UnitOfWork/],
+ ['transaction abstraction', /beginTransaction|TransactionCoordinator/], ['journal', /writeAhead|journalWrite/],
+ ['compensation framework', /compensationStep|runCompensation|compensator|CompensationRunner/],
+ ['batch persistence', /saveMany|StorageAdapter\.(setMany|batch)/]
+].forEach(([label,re])=> check(!re.test(mpSrc082) && !re.test(stabSrc082), 'SPR-082 introduces no '+label));
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'SCHEMA_VERSION remains 6 (SPR-082 adds no migration)');
+check(read(path.join(root,'js','core','storage-adapter.js')).indexOf('async set(key, value)') !== -1, 'StorageAdapter is unchanged by SPR-082');
+check(!/HR_KEYS\s*=/.test(mpSrc082), 'SPR-082 introduces no storage key');
+check(fs.existsSync(path.join(root,'tools','verify-monthlyplan-runtime.js')), 'SPR-082 runtime harness present: tools/verify-monthlyplan-runtime.js');
 
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');

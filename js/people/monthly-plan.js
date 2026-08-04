@@ -72,8 +72,30 @@ async function commitMonthlyPlan(preview){
     State.txns.push(txn); plan.committedTxnIds.push(txn.id); created++;
   }
   plan.status='Committed'; plan.committedAt=new Date().toISOString(); plan.updatedAt=plan.committedAt;
-  await persist(); await persistMonthlyPlans();
-  return {created};
+  // SPR-082 — the two writes keep their EXISTING ORDER (transactions, then
+  // monthly plans) and the existing attempt-all behaviour: a failing first write
+  // does not abort the second, so the failure matrix is unchanged. What changes
+  // is that both results are now inspected instead of discarded.
+  //
+  // This is NOT atomic and no rollback is performed or claimed: one storage key
+  // is written at a time, so a failure means the commit did not complete — not
+  // that nothing was written. An earlier write in the sequence may well have
+  // persisted.
+  const txnsOk = await persist();
+  const plansOk = await persistMonthlyPlans();
+  const steps = [{name:'transactions', ok:txnsOk===true}, {name:'monthlyPlans', ok:plansOk===true}];
+  const completedSteps = steps.filter(s=>s.ok).map(s=>s.name);
+  const failedSteps = steps.filter(s=>!s.ok).map(s=>s.name);
+  if(failedSteps.length){
+    return {ok:false, error:'MonthlyPlanPersistenceFailed',
+      failedStep: failedSteps[0],            // deterministic: first failure in the fixed write order
+      failedSteps, completedSteps,
+      partialPersistence: completedSteps.length > 0,
+      recoveryHint:'RunIntegrityCheckAndReview',
+      created, monthlyPlanId:plan.id};
+  }
+  return {ok:true, created, updated:0, monthlyPlanId:plan.id,
+    transactionId: created ? plan.committedTxnIds[plan.committedTxnIds.length-1] : null};
 }
 
 function renderMonthlyPlanGenerator(main){
@@ -208,6 +230,16 @@ function renderPlanPreview(area, preview, main){
     if(!sel.length){ toast('No new rows selected to commit.'); return; }
     if(!confirm(`Commit ${sel.length} row(s) to the ${keyToMonthObj(preview.monthKey).month} plan?\n\nPlanned transactions will be created (status: Planned). Nothing is executed automatically.`)) return;
     const res = await commitMonthlyPlan(preview);
+    // SPR-082 — inspect the result BEFORE any completion behaviour. Clearing the
+    // preview is completion behaviour: it discards the rows the user was
+    // committing, which is exactly the context they need in order to review the
+    // data manually. The failure path therefore keeps the preview and shows no
+    // success toast. The message never claims a rollback, because none happened.
+    if(!res.ok){
+      showError('Monthly Plan commit did not complete successfully. Some data may already have been saved. Run Integrity Check and review the Monthly Plan and Finance transaction before retrying.', null, 9000);
+      render();
+      return;
+    }
     State.planPreview=null;
     toast(`Monthly plan committed: ${res.created} planned transaction(s) created.`, 5000);
     render();
