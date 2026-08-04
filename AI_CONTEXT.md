@@ -7,9 +7,14 @@ authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file
 there rather than duplicating it.
 
 **As of the current source state:** v2.8.4 — "Monthly Plan Result Integrity"; `SCHEMA_VERSION` 6.
-v2.8.4 is **merged on `main` (`969913b`) but not tagged and not published** — the latest *published*
-release remains v2.8.3. The current distributable is `dist/tam-intelligence-os-v2.8.4.html`
-(914,409 bytes; SHA-256 `09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`).
+v2.8.4 is **tagged and published, and is the latest published release** — annotated tag `v2.8.4` peels
+to the published baseline commit `bd8819af0287af02711898cf43d22fb70cc3bcd5` on `main`, and the GitHub
+Release *TAM Intelligence OS v2.8.4* is published (not draft, not prerelease) and marked Latest. v2.8.3
+remains published and unchanged; it is no longer marked Latest. The current distributable is
+`dist/tam-intelligence-os-v2.8.4.html` (914,409 bytes; SHA-256
+`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`), and the published asset
+`tam-intelligence-os-v2.8.4.html` is byte-identical to it. Publication created a tag and a GitHub
+Release only — it changed no source commit, runtime behavior, schema, or storage key.
 When these change, update this document (not `CLAUDE.md`).
 
 **Current baseline (aggregate-backed Repository adoption complete):**
@@ -274,9 +279,9 @@ detailed layout is in [`README.md`](README.md#project-structure) and
 
 Bump the version constants, add release notes, build + verify, present a Release Candidate, and — on
 approval — commit, tag, push, and let the tag-triggered workflow publish the GitHub Release and
-portable asset (guarded so it publishes only when the tag matches the source version). **v2.8.4 is merged on `main`
-but has not been tagged or published; v2.8.3 remains the latest published release and is marked
-Latest.** Detailed steps:
+portable asset (guarded so it publishes only when the tag matches the source version). **v2.8.4 is the
+latest published release, published from annotated tag `v2.8.4` (commit `bd8819a`) and marked Latest;
+v2.8.3 remains published and unchanged but is no longer Latest.** Detailed steps:
 [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md). History: [`CHANGELOG.md`](CHANGELOG.md); latest
 summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
@@ -289,8 +294,9 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 - **Release** (`release.yml`) is tag-triggered, re-derives the version, enforces the tag-equals-version
   guardrail, and creates/refreshes the GitHub Release idempotently, uploading the portable HTML as the
   release asset. It titles the Release `TAM Intelligence OS <tag>` — the short convention, which is why a
-  published Release title reads `TAM Intelligence OS v2.8.3` rather than including the release name.
-  Shipped releases are never rewritten.
+  published Release title reads `TAM Intelligence OS v2.8.4` rather than including the release name.
+  It resolves the Release body from `RELEASE_NOTES.md` at the tagged commit. Shipped releases are never
+  rewritten.
 - Workflows use **official GitHub Actions only**, on current stable major versions, with minimal
   permissions.
 
@@ -350,9 +356,8 @@ Directions (no committed release numbers unless already approved):
 - **Released:** Supplemental Payroll Engine (v2.7.0); Payroll Integrity & Reporting Foundation (v2.7.1);
   Persistence & Transactional Integrity (v2.7.2); Supplemental-Aware Payroll History (v2.7.3);
   Aggregate-Owned Contract Renewal + Single Payroll Posting Authority (v2.8.1); Honest Persistence
-  Results (v2.8.2); Payroll Posting Integrity (v2.8.3 — **latest published release**).
-- **Merged, not yet released:** **Monthly Plan Result Integrity (v2.8.4 — current source state**, on
-  `main` but not tagged or published).
+  Results (v2.8.2); Payroll Posting Integrity (v2.8.3); **Monthly Plan Result Integrity (v2.8.4 —
+  current, and the latest published release)**.
 - **Immediate residuals** (evidence-backed, not yet scheduled): Monthly Plan retry linkage reconciliation
   (Scenarios A2 and B); the Smart Import undo in-memory/storage divergence — both described under
   *Known Limitations*, and both answered today by **manual review** only.

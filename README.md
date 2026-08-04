@@ -47,8 +47,9 @@ Design principles:
 
 **v2.8.4 — Monthly Plan Result Integrity** · `SCHEMA_VERSION` 6
 
-> **Release state.** v2.8.4 is the current **source state** on `main`. It has **not been tagged and not
-> been published** — **v2.8.3 — Payroll Posting Integrity** remains the latest published release. See
+> **Release state.** v2.8.4 is **published and marked Latest**, released from annotated tag `v2.8.4` at
+> commit `bd8819a`. The prior release, **v2.8.3 — Payroll Posting Integrity**, remains published and
+> unchanged; it is simply no longer the Latest release. See
 > [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a release is cut.
 
 A correctness release for committing a Monthly Plan. The commit previously ignored whether its two saves
@@ -421,8 +422,7 @@ Directions only — no release numbers are assigned unless already approved.
 **Released**
 - Monthly Plan Result Integrity — the commit inspects both save results, no false success, preview
   retained on failure, Critical Integrity Check finding for absent-plan and missing-backlink states;
-  retry prevents duplicate transactions but does not reconcile linkage (v2.8.4 — merged on `main`, not
-  yet tagged or published)
+  retry prevents duplicate transactions but does not reconcile linkage (v2.8.4)
 - Payroll Posting Integrity — posting inspects all four save results, no false success audit or
   completion UX, no duplicate Finance transaction on retry, no guessed ambiguous match, two new
   Critical Integrity Check findings (v2.8.3)
