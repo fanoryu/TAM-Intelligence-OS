@@ -1801,7 +1801,9 @@ check(/ok:\s*true/.test(contractRepoCode) && /ok:\s*false,\s*error:\s*'PersistFa
 check(/c\[k\] = before\[k\]/.test(udCode) && /c\.history\.pop\(\)/.test(udCode) && /c\.updatedAt = prevUpdatedAt/.test(udCode), 'contract-date handler still owns full rollback (fields + history.pop + updatedAt) on persistence failure');
 // PR-10B — exactly two ContractRepository call sites across contracts.js (dates + status).
 check((stripComments(ctSrc).match(/ContractRepository\.save\(\)/g)||[]).length === 3, 'exactly three ContractRepository.save() call sites in contracts.js (contract.dates.update + contract.status.transition + contract.renewal.execute)');
-// Renewal (compound create-successor persistence, ARCH-006) remains DIRECT and out of scope.
+// Renewal is Repository-mediated (SPR-077). The former comment here said renewal "remains DIRECT and
+// out of scope", which contradicted the assertion below and predates SPR-077; corrected by ARCH-008.
+// Comment only — the check itself is unchanged.
 check(!/State\.contracts\.push\(nc\);\s*\n\s*await persistContracts\(\)/.test(ctSrc) && /State\.contracts\.push\(nc\);[\s\S]{0,600}ContractRepository\.save\(\)/.test(ctSrc), 'renewal is Repository-mediated (SPR-077 — create-successor persists through ContractRepository)');
 // EmployeeRepository is unchanged and independent of the Contract repository.
 check(!/ContractRepository/.test(repoSrc), 'EmployeeRepository has no dependency on ContractRepository (independent)');

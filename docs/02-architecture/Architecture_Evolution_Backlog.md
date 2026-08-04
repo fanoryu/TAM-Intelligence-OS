@@ -28,8 +28,9 @@ hold open, not a problem it is ignoring.
 | [ARCH-003](#arch-003--compensation-write-authority) | Compensation Write Authority | Planned | [ADR-010](../03-adr/ADR-010-Compensation-Write-Authority.md) (Proposed) |
 | [ARCH-004](#arch-004--contract-date-model-authority) | Contract Date Model Authority | Planned | [ADR-011](../03-adr/ADR-011-Contract-Date-Model-Authority.md) (Proposed) |
 | [ARCH-005](#arch-005--contract-overlap-enforcement) | Contract Overlap Enforcement | Planned | [ADR-012](../03-adr/ADR-012-Contract-Overlap-Enforcement.md) (Proposed) |
-| [ARCH-006](#arch-006--contract-status--renewal-write-authority) | Contract Status & Renewal Write Authority | Planned | — |
+| [ARCH-006](#arch-006--contract-status--renewal-write-authority) | Contract Status & Renewal Write Authority | Planned — **scope narrowed by [ARCH-008](#arch-008--contract-authority-reconciliation-addendum)** | — |
 | [ARCH-007](#arch-007--legacy-lifecycle-mutation-paths) | Legacy Lifecycle Mutation Paths | Planned | — |
+| [ARCH-008](#arch-008--contract-authority-reconciliation-addendum) | Contract Authority Reconciliation Addendum (narrows ARCH-006) | Planned | — |
 
 ---
 
@@ -198,7 +199,13 @@ Evaluated in [ADR-012 (Proposed)](../03-adr/ADR-012-Contract-Overlap-Enforcement
 
 ## ARCH-006 — Contract Status & Renewal Write Authority
 
-**Status:** Planned
+**Status:** Planned — active residual scope **narrowed by [ARCH-008](#arch-008--contract-authority-reconciliation-addendum)**
+
+> **Forward pointer (added by ARCH-008, 2026-08-04).** Everything below is **retained verbatim as
+> historical evidence** and is accurate as of the state it recorded. One of the two write paths it
+> names — Contract renewal — has since been closed by the shipped compound renewal path, and the
+> record's scope has proven narrower than the residual actually is. **[ARCH-008](#arch-008--contract-authority-reconciliation-addendum)
+> governs the current interpretation.** Read this entry for history; read ARCH-008 for present scope.
 
 ### Context
 PR-5K introduced `ContractStatusAggregate` via `contract.status.transition` as the controlled Domain
@@ -268,3 +275,219 @@ migrate now.
   preserve that invariant.
 
 **ARCH-007 is Planned, non-blocking, not a defect, and not implementation authorization.**
+
+---
+
+## ARCH-008 — Contract Authority Reconciliation Addendum
+
+**Status:** Planned
+**Relationship:** narrowing addendum to [ARCH-006](#arch-006--contract-status--renewal-write-authority)
+**Evidence baseline:** `main` @ `d4c00179b71ea4564df2fb67d90824d3f31c2285`, 2026-08-04 —
+`APP_VERSION` 2.8.4, `SCHEMA_VERSION` 6, verifier 1443 checks, runtime harnesses 781 checks.
+
+### 1. Relationship to ARCH-006
+
+ARCH-006 is **retained as historical evidence and is not rewritten**. It was accurate when written; it
+is not treated here as having been wrong. Two things have since changed:
+
+- One of the two write paths it named — **Contract renewal** — was closed by a shipped implementation
+  that satisfied the very constraint ARCH-006 recorded (see §3).
+- Its scope proved **narrower than the residual actually is**: ARCH-006 frames the residual as a
+  *status* concern, whereas the full editor writes considerably more than status (see §4).
+
+ARCH-008 therefore **narrows and updates the active residual scope** of ARCH-006 and **governs the
+current interpretation going forward**. ARCH-006 remains the record of how that scope was first
+identified and of the constraints that shaped the renewal solution.
+
+### 2. Current shipped Contract write architecture
+
+Three Contract operations are **aggregate-authoritative** — each routed through the canonical Platform
+path (UI seam → `uiExecute` → Gateway → `Domain.command` → aggregate → handler → `ContractRepository`
+→ `persistContracts()` → `StorageAdapter`), each returning a typed result with handler-owned rollback:
+
+| Operation | Command | Aggregate |
+|---|---|---|
+| Status transition | `contract.status.transition` | `ContractStatusAggregate` |
+| Date extent update | `contract.dates.update` | `ContractDateAggregate` |
+| Renewal | `contract.renewal.execute` | `ContractRenewalAggregate` |
+
+All three are operationally routed — each has a live UI caller, none is metadata-only.
+`ContractRepository.save()` has exactly three call sites in `js/people/contracts.js`, one per operation
+above; the verifier asserts that count.
+
+Two Contract operations remain **direct**: the full editor save and `deleteContract` (§4, §5). Bulk
+paths (Smart Import, import rollback, backup restore, demo seed, reset) write Contract records outside
+the aggregate design by intent and are **not** part of the editor residual (§6).
+
+### 3. Renewal closure
+
+**Contract renewal is aggregate-authoritative and is no longer part of active M-5 scope.**
+
+Verified at the evidence baseline:
+
+- **Command** `contract.renewal.execute` (`js/domain/commands.js:53`), boundary
+  `ContractRenewalAggregate`, `boundaryPayload: 'renewal'`, handler `renewContract`.
+- **Sole ingress** — `requestContractRenewal()` (`js/people/contracts.js:326`) routes through
+  `uiExecute('command', 'contract.renewal.execute', …)`. The renewal modal is its only caller.
+  **No alternate renewal ingress exists**; no other path marks a Contract `Renewed`.
+- **Business authority is the aggregate** — the predecessor's renewed status is applied from the
+  aggregate-authored decision (`c.status = renewal.predecessorStatus`), not from a literal in the
+  handler. The successor's business shape and both history notes are likewise aggregate-authored.
+- **Repository mediation** — `ContractRepository.save()`; one write covers predecessor and successor,
+  which live in the same collection.
+- **Typed result** — `{ success, data:{ predecessor, successor } }`, with typed failures
+  `ContractNotFound`, `RenewalNotAllowed`, `ContractAlreadyRenewed`, `PersistFailed`.
+- **Rollback** — in-memory and complete on `PersistFailed`: the successor is dropped and every mutated
+  predecessor field is restored.
+- **Runtime evidence** — `tools/verify-renewal-runtime.js`, **67 checks**, including *"renewal succeeds
+  through the canonical Platform path"*.
+
+The ARCH-006 constraints that governed this outcome were **honoured, not bypassed**:
+
+- Renewal was **not** routed into the generic `contract.status.transition` command. It received its own
+  compound command, exactly as ARCH-006 required before any renewal migration.
+- **`Renewed` remains renewal-only.** It is not an ordinary transition target and must not become one.
+- Any future consolidation of renewal into another authority would need to re-satisfy both constraints.
+
+### 4. Remaining residual — the full Contract editor
+
+The full Contract editor save remains a **direct write path**: `js/people/contracts.js:139–153` (field
+assignments at `:140–148`, `rec.status` at `:146`, `await persistContracts()` at `:152`).
+
+> *Line numbers are accurate at the evidence baseline and must be re-verified at implementation time.*
+
+On submit it assigns `employeeId`, `employeeName`, `contractNumber`, `startDate`, `durationMonths`,
+`monthlySalary`, `status`, `notes`, schedule fields, `updatedAt`, and a `history` entry directly to the
+record, then persists via `persistContracts()`. It therefore bypasses **`ContractStatusAggregate`,
+`ContractDateAggregate`, and `ContractRepository`**.
+
+This creates genuine **duplicate authority for at least three fields** that operational aggregates
+already own:
+
+- `status` — owned by `contract.status.transition`
+- `startDate` and `durationMonths` — owned by `contract.dates.update`
+
+For those three, business rules enforced by the aggregates (the legal-transition graph; date-extent
+validation) are reachable through one UI route and bypassable through another.
+
+**This record does not conclude that every editor field must become aggregate-owned.** Authority for
+the remaining fields is an open question (§9, OQ-1). Notably, the narrow *Edit Contract Dates* modal
+already routes correctly through `contract.dates.update`; only the full editor writes those same fields
+directly.
+
+### 5. Remaining residual — deletion
+
+`deleteContract()` (`js/people/contracts.js:222–233`) removes a Contract from `State.contracts` and
+calls `persistContracts()` directly. It is:
+
+- outside any aggregate;
+- outside `ContractRepository`;
+- without a typed result contract;
+- without persistence-failure rollback.
+
+It does carry meaningful **pre-conditions** — deletion is refused when linked payroll or transactions
+exist, and non-`Draft` deletion requires confirmation. Those guards are correct and are not in question.
+
+**Whether deletion should become a canonical command is not decided here** (§9, OQ-3).
+
+### 6. Scope boundary — bulk paths are not the editor residual
+
+Smart Import creation, import rollback, backup restore, demo seed, and reset also write Contract records
+directly. They are **batch/portability paths, outside the per-operation aggregate design by intent**,
+and they are **not automatically part of an editor-authority migration**. They are recorded here only so
+that "residual Contract authority" is not read as covering them.
+
+### 7. Persistence-honesty findings (new, not previously recorded)
+
+Two findings surfaced during the ARCH-008 discovery that neither ARCH-006 nor the GHA records had
+captured. Both are about **honest reporting on a failure path**, not about aggregate authority:
+
+1. **Editor save can report success after a persistence failure.** `js/people/contracts.js:152`
+   discards the return value of `await persistContracts()`, then unconditionally closes the modal and
+   shows *"Contract created."* / *"Contract updated."* `persistHR()` returns `ok === true`, so a failed
+   write is observable but unobserved.
+
+2. **Deletion can report and log success after a persistence failure.**
+   `js/people/contracts.js:230` discards the same result, then writes a `contract.delete` activity-log
+   entry and shows *"Contract deleted."* — so the audit trail can record a deletion that did not persist.
+
+Classification for both:
+
+- **Severity: Medium.** **Non-controlling** — no release gate, no invariant breach.
+- **Not data corruption.** Nothing stored is damaged; in-memory state diverges from persisted state
+  until the next reload, and the user is told the wrong thing about a failed save.
+- **Testable and implementation-ready**, and **separable** from the unresolved aggregate-authority
+  question — a narrow fix needs no new aggregate, command, or ADR.
+- The controlled paths (status, dates, renewal) already handle this correctly via strict
+  `persisted.ok !== true` checks and rollback; this is the same class of gap SPR-079 closed for
+  `saveAllData`.
+
+**Recorded, not implemented.** ARCH-008 does not fix, schedule, or authorize fixing them.
+
+### 8. Narrowed M-5 scope and status
+
+**Active M-5 consists of exactly four items:**
+
+1. Full Contract editor direct authority over fields that **overlap existing aggregates** (`status`,
+   `startDate`, `durationMonths`).
+2. **Undefined authority** for the remaining non-aggregate editor fields.
+3. Direct **deletion** authority.
+4. **Persistence-honesty gaps** for editor save and delete (§7).
+
+**Explicitly excluded from M-5:**
+
+- **Contract renewal** — closed (§3).
+- **Bulk paths** — Smart Import, restore, seed, reset (§6).
+- M-5 is **not** "all Contract writes." Three of the six single-record Contract operations are already
+  aggregate-authoritative.
+
+| Attribute | Value |
+|---|---|
+| Status | **Requires additional discovery** |
+| Severity | **Medium** |
+| Controlling | **No** |
+| Implementation readiness — editor-authority migration | **Not ready** (blocked on OQ-1) |
+| Implementation readiness — persistence-honesty gaps | **Ready** for a separate narrow sprint |
+
+M-5 is **not** Closed, Ready, Accepted, or Scheduled.
+
+### 9. Open architecture questions
+
+- **OQ-1 — Which authority owns the editor's non-aggregate fields** (`contractNumber`, `employeeId`,
+  `employeeName`, `notes`, schedule fields)? A new aggregate, an extension of an existing one, or a
+  deliberate decision to leave them direct. **This blocks editor-authority migration readiness.**
+- **OQ-2 — Should the editor's status control be removed, constrained to legal transitions, or routed
+  through `ContractStatusAggregate`?** **Potentially requires a product decision:** aggregate routing
+  would reject status changes the editor currently permits, so the migration is not behaviour-neutral.
+- **OQ-3 — Should `deleteContract` become a canonical command with aggregate and repository
+  mediation?** Not covered by any existing ARCH record.
+
+### 10. Recommended sequencing
+
+Recorded as a recommendation only. **No step below is authorized by this record.**
+
+1. Publication of ARCH-008 (this record).
+2. A narrow implementation sprint for the editor and delete **persistence-honesty gaps** (§7) — no ADR
+   required, no aggregate decision required.
+3. An architecture decision or ADR resolving **OQ-1** (editor field authority).
+4. Targeted discovery and an implementation charter for **editor-authority migration**, gated on OQ-1
+   and OQ-2.
+5. A separate decision for **delete authority** (OQ-3) if not resolved by the OQ-1 ADR.
+
+### 11. Explicit non-authorization
+
+ARCH-008 is a documentation and architecture-governance record. It authorizes **no** production code
+change, **no** editor migration, **no** deletion migration, **no** new aggregate, **no** new command,
+**no** status-dropdown behaviour change, **no** schema or migration change, **no** backend work, and
+**no** version assignment. It makes no product decision.
+
+**ARCH-008 is Planned, non-blocking, not a defect, and not implementation authorization.**
+
+### 12. Verification and no-state-change statement
+
+Established read-only at the evidence baseline: verifier **1443 checks**; runtime harnesses
+**67 / 146 / 144 / 118 / 106 / 61 / 67 / 72** (total **781**); artifact
+`dist/tam-intelligence-os-v2.8.4.html` **914,409 bytes**, SHA-256
+`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`. No production behaviour, rule
+identifier, severity, schema, workflow, tag, or Release was changed by the discovery that produced this
+record, or by the record itself.
