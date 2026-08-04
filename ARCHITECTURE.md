@@ -1,10 +1,12 @@
 # TAM Intelligence OS — Architecture
 
-**Current source state:** v2.8.4 — Monthly Plan Result Integrity (merged on `main` at
-`969913beb1b864d4dec0ed960f95516dff9d9889`; **not tagged, not published**)
-**Latest published release:** v2.8.3 — Payroll Posting Integrity (marked Latest)
+**Current release:** v2.8.4 — Monthly Plan Result Integrity (**published, marked Latest**), released
+from annotated tag `v2.8.4`, which peels to the published baseline commit
+`bd8819af0287af02711898cf43d22fb70cc3bcd5` on `main`
+**Previous release:** v2.8.3 — Payroll Posting Integrity (still published and unchanged; no longer Latest)
 **Current distributable:** `dist/tam-intelligence-os-v2.8.4.html` — 914,409 bytes, SHA-256
-`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`
+`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`; the published asset
+`tam-intelligence-os-v2.8.4.html` is byte-identical to it
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
 CSS/data-safety invariants)
 **Shape today:** a modular source of **65 classic-script JS modules** (in `core/ ui/ finance/ people/
@@ -412,10 +414,17 @@ refuses to publish unless the tag equals that version and the portable HTML exis
 refreshes the GitHub Release idempotently and uploads the portable asset. The portable build is
 **reproducible** — the same source yields a byte-identical artifact, so the published SHA-256 verifies any
 downloaded copy. Shipped releases are never rewritten. The workflow titles a Release
-`TAM Intelligence OS <tag>` — the short convention — which is why the published v2.8.3 Release is titled
-`TAM Intelligence OS v2.8.3` rather than carrying the release name. **No `v2.8.4` tag exists and no
-v2.8.4 Release has been published** — the v2.8.4 source and its portable build are merged on `main`
-only, so the latest published release is still v2.8.3. `ci.yml` builds and verifies every
+`TAM Intelligence OS <tag>` — the short convention — which is why the published v2.8.4 Release is titled
+`TAM Intelligence OS v2.8.4` rather than carrying the release name.
+
+**v2.8.4 publication (REL-001).** Pushing annotated tag `v2.8.4` triggered the workflow, which rebuilt,
+verified, re-derived the version, passed the tag-equals-`APP_VERSION` guard, confirmed the
+version-derived portable HTML existed, resolved the Release body from `RELEASE_NOTES.md`, created the
+Release, and uploaded the asset. The published asset `tam-intelligence-os-v2.8.4.html` (914,409 bytes,
+SHA-256 `09c622b3…a02c6`) is byte-identical to the repository artifact, and the Release body is
+byte-identical to `RELEASE_NOTES.md` at the tagged commit. Publication produced a tag and a GitHub
+Release only: no source commit, runtime behavior, schema, storage key, or artifact byte changed, and
+v2.8.3 remains published and unmodified apart from no longer being Latest. `ci.yml` builds and verifies every
 push/PR to `main`; `codeql.yml` runs code scanning with two Analyze jobs (`javascript-typescript`,
 `actions`).
 
