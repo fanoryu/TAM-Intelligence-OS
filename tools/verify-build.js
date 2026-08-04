@@ -1834,8 +1834,37 @@ check(/c\.status = prevStatus/.test(tcCode) && /c\.history\.pop\(\)/.test(tcCode
 check(/error:'PersistFailed'/.test(tcCode), 'contract-status handler preserves the typed PersistFailed result');
 // Non-aggregate Contract persistence pathways remain DIRECT and unmigrated.
 check(!/c\.status='Renewed'/.test(ctSrc) && /renewal\.predecessorStatus/.test(ctSrc), 'renewal status is aggregate-authored, not an inline UI write (SPR-077)');
-check(/rec\.status = fd\.get\('status'\)[\s\S]{0,400}await persistContracts\(\)/.test(ctSrc), 'full Contract editor remains direct (not migrated)');
-check(/State\.contracts = State\.contracts\.filter\(x=>x\.id!==id\);\s*\n\s*await persistContracts\(\)/.test(ctSrc), 'delete Contract path remains direct (not migrated)');
+// SPR-093 widened these two patterns to allow the persistence RESULT to be captured
+// (`const persisted = await persistContracts()`). The invariant they guard is unchanged
+// and is what still matters: both paths persist DIRECTLY via persistContracts(), with no
+// repository mediation and no command route. Checking a write's result is not migration.
+check(/rec\.status = fd\.get\('status'\)[\s\S]{0,900}(?:const persisted = )?await persistContracts\(\)/.test(ctSrc), 'full Contract editor remains direct (not migrated)');
+check(/State\.contracts = State\.contracts\.filter\(x=>x\.id!==id\);\s*\n\s*(?:const persisted = )?await persistContracts\(\)/.test(ctSrc), 'delete Contract path remains direct (not migrated)');
+// Neither residual path acquired repository mediation or a command route in SPR-093.
+check(!/ContractRepository[\s\S]{0,200}fd\.get\('status'\)/.test(ctSrc), 'the editor did not acquire repository mediation (SPR-093 is honesty-only)');
+
+/* ---------- SPR-093 — Contract persistence honesty (discoverability only) ----------
+   Both residual paths now CHECK the persistContracts() result and roll back in memory on
+   failure, so neither can report success after a failed write (ARCH-008 section 7). The
+   behaviour is proven by tools/verify-contract-persistence-runtime.js; this file only makes
+   that harness discoverable and asserts the production shape, without executing it. */
+console.log('== CONTRACT PERSISTENCE HONESTY (SPR-093) ==');
+const cphPath = path.join(root,'tools','verify-contract-persistence-runtime.js');
+check(fs.existsSync(cphPath), 'SPR-093 runtime harness present: tools/verify-contract-persistence-runtime.js');
+const cphSrc = fs.existsSync(cphPath) ? read(cphPath) : '';
+check(/RUNTIME VERIFICATION PASSED/.test(cphSrc) && /process\.exit\(1\)/.test(cphSrc), 'SPR-093 harness fails non-zero on assertion failure');
+check(!/child_process|require\('http|require\("http/.test(cphSrc), 'SPR-093 harness spawns no process and opens no network');
+check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rmSync|mkdir)/.test(cphSrc), 'SPR-093 harness writes nothing to disk');
+// Scope honesty — the harness must not claim to have executed the modal-closure editor.
+check(/DO NOT PROVE/.test(cphSrc), 'SPR-093 harness states which editor guarantees are static rather than executed');
+// Production shape: no persistContracts() result is discarded anywhere in contracts.js.
+check(!/\n\s*await persistContracts\(\);/.test(ctSrc), 'no persistContracts() call in contracts.js discards its result (SPR-093)');
+check((ctSrc.match(/persisted !== true/g)||[]).length >= 2, 'editor and delete both use the strict persisted !== true check');
+check(/State\.contracts\.splice\(prevIndex, 0, c\)/.test(ctSrc), 'a failed delete restores the record at its original index');
+check(/if\(!isNew\) EDITED_FIELDS\.forEach\(k=>\{ before\[k\] = rec\[k\]; \}\);/.test(ctSrc), 'the editor snapshots mutated fields before assigning them');
+check(/rec\.history\.pop\(\);/.test(ctSrc), 'a failed editor save drops the history entry it added');
+// Pre-existing delete guards are untouched by SPR-093.
+check(/cannot be deleted\. Cancel it instead\./.test(ctSrc), 'the linked-payroll delete refusal is preserved');
 // Committed-payroll confirmation stays in the UI seam — never inside the Repository.
 check(/payrollPlansForContract\(id\)\.some\(isPayrollCommitted\)/.test(ctSrc) && !/committed|confirm\s*\(|payrollPlansForContract/.test(contractRepoCode), 'committed-payroll confirmation remains outside the Repository (UI seam only)');
 check(!/confirm\s*\(|payrollPlansForContract/.test(tcCode), 'committed-payroll confirmation remains outside the handler (UI seam only)');
