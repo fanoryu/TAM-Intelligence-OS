@@ -10,11 +10,22 @@ there rather than duplicating it.
 v2.8.4 is **tagged and published, and is the latest published release** — annotated tag `v2.8.4` peels
 to the published baseline commit `bd8819af0287af02711898cf43d22fb70cc3bcd5` on `main`, and the GitHub
 Release *TAM Intelligence OS v2.8.4* is published (not draft, not prerelease) and marked Latest. v2.8.3
-remains published and unchanged; it is no longer marked Latest. The current distributable is
-`dist/tam-intelligence-os-v2.8.4.html` (914,409 bytes; SHA-256
-`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`), and the published asset
-`tam-intelligence-os-v2.8.4.html` is byte-identical to it. Publication created a tag and a GitHub
+remains published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub
 Release only — it changed no source commit, runtime behavior, schema, or storage key.
+
+**Repository `main` now contains production changes beyond the published v2.8.4 Release artifact.**
+SPR-093 changed `js/people/contracts.js`, so the portable build was regenerated from source as
+`CLAUDE.md` §10 and §19 require. `APP_VERSION`, `APP_RELEASE_NAME` and `SCHEMA_VERSION` are unchanged,
+so the filename is unchanged — but the repository artifact and the published asset are **no longer
+byte-identical**:
+
+| | Repository `main` | Published v2.8.4 Release asset |
+|---|---|---|
+| `dist/tam-intelligence-os-v2.8.4.html` | **917,969 bytes** | 914,409 bytes |
+| SHA-256 | `66509d2597…ce70b509` | `09c622b3a6…3aea02c6` |
+
+The tag, Release, and published asset are unchanged and were **not** republished. No version has been
+assigned to this divergence and no release is implied or recommended here.
 When these change, update this document (not `CLAUDE.md`).
 
 **Current baseline (aggregate-backed Repository adoption complete):**
@@ -302,6 +313,17 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 ## 16. Known Limitations
 
+- **Contract editor and delete report persistence truthfully (SPR-093 — implemented, not a
+  limitation).** Recorded here because it *was* one. Both paths previously discarded the
+  `persistContracts()` result and could announce success after a failed write, with delete additionally
+  writing a `contract.delete` activity entry for a deletion that never persisted. **SPR-093 closed
+  both.** A failed create leaves no record; a failed edit restores every mutated field and restores
+  `history` in both contents and prior own-property absence; a failed delete restores the record at its
+  exact original index and writes no activity entry; failure shows failure feedback and the editor modal
+  stays open for retry. Proven by `tools/verify-contract-persistence-runtime.js` (73 checks) and by
+  real-browser QA. **What SPR-093 did not do:** it migrated no authority. The editor still assigns
+  `status` directly and both paths still persist through `persistContracts()` — no aggregate, no
+  repository mediation, no command. That residual authority is ARCH-008's M-5 and remains open.
 - **Payroll posting is not atomic.** `commitReadyPayroll` still writes **four storage keys
   sequentially** and retains attempt-all behaviour. Its results are now checked (SPR-081), which makes
   failure *visible* — it does not make the operation all-or-nothing. **No coordinated rollback and no
@@ -365,6 +387,12 @@ Directions (no committed release numbers unless already approved):
 - **Immediate residuals** (evidence-backed, not yet scheduled): Monthly Plan retry linkage reconciliation
   (Scenarios A2 and B); the Smart Import undo in-memory/storage divergence — both described under
   *Known Limitations*, and both answered today by **manual review** only.
+- **Open architecture question — Contract editor and delete authority (ARCH-008 M-5).** The full editor
+  and `deleteContract` remain direct writers, bypassing `ContractStatusAggregate`, `ContractDateAggregate`
+  and `ContractRepository`. M-5 is now **entirely an authority question** — its persistence-honesty
+  component was closed by SPR-093. Status: *Requires additional discovery*, Medium, non-controlling,
+  blocked on ARCH-008's OQ-1 (which authority owns the editor's non-aggregate fields). **Not scheduled
+  and not authorized.**
 - **Deferred architecture** — considered only if evidence justifies it, never pre-emptively:
   operation-specific compensation (only where a concrete failure mode warrants it); a persisted recovery
   marker (only if runtime evidence requires one); a generic coordination mechanism (only after a
