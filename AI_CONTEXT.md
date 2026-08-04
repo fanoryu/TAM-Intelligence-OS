@@ -344,8 +344,12 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 - **External CDN references** for the spreadsheet parser and fonts mean the fully offline experience
   depends on those assets (no user data is sent to them).
 - **Single-owner project** — response and review timelines are best-effort.
-- A real company workbook is intentionally tracked as a **documented, accepted exception**; it must
-  not be inspected, exposed, moved, or removed without explicit approval.
+- **The repository contains no real company workbook and no confidential operational dataset.** A
+  confidential workbook was removed from all branches and tags by the 2026-07-31 sanitization
+  ([record](audit/sanitization-2026-07-31/SANITIZATION_RECORD.md)); it is not tracked and not
+  reachable in repository history. Development, examples, and testing use **fabricated or
+  appropriately sanitized data only**, and confidential company data must never be introduced into
+  this public repository.
 - Screenshots and a social-preview image are **planned**, not yet captured (to avoid exposing real
   data).
 
