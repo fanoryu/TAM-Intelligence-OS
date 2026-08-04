@@ -1346,6 +1346,32 @@ check(read(path.join(root,'js','core','storage-adapter.js')).indexOf('async set(
 check(!/HR_KEYS\s*=/.test(mpSrc082), 'SPR-082 introduces no storage key');
 check(fs.existsSync(path.join(root,'tools','verify-monthlyplan-runtime.js')), 'SPR-082 runtime harness present: tools/verify-monthlyplan-runtime.js');
 
+/* ---------- SPR-089 — Critical Integrity Rule harness discoverability ----------
+   This verifier proves the STRUCTURE of the Integrity Check; tools/verify-integrity-
+   rules-runtime.js proves that its CRITICAL rules actually fire. The two checks below
+   make that harness discoverable and keep its Critical-rule scope honest — they do NOT
+   execute it (this file stays a static, single-process verifier with no child_process),
+   and they deliberately govern the 11 Critical rule IDs ONLY. Warning/Info coverage and
+   the full derived-registry completeness mechanism are out of scope for SPR-089. */
+console.log('== CRITICAL INTEGRITY RULE HARNESS (SPR-089 — discoverability only) ==');
+const intgHarnessPath = path.join(root,'tools','verify-integrity-rules-runtime.js');
+check(fs.existsSync(intgHarnessPath), 'SPR-089 runtime harness present: tools/verify-integrity-rules-runtime.js');
+const intgHarnessSrc = fs.existsSync(intgHarnessPath) ? read(intgHarnessPath) : '';
+// The 11 Critical rules that had NO harness coverage before SPR-089. Each must appear
+// as an explicit rule() block in the harness, not merely as a mention in a comment.
+['contract-multiple-employees','duplicate-employee-name','duplicate-id',
+ 'overtime-double-commit','overtime-negative-hours','payroll-negative',
+ 'payroll-posted-no-transaction','schema-error','supplemental-missing-transaction',
+ 'supplemental-orphan-transaction','supplemental-overtime-double-capture'
+].forEach((id)=>check(intgHarnessSrc.indexOf("rule('"+id+"'") !== -1,
+  'SPR-089 harness asserts Critical rule: '+id));
+// Scope honesty — the harness must not silently grow into a no-op or drop its baseline.
+check(/the healthy fabricated baseline produces ZERO findings/.test(intgHarnessSrc), 'SPR-089 harness asserts a clean healthy baseline before any defect fixture');
+check(/RUNTIME VERIFICATION PASSED/.test(intgHarnessSrc) && /process\.exit\(1\)/.test(intgHarnessSrc), 'SPR-089 harness fails non-zero on assertion failure');
+// SPR-089 is verification-only: the harness must not write to the repository or shell out.
+check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rm|rmSync|mkdir)/.test(intgHarnessSrc), 'SPR-089 harness writes nothing to disk');
+check(!/child_process|require\('http|require\("http/.test(intgHarnessSrc), 'SPR-089 harness spawns no process and opens no network');
+
 // PR-5F "The Sentinel" — shared aggregate helpers (refactor; no behavior change).
 console.log('== SHARED AGGREGATE HELPERS (PR-5F — business-support utilities) ==');
 const helpPath = path.join(root,'js','domain','aggregate-helpers.js');
