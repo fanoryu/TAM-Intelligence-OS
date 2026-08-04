@@ -540,12 +540,14 @@ the editor and `deleteContract` remain direct writers through `persistContracts(
 
 Because production source changed, the portable artifact was regenerated from it (`CLAUDE.md` §10, §19).
 `APP_VERSION` remains 2.8.4, `APP_RELEASE_NAME` remains *Monthly Plan Result Integrity*, and
-`SCHEMA_VERSION` remains 6, so the artifact filename is unchanged.
+`SCHEMA_VERSION` remains 6, so the artifact filename is unchanged. **The current repository artifact is
+SPR-095's rebuild** (SPR-095 added production modules under ADR-014 step 1); the table below carries the
+current values, and `ARCHITECTURE.md` holds the authoritative header.
 
 | | Repository `main` | Published v2.8.4 Release asset |
 |---|---|---|
-| `dist/tam-intelligence-os-v2.8.4.html` | **917,969 bytes** | 914,409 bytes |
-| SHA-256 | `66509d25971e603f54f17051471f7dcf4de0009ff778bae5134d43d5ce70b509` | `09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6` |
+| `dist/tam-intelligence-os-v2.8.4.html` | **934,518 bytes** | 914,409 bytes |
+| SHA-256 | `3b7204a04ed9bba6e0db0a6fa00fc354ed0ea868d745ecdc63f1cb2251eae10e` | `09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6` |
 
 **Repository `main` therefore contains production changes beyond the published v2.8.4 Release
 artifact.** This is a recorded fact about the current repository state, not a defect and not a release

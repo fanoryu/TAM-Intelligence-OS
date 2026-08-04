@@ -41,10 +41,10 @@ Do **not** do any of the following without the maintainer's explicit approval:
 
 ## Architecture (what you are editing)
 
-- **Modular source** = `index.html` + `css/` (5 files) + `js/` (**64 browser-loaded** classic-script
+- **Modular source** = `index.html` + `css/` (5 files) + `js/` (**65 browser-loaded** classic-script
   modules across `core/ ui/ finance/ people/ import/ analytics/ domain/ platform/ transport/
   repository/`), loaded as ordered `<script>` tags sharing one global scope. **No ES modules, no
-  bundler.** A 65th module, `js/cli/cli.js`, is a Node-only ingress and is deliberately **not**
+  bundler.** A 66th module, `js/cli/cli.js`, is a Node-only ingress and is deliberately **not**
   browser-loaded.
 - **Load order is behavior-critical** and lives in exactly one place: `tools/module-order.js`.
   `index.html` mirrors it; the build/verify tools read it; `verify-build.js` asserts they match.

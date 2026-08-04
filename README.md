@@ -38,7 +38,7 @@ Design principles:
   app. The only external network references are the XLSX parser and web fonts (CDN).
 - **Two shippable forms.** A modular development source and a single portable HTML file that behaves
   identically.
-- **Data-safety first.** A 1267-check verifier guards the persisted-data schema, storage keys,
+- **Data-safety first.** A 1561-check verifier guards the persisted-data schema, storage keys,
   migration flags, and build fidelity on every change.
 
 ---
@@ -100,7 +100,7 @@ Two supported outputs:
 
 | Output | What it is | Where |
 |---|---|---|
-| **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (64 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/ domain/ platform/ transport/ repository/ cli/`), one shared global scope, no ES modules | project root |
+| **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (66 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/ domain/ platform/ transport/ repository/ cli/` — 65 browser-loaded in one shared global scope, plus the CLI-only module), no ES modules | project root |
 | **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.4.html` |
 
 ---
@@ -180,7 +180,7 @@ flowchart LR
   subgraph Source["Modular source"]
     IDX["index.html<br/>(ordered script tags)"]
     CSS["css/ (5 files)"]
-    JS["js/ (64 classic-script modules)<br/>core · ui · finance · people · import · analytics<br/>domain · platform · transport · repository · cli"]
+    JS["js/ (66 classic-script modules)<br/>core · ui · finance · people · import · analytics<br/>domain · platform · transport · repository · cli"]
   end
   subgraph Runtime["Browser runtime (client-only)"]
     STATE["State (in-memory)"]
@@ -189,7 +189,7 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(1267 checks)"]
+    VERIFY["tools/verify-build.js<br/>(1561 checks)"]
   end
   DIST["dist/tam-intelligence-os-v2.8.4.html<br/>(portable single file)"]
 
@@ -203,7 +203,7 @@ flowchart LR
   BUILD --> VERIFY
 ```
 
-The 64 browser-loaded modules are **classic scripts** sharing one global scope; their **load order** is the single
+The 65 browser-loaded modules are **classic scripts** sharing one global scope; their **load order** is the single
 critical invariant and lives once in `tools/module-order.js` (mirrored by `index.html`). The build
 inlines CSS + JS into one portable file; the verifier asserts the dist equals the concatenated
 source and that the version identity, schema, storage keys, and decomposition are all consistent.
@@ -222,7 +222,8 @@ index.html                         Modular entry: meta, external deps, pre-paint
                                    script, ordered CSS <link> + JS <script> tags, mounts
 css/                               Extracted styles (load order fixed)
   tokens.css base.css shell.css components.css charts.css
-js/                                64 classic-script modules, one shared global scope
+js/                                66 classic-script modules (65 browser-loaded, one shared
+                                   global scope; cli/ is Node-only)
   core/       constants, utils, storage-adapter, state, state-load-migrations,
               domain-services, hr-persistence-portability, stabilization,
               onboarding-reset, app-bootstrap
@@ -306,7 +307,7 @@ Build the portable single file from the modular source:
 node tools/build-single-file.js
 ```
 
-Verify (1267 checks):
+Verify (1561 checks):
 
 ```bash
 node tools/verify-build.js
@@ -349,7 +350,7 @@ Releases are tag-driven and guarded end-to-end (see [`docs/RELEASE-PROCESS.md`](
 
 ```mermaid
 flowchart LR
-  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1267)"]
+  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1561)"]
   V --> C["commit source + dist"] --> T["push tag vX.Y.Z"]
   T --> GA["GitHub Actions: Release"]
   GA --> GATE{"tag matches<br/>v-APP_VERSION?"}
