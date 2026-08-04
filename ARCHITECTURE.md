@@ -4,23 +4,24 @@
 from annotated tag `v2.8.4`, which peels to the published baseline commit
 `bd8819af0287af02711898cf43d22fb70cc3bcd5` on `main`
 **Previous release:** v2.8.3 — Payroll Posting Integrity (still published and unchanged; no longer Latest)
-**Current distributable:** `dist/tam-intelligence-os-v2.8.4.html` — 917,969 bytes, SHA-256
-`66509d25971e603f54f17051471f7dcf4de0009ff778bae5134d43d5ce70b509`, rebuilt from source by SPR-093.
+**Current distributable:** `dist/tam-intelligence-os-v2.8.4.html` — 934,518 bytes, SHA-256
+`3b7204a04ed9bba6e0db0a6fa00fc354ed0ea868d745ecdc63f1cb2251eae10e`, rebuilt from source by SPR-095.
 The **published** v2.8.4 asset remains the 914,409-byte artifact published at the tag
 (`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`) and was not republished, so the
 repository artifact and the published asset are **no longer byte-identical** — `main` carries
 production changes beyond the published Release. Version, release name and schema are unchanged.
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
 CSS/data-safety invariants)
-**Shape today:** a modular source of **65 classic-script JS modules** (in `core/ ui/ finance/ people/
+**Shape today:** a modular source of **66 classic-script JS modules** (in `core/ ui/ finance/ people/
 import/ analytics/ domain/ platform/ transport/ repository/ cli/`) + 5 CSS files, assembled into one
-portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **64 of the 65 are browser-loaded** — the
-load-order manifest and `index.html` agree on all 64 — and `js/cli/cli.js` is the CLI-only ingress,
+portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **65 of the 66 are browser-loaded** — the
+load-order manifest and `index.html` agree on all 65 — and `js/cli/cli.js` is the CLI-only ingress,
 deliberately outside the browser load order. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
-**Verification:** `tools/verify-build.js` — **1267** checks; five Node runtime harnesses — **424**
-checks (monthly plan 118, payroll posting 106, `saveAllData` 61, contract renewal 67, payroll committed
-state 72).
+**Verification:** `tools/verify-build.js` — **1561** checks; ten Node runtime harnesses — **984**
+checks (integrity warning rules 146, integrity payroll rules 144, Contract Core 129, monthly plan 118,
+payroll posting 106, contract persistence 74, payroll committed state 72, contract renewal 67,
+integrity rules 67, `saveAllData` 61).
 
 > **How to read this document.** The header block above and **§18** (Repository layer) describe the
 > architecture **as it stands today**; start there. Everything below §18 is a dated release record,
@@ -57,7 +58,7 @@ flowchart TD
   subgraph SRC["Modular source (edited by hand)"]
     IDX["index.html<br/>ordered CSS link + JS script tags, mount points"]
     CSS["css/ — tokens, base, shell, components, charts"]
-    subgraph JSMOD["js/ — 65 modules: 64 browser-loaded (one global scope) + 1 CLI-only"]
+    subgraph JSMOD["js/ — 66 modules: 65 browser-loaded (one global scope) + 1 CLI-only"]
       CORE["core/ — constants, state, storage-adapter,<br/>state-load-migrations, domain-services, bootstrap"]
       DOM["domain/ — aggregates, aggregate-helpers,<br/>commands, queries, domain-layer"]
       PLAT["platform/ + transport/ — application-gateway,<br/>transport-adapter"]
@@ -79,7 +80,7 @@ flowchart TD
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>1267 invariant checks"]
+  VERIFY["tools/verify-build.js<br/>1561 invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX
@@ -233,16 +234,18 @@ migration was added or re-run.
 
 ### Adoption
 
-All eight aggregate-backed handlers are Repository-mediated — Employee 4 of 4, Contract 3 of 3,
-Payroll 1 of 1 (**8 of 8**). This means *only* that every aggregate-backed handler delegates persistence
+All nine aggregate-backed handlers are Repository-mediated — Employee 4 of 4, Contract 4 of 4,
+Payroll 1 of 1 (**9 of 9**). This means *only* that every aggregate-backed handler delegates persistence
 through an entity-named Repository. It is **not** full persistence abstraction (the layer mediates 3 of
 11 persist functions), **not** compound-persistence support, and **not** backend readiness — the
-application is client-only by `CLAUDE.md` §4.3. `tools/verify-build.js` asserts the 8-of-8 milestone
+application is client-only by `CLAUDE.md` §4.3. `tools/verify-build.js` asserts the 9-of-9 milestone
 *and* the bound, including a check whose message reads *"adoption completeness != persistence
 abstraction"*.
 
-The operational surface (8 aggregates / 8 aggregate-backed commands / 1 aggregate-backed query) and
-registered surface (14 commands / 4 queries) were unchanged by every Repository slice.
+The operational surface (9 aggregates / 8 seam-routed aggregate-backed commands / 1 aggregate-backed
+query) and registered surface (15 commands / 4 queries) were unchanged by every Repository slice.
+Adoption and routing are distinct counts: the ninth aggregate-backed command, `contract.core.update`,
+is Repository-mediated but reached by no ingress — see *Contract Core authority* below.
 
 No generic Repository, factory, or base class exists; no Repository coordinates another Repository; and
 there is **no Unit of Work and no Transaction Coordinator**. The verifier asserts each of these.
@@ -261,6 +264,29 @@ Renewability is evaluated against **stored** statuses (`Draft`, `Active`), never
 A contract displayed as *Expired* or *Expiring Soon* remains renewable while its stored status is still
 `Active`; terminal statuses (`Renewed`, `Cancelled`) are never renewable. The UI eligibility mirror
 (`contractIsRenewable`) is verifier-checked against the same rule.
+
+### Contract Core authority — prepared, not routed (ADR-014 step 1 / SPR-095)
+
+[ADR-014](docs/03-adr/ADR-014-Contract-Core-Field-Authority.md) (Accepted) fixed the permanent owner of
+every mutable Contract field. SPR-095 implemented **step 1 of its recorded sequence and nothing else**:
+
+- **`ContractCoreAggregate` is prepared** — a pure decision boundary owning exactly ten fields
+  (`employeeId`, `employeeName`, `contractNumber`, `monthlySalary`, `notes`, and the five-field schedule
+  group). It refuses any field it does not own with a typed failure rather than discarding it, and it
+  enforces the atomic `employeeId`/`employeeName` pair, the all-or-nothing schedule group, PD-1 and PD-2.
+- **`contract.core.update` is registered** in `DOMAIN_COMMANDS`, bound to the aggregate and to the
+  `updateContractCore` handler, which is `ContractRepository`-mediated with handler-owned rollback.
+- **No operational ingress exists.** No UI, modal, Platform, Gateway, Transport or `uiExecute` route
+  invokes the command; the only invoker in the repository is `tools/verify-contract-core-runtime.js`.
+  The seam-routed command count therefore remains **8** against a registered surface of **15**.
+- **Editor routing is unchanged.** The full Contract editor still writes those ten fields directly and
+  still persists through `persistContracts()`; the delete path is unchanged.
+- **No authority migration has happened.** The editor's duplicate writes of `status`, `startDate` and
+  `durationMonths` remain in place, and the two hazards ADR-014 measures remain reachable through it.
+- **OQ-2 and OQ-3 remain OPEN**, and editor routing (ADR-014 step 2) stays blocked on OQ-2.
+
+Behaviour is proven by `tools/verify-contract-core-runtime.js` (129 checks); the shape and the *absence*
+of any call site are asserted by `tools/verify-build.js`.
 
 ### Payroll posting authority (SPR-078, SPR-081)
 

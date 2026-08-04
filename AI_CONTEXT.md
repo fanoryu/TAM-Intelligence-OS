@@ -14,15 +14,15 @@ remains published and unchanged; it is no longer marked Latest. Publication crea
 Release only — it changed no source commit, runtime behavior, schema, or storage key.
 
 **Repository `main` now contains production changes beyond the published v2.8.4 Release artifact.**
-SPR-093 changed `js/people/contracts.js`, so the portable build was regenerated from source as
+SPR-093 and SPR-095 changed production source, so the portable build was regenerated from source as
 `CLAUDE.md` §10 and §19 require. `APP_VERSION`, `APP_RELEASE_NAME` and `SCHEMA_VERSION` are unchanged,
 so the filename is unchanged — but the repository artifact and the published asset are **no longer
 byte-identical**:
 
 | | Repository `main` | Published v2.8.4 Release asset |
 |---|---|---|
-| `dist/tam-intelligence-os-v2.8.4.html` | **917,969 bytes** | 914,409 bytes |
-| SHA-256 | `66509d2597…ce70b509` | `09c622b3a6…3aea02c6` |
+| `dist/tam-intelligence-os-v2.8.4.html` | **934,518 bytes** | 914,409 bytes |
+| SHA-256 | `3b7204a04e…51eae10e` | `09c622b3a6…3aea02c6` |
 
 The tag, Release, and published asset are unchanged and were **not** republished. No version has been
 assigned to this divergence and no release is implied or recommended here.
@@ -52,7 +52,7 @@ CLI    ─┘
   Handlers keep validation, mutation, `updatedAt`, history, rollback, typed results — and, for Payroll,
   the post-persistence best-effort audit. See [ADR-013](docs/03-adr/ADR-013-Repository-Layer.md).
 
-**Aggregate-backed Repository adoption: 8 of 8** — Employee 4/4, Contract 3/3, Payroll 1/1.
+**Aggregate-backed Repository adoption: 9 of 9** — Employee 4/4, Contract 4/4, Payroll 1/1.
 This means *only* that every aggregate-backed handler delegates persistence through an entity-named
 Repository. It does **not** mean all persistence is mediated (the layer covers 3 of 11 persist
 functions), that compound persistence is solved, that multi-store transactions are supported, or that
@@ -67,6 +67,15 @@ history append, one `ContractRepository.save()`, strict result inspection, in-me
 write, and the typed result. Renewability is evaluated against **stored** statuses (`Draft`, `Active`),
 never derived display states — so a contract displayed as *Expired* or *Expiring Soon* remains renewable
 while its stored status is still `Active`. Terminal statuses (`Renewed`, `Cancelled`) are never renewable.
+
+**Contract Core authority — prepared, not routed (ADR-014 step 1 / SPR-095).** `ContractCoreAggregate`
+**is prepared** (a pure boundary owning exactly ten fields) and `contract.core.update` **is registered**
+to the `ContractRepository`-mediated `updateContractCore` handler. **No operational ingress exists** — no
+UI, modal, Platform, Gateway, Transport or `uiExecute` route invokes it, and the only invoker in the
+repository is `tools/verify-contract-core-runtime.js`. **Editor routing is unchanged**: the full Contract
+editor still writes those ten fields directly through `persistContracts()`, and the delete path is
+unchanged. **No authority migration has happened.** **OQ-2 and OQ-3 remain OPEN**, and editor routing
+(ADR-014 step 2) stays blocked on OQ-2.
 
 **Next architecture frontier: compound persistence** — `commitReadyPayroll` writes four stores in one
 logical unit, which the collection-grained contract cannot express. This is the open question, not backend
@@ -151,9 +160,10 @@ exists but does not list it), alongside the pre-existing `corrupt-plan-ref` **wa
 direction. All of these are **read-only detection**: they report that a partial state exists and where —
 they do **not** repair it and do **not** block the underlying operation.
 
-Operational surface: 8 aggregates / 8 aggregate-backed commands / 1 aggregate-backed query; 14 registered
-commands / 4 registered queries — unchanged by every Repository slice. Business authority remains
-exclusively in the Domain.
+Operational surface: 9 aggregates / 8 seam-routed aggregate-backed commands / 1 aggregate-backed query;
+15 registered commands / 4 registered queries — unchanged by every Repository slice. The ninth
+aggregate-backed command, `contract.core.update`, is registered and Repository-mediated but routed by
+nothing. Business authority remains exclusively in the Domain.
 
 **v2.7.1 note.** Posted/Executed payroll and supplemental display now derive from a single stage-aware
 historical source-of-truth helper (`payrollHistoricalSnapshot`) backed by immutable snapshots frozen
@@ -214,8 +224,8 @@ workflow, release pipeline) live in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1267** at v2.8.4), joined
-  by five runtime harnesses (**424** checks). PowerShell fallbacks exist for machines without Node.
+  the portable single file, and a verifier runs a suite of invariant checks (**1561** on current `main`),
+  joined by ten runtime harnesses (**984** checks). PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
 - **Version is derived** from a single source constant; the portable filename follows it
@@ -320,10 +330,11 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   both.** A failed create leaves no record; a failed edit restores every mutated field and restores
   `history` in both contents and prior own-property absence; a failed delete restores the record at its
   exact original index and writes no activity entry; failure shows failure feedback and the editor modal
-  stays open for retry. Proven by `tools/verify-contract-persistence-runtime.js` (73 checks) and by
+  stays open for retry. Proven by `tools/verify-contract-persistence-runtime.js` (74 checks) and by
   real-browser QA. **What SPR-093 did not do:** it migrated no authority. The editor still assigns
-  `status` directly and both paths still persist through `persistContracts()` — no aggregate, no
-  repository mediation, no command. That residual authority is ARCH-008's M-5 and remains open.
+  `status` directly and both paths still persist through `persistContracts()` — the editor routes through
+  no command and uses no repository mediation, and SPR-095 did not change that. That residual authority
+  is ARCH-008's M-5 and remains open.
 - **Payroll posting is not atomic.** `commitReadyPayroll` still writes **four storage keys
   sequentially** and retains attempt-all behaviour. Its results are now checked (SPR-081), which makes
   failure *visible* — it does not make the operation all-or-nothing. **No coordinated rollback and no
@@ -359,9 +370,10 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1267** checks) plus five
-  Node runtime harnesses (**424** checks total: monthly plan 118, payroll posting 106, `saveAllData` 61,
-  contract renewal 67, payroll committed state 72) plus manual browser validation. The runtime harnesses drive real
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1561** checks) plus ten
+  Node runtime harnesses (**984** checks total: integrity warning rules 146, integrity payroll rules 144,
+  Contract Core 129, monthly plan 118, payroll posting 106, contract persistence 74, payroll committed
+  state 72, contract renewal 67, integrity rules 67, `saveAllData` 61) plus manual browser validation. The runtime harnesses drive real
   behaviour against the live engine and UI seams, but they are not a general test suite.
 - **External CDN references** for the spreadsheet parser and fonts mean the fully offline experience
   depends on those assets (no user data is sent to them).
@@ -397,10 +409,12 @@ Directions (no committed release numbers unless already approved):
   with status, the date extent and renewal unchanged. Approved policy: `contractNumber` editable only
   while `Draft` (PD-1); employee reassignment only while `Draft` and only with no linked payroll,
   overtime or transactions (PD-2). Smart Import, Backup Restore, Demo Seed and the Employee Dedup relink
-  are permanent bounded exemptions. **ADR-014 authorizes no implementation** — no aggregate, command,
-  handler, or editor routing exists yet, and the runtime is unchanged. OQ-2 (editor status control) and
-  OQ-3 (delete as a command) **remain open**, and editor routing stays blocked on OQ-2. **Not scheduled
-  and not authorized.**
+  are permanent bounded exemptions. **ADR-014 itself authorized no implementation**; SPR-095 was
+  separately chartered and delivered **step 1 only** — `ContractCoreAggregate`, `contract.core.update`
+  and the `ContractRepository`-mediated `updateContractCore` handler now exist, and **nothing invokes
+  them**. Editor routing (step 2) does not exist and existing user-visible flows are unchanged. OQ-2
+  (editor status control) and OQ-3 (delete as a command) **remain open**, and editor routing stays
+  blocked on OQ-2. **Not scheduled and not authorized.**
 - **Deferred architecture** — considered only if evidence justifies it, never pre-emptively:
   operation-specific compensation (only where a concrete failure mode warrants it); a persisted recovery
   marker (only if runtime evidence requires one); a generic coordination mechanism (only after a
@@ -417,7 +431,7 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
 
 ## 18. Technical Debt
 
-- No general automated regression suite; coverage is the invariant verifier plus five targeted runtime
+- No general automated regression suite; coverage is the invariant verifier plus ten targeted runtime
   harnesses, with the remaining behavioural coverage manual.
 - Heavy use of direct DOM string rendering — safe today because user data is escaped, but a
   standing reason to keep escaping disciplined.
