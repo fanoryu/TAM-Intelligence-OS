@@ -139,20 +139,29 @@ function restoreSidebarScroll(){
     if(nav) nav.scrollTop = State.sidebarScrollTop || 0;
   });
 }
-function render(){
-  closeFloatingMenu();    // v2.6.3b — never leave a portaled Actions menu orphaned across a re-render
-  captureSidebarScroll(); // read the outgoing .nav's scroll position before it's torn down
+/* ============================================================
+   SHELL / VIEW SEPARATION (UX-002A)
+   The shell — sidebar, brand, nav tree and the #main container — is mounted
+   ONCE by renderShell() and then persists for the life of the session.
+   Ordinary navigation replaces only the #main content (renderView) and syncs
+   the nav's derived state in place (syncShellState): active item, group
+   collapse, chevron, aria-expanded and the brand subtitle. The sidebar, the
+   nav tree and their listeners are no longer torn down and rebuilt.
+
+   render() is retained as the compatibility facade so every existing caller
+   keeps working unchanged; its observable result is identical to before.
+   #menu-root, #modal-root and #toast-root are siblings of #app and were never
+   inside the rebuilt subtree — they are unaffected, before and after.
+   ============================================================ */
+function shellIsMounted(){
   const app = document.getElementById('app');
-  app.innerHTML = `
-    <div class="sidebar">
-      <div class="brand">
-        <div class="mark"><span class="mfull">TAM <span>Intelligence&nbsp;OS</span></span><span class="mshort">TAM <span>OS</span></span></div>
-        <div class="sub">${escapeHtml(State.settings.companyName||COMPANY_NAME_DEFAULT)}</div>
-      </div>
-      <div class="nav">
-        ${NAV_GROUPS.map(g=>{
-          const collapsed = !!State.navCollapsed[g.id];
-          return `<div class="nav-group">
+  return !!(app && app.querySelector('.sidebar') && app.querySelector('#main'));
+}
+// One nav group's markup. Extracted verbatim from the previous render() so the
+// mounted shell is byte-identical to what the full rebuild used to produce.
+function navGroupHTML(g){
+  const collapsed = !!State.navCollapsed[g.id];
+  return `<div class="nav-group">
             <button class="nav-group-head" data-group="${g.id}" aria-expanded="${!collapsed}">
               <span>${escapeHtml(g.label)}</span><span class="chev">${collapsed?'▸':'▾'}</span>
             </button>
@@ -162,19 +171,35 @@ function render(){
               </button>`).join('')}
             </div>
           </div>`;
-        }).join('')}
+}
+// Mounts the persistent shell. Called once (first render), and again only if
+// the shell is somehow absent — it is never part of ordinary navigation.
+function renderShell(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="sidebar">
+      <div class="brand">
+        <div class="mark"><span class="mfull">TAM <span>Intelligence&nbsp;OS</span></span><span class="mshort">TAM <span>OS</span></span></div>
+        <div class="sub">${escapeHtml(State.settings.companyName||COMPANY_NAME_DEFAULT)}</div>
+      </div>
+      <div class="nav">
+        ${NAV_GROUPS.map(navGroupHTML).join('')}
       </div>
       <div class="sidebar-foot">${escapeHtml(APP_NAME)} v${APP_VERSION}<br>${escapeHtml(APP_TAGLINE)}<br>Data stored privately in your browser.</div>
     </div>
     <div class="main" id="main"></div>
   `;
+  bindShell(app);
+}
+// Shell listeners are bound once, against nodes that now outlive navigation.
+function bindShell(app){
   app.querySelectorAll('[data-nav]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{
       e.preventDefault();
       captureSidebarScroll();
       State.view = btn.dataset.nav; State.pendingImport=null;
       render();
-      btn.blur(); // click already re-renders the shell; drop focus so the browser doesn't auto-scroll toward it
+      btn.blur(); // unchanged: navigation leaves focus off the nav item, as before
     });
   });
   app.querySelectorAll('[data-group]').forEach(btn=>{
@@ -188,7 +213,40 @@ function render(){
   });
   const navEl = app.querySelector('.nav');
   if(navEl) navEl.addEventListener('scroll', ()=>{ State.sidebarScrollTop = navEl.scrollTop; });
-  restoreSidebarScroll(); // reapply the captured position now that the new .nav exists
+}
+// Reapplies to the persistent shell exactly the derived state that the old full
+// rebuild used to re-emit from scratch. Same inputs, same resulting DOM.
+function syncShellState(){
+  const app = document.getElementById('app');
+  if(!app) return;
+  const sub = app.querySelector('.brand .sub');
+  const company = State.settings.companyName||COMPANY_NAME_DEFAULT;
+  if(sub && sub.textContent !== company) sub.textContent = company;
+  app.querySelectorAll('[data-nav]').forEach(btn=>{
+    btn.classList.toggle('active', State.view === btn.dataset.nav);
+  });
+  app.querySelectorAll('[data-group]').forEach(head=>{
+    const collapsed = !!State.navCollapsed[head.dataset.group];
+    const expanded = String(!collapsed);
+    // Write only on change: an unconditional assignment would replace the chevron's
+    // text node on every navigation, churning the nav subtree we just stopped rebuilding.
+    if(head.getAttribute('aria-expanded') !== expanded) head.setAttribute('aria-expanded', expanded);
+    const chev = head.querySelector('.chev');
+    const glyph = collapsed?'▸':'▾';
+    if(chev && chev.textContent !== glyph) chev.textContent = glyph;
+    const items = head.parentNode.querySelector('.nav-group-items');
+    const disp = collapsed?'none':'';
+    if(items && items.style.display !== disp) items.style.display = disp;
+  });
+}
+/* Compatibility facade — the entry point every existing caller already uses.
+   Mounts the shell on first use, then only syncs it and replaces the view. */
+function render(){
+  closeFloatingMenu();    // v2.6.3b — never leave a portaled Actions menu orphaned across a re-render
+  captureSidebarScroll(); // preserved: keeps State.sidebarScrollTop the authority for nav scroll
+  if(!shellIsMounted()) renderShell();
+  syncShellState();
+  restoreSidebarScroll();
   renderView(document.getElementById('main'));
 }
 
