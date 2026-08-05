@@ -5888,6 +5888,30 @@ function keyAbs(key){ const {y,m}=keyParts(key); return absMonth(y,m); }
 function daysBetween(isoA, isoB){ return Math.round((new Date(isoB+'T00:00:00') - new Date(isoA+'T00:00:00'))/86400000); }
 
 /* ---------- contract progress calculator ---------- */
+/* UX-003A — ONE reference date per calc.
+   Every field contractCalc() derives (progress, coversMonth, expiredForRef,
+   beforeStart) is measured against refKey. daysUntilEnd must share that basis,
+   or the same return object answers two different questions at once.
+
+   The reference DATE for a reference MONTH:
+     - current month (or refKey omitted) → isoToday(). This is exactly what an
+       omitted refKey has always meant, so today-evaluated callers are unchanged
+       byte for byte, and passing todayKey() explicitly is identical to omitting it.
+     - any other month → that month's FIRST day. There is no "today" inside a
+       historical or future month, and the first day makes the calc internally
+       coherent: coversMonth <=> daysUntilEnd >= 0, and expiredForRef <=>
+       daysUntilEnd < 0.
+     - unusable key (null, malformed, month outside 1-12) → isoToday(), which
+       LOCKS the pre-UX-003A fallback. UX-003A adds no validation semantics. */
+function contractRefDate(refKey){
+  const today = isoToday();
+  if(!refKey) return today;
+  const key = String(refKey).slice(0,7);
+  if(key === today.slice(0,7)) return today;      // current month → today
+  const {y, m} = keyParts(key);
+  if(!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return today;
+  return `${y}-${String(m).padStart(2,'0')}-01`;
+}
 // Pure, calendar-month based. Never stores "8/12" — always derived from
 // startDate + durationMonths for a given reference month (default: current).
 //   before the contract starts → 0/N
@@ -5909,7 +5933,7 @@ function contractCalc(c, refKey){
   // end date = start + duration months − 1 day (last covered calendar day)
   const endD = new Date(sp.y, (sp.m-1)+dur, 0);
   out.endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,'0')}-${String(endD.getDate()).padStart(2,'0')}`;
-  out.daysUntilEnd = daysBetween(isoToday(), out.endDate);
+  out.daysUntilEnd = daysBetween(contractRefDate(ref), out.endDate);
   if(current < 1){ out.current=0; out.beforeStart=true; }
   else if(current > dur){ out.current=dur; out.expiredForRef=true; out.beforeStart=false; }
   else { out.current=current; out.beforeStart=false; out.coversMonth=true; }
@@ -10380,7 +10404,9 @@ function payrollExclusionReason(e, monthKey){
     if(!cts.length) return 'No active contract';
     // classify why none covers this month
     let notStarted=false, expired=false, cancelled=false;
-    cts.forEach(c=>{ const es=contractEffectiveStatus(c, monthKey); const cc=contractCalc(c, monthKey);
+    // UX-003A — the effective status was computed here and never read; exclusion is
+    // classified from the refKey-based calc fields only. Dead read removed (CLAUDE.md §6.6).
+    cts.forEach(c=>{ const cc=contractCalc(c, monthKey);
       if(c.status==='Cancelled') cancelled=true;
       else if(cc.valid && cc.current<1) notStarted=true;
       else if(cc.valid && cc.current>cc.total) expired=true; });

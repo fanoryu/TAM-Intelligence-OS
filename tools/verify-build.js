@@ -2315,6 +2315,74 @@ check(ux2bHexHits.length === 0,
   'no theme-sensitive hex colour literal in production JS colour positions (chart colours resolve via themeVar tokens)'
   + (ux2bHexHits.length ? ' >> VIOLATION: ' + ux2bHexHits.join(' | ') : ''));
 
+// UX-003A — CONTRACT TIMELINE REFERENCE-DATE COHERENCE.
+// contractCalc(c, refKey) derives progress, coversMonth, expiredForRef and
+// beforeStart against refKey. daysUntilEnd used to be derived from isoToday(),
+// so one return object answered two different questions and
+// contractEffectiveStatus() — which reads daysUntilEnd for its "Expiring Soon"
+// branch — became a today/refKey hybrid. These checks inspect the real function
+// bodies, so a regression that reintroduced the today-based origin cannot pass.
+console.log('== UX-003A CONTRACT TIMELINE (REFERENCE-DATE COHERENCE) ==');
+const ux3aSrc = stripComments(read(path.join(root,'js','people','people-core.js')));
+// Top-level function body: declaration at column 0 through the next line that
+// begins with a closing brace at column 0.
+const ux3aBodyOf = (name)=>{
+  const m = ux3aSrc.match(new RegExp('^function '+name+'\\([^)]*\\)\\{[\\s\\S]*?\\n\\}','m'));
+  return m ? m[0] : '';
+};
+const ux3aCalcBody = ux3aBodyOf('contractCalc');
+const ux3aStatusBody = ux3aBodyOf('contractEffectiveStatus');
+const ux3aRefDateBody = ux3aBodyOf('contractRefDate');
+check(ux3aCalcBody !== '' && ux3aStatusBody !== '' && ux3aRefDateBody !== '',
+  'UX-003A: contractCalc(), contractEffectiveStatus() and contractRefDate() are all resolvable top-level functions');
+// 1. daysUntilEnd is not computed directly from isoToday() inside contractCalc().
+const ux3aDaysLine = (ux3aCalcBody.match(/^.*\bout\.daysUntilEnd\s*=.*$/m)||[''])[0];
+check(ux3aDaysLine !== '' && !/isoToday\s*\(/.test(ux3aDaysLine),
+  'UX-003A: daysUntilEnd is NOT derived directly from isoToday() inside contractCalc()');
+check(!/isoToday\s*\(/.test(ux3aCalcBody),
+  'UX-003A: contractCalc() contains no direct isoToday() call at all (single reference-date source)');
+// 2. The supplied refKey — via its normalized reference date — feeds the calculation.
+check(/\bout\.daysUntilEnd\s*=\s*daysBetween\(\s*contractRefDate\(\s*ref\s*\)/.test(ux3aCalcBody),
+  'UX-003A: daysUntilEnd is measured from contractRefDate(ref) — the normalized reference date of the supplied refKey');
+check(/const\s+ref\s*=\s*refKey\s*\|\|\s*todayKey\(\)/.test(ux3aCalcBody),
+  'UX-003A: ref still defaults to todayKey() when refKey is omitted (today behaviour preserved)');
+// 3. contractRefDate() resolves the current month to isoToday(), which is what
+//    makes an omitted refKey and an explicit current-month key identical.
+check(/isoToday\s*\(/.test(ux3aRefDateBody) && /slice\(0,\s*7\)/.test(ux3aRefDateBody),
+  'UX-003A: contractRefDate() resolves the CURRENT month to isoToday() (omitted === explicit current month)');
+check(/keyParts\s*\(/.test(ux3aRefDateBody) && /-01/.test(ux3aRefDateBody),
+  'UX-003A: contractRefDate() resolves any OTHER month to that month\'s first day');
+// 4. contractEffectiveStatus() introduces no second, independent time source.
+check(!/isoToday\s*\(/.test(ux3aStatusBody) && !/daysBetween\s*\(/.test(ux3aStatusBody) && !/new\s+Date\s*\(/.test(ux3aStatusBody),
+  'UX-003A: contractEffectiveStatus() introduces no independent today-based time source (no isoToday/daysBetween/new Date)');
+check(/contractCalc\(c,\s*refKey\s*\|\|\s*todayKey\(\)\)/.test(ux3aStatusBody),
+  'UX-003A: contractEffectiveStatus() derives its time basis solely from contractCalc()');
+// UX-003A is a reference-date correction ONLY — no vocabulary, storage or schema move.
+check(/const CONTRACT_STORED_STATUSES = \['Draft','Active','Renewed','Cancelled'\];/.test(read(path.join(root,'js','core','constants.js'))),
+  'UX-003A: stored contract status vocabulary is unchanged (no Scheduled state added)');
+check(!/Scheduled/.test(ux3aSrc),
+  'UX-003A: people-core.js introduces no Scheduled state (deferred to a later UX-003 phase)');
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))),
+  'UX-003A: SCHEMA_VERSION remains 6 (UX-003A is not a migration)');
+// 5. The dedicated runtime harness is DISCOVERABLE and honest (not executed here).
+const ux3aPath = path.join(root,'tools','verify-contract-timeline-runtime.js');
+check(fs.existsSync(ux3aPath), 'UX-003A runtime harness present: tools/verify-contract-timeline-runtime.js');
+const ux3aHarness = read(ux3aPath);
+check(/UX-003A/.test(ux3aHarness) && /CONTRACT TIMELINE/.test(ux3aHarness),
+  'UX-003A harness identifies its sprint and subject correctly');
+check(/RUNTIME VERIFICATION PASSED/.test(ux3aHarness) && /process\.exit\(1\)/.test(ux3aHarness),
+  'UX-003A harness fails non-zero on assertion failure');
+check(!/child_process|require\('http|require\("http/.test(ux3aHarness),
+  'UX-003A harness spawns no process and opens no network');
+check(!/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|rmSync|mkdir)/.test(ux3aHarness),
+  'UX-003A harness writes nothing to disk');
+check(/module-order\.js/.test(ux3aHarness) && /vm\.runInContext/.test(ux3aHarness),
+  'UX-003A harness executes the REAL production modules in manifest order');
+check(/payrollHealth/.test(ux3aHarness) && /generatePayrollForMonth/.test(ux3aHarness),
+  'UX-003A harness exercises the real payroll paths (safety + historical advisory)');
+check(/daysBetween\(firstDayOf\(/.test(ux3aHarness),
+  'UX-003A harness states its OWN reference-date expectation (not production\'s helper result)');
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');

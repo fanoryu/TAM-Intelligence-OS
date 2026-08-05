@@ -238,7 +238,9 @@ function payrollExclusionReason(e, monthKey){
     if(!cts.length) return 'No active contract';
     // classify why none covers this month
     let notStarted=false, expired=false, cancelled=false;
-    cts.forEach(c=>{ const es=contractEffectiveStatus(c, monthKey); const cc=contractCalc(c, monthKey);
+    // UX-003A — the effective status was computed here and never read; exclusion is
+    // classified from the refKey-based calc fields only. Dead read removed (CLAUDE.md §6.6).
+    cts.forEach(c=>{ const cc=contractCalc(c, monthKey);
       if(c.status==='Cancelled') cancelled=true;
       else if(cc.valid && cc.current<1) notStarted=true;
       else if(cc.valid && cc.current>cc.total) expired=true; });
