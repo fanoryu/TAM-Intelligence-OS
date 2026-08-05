@@ -14,15 +14,15 @@ remains published and unchanged; it is no longer marked Latest. Publication crea
 Release only — it changed no source commit, runtime behavior, schema, or storage key.
 
 **Repository `main` now contains production changes beyond the published v2.8.4 Release artifact.**
-SPR-093 and SPR-095 changed production source, so the portable build was regenerated from source as
-`CLAUDE.md` §10 and §19 require. `APP_VERSION`, `APP_RELEASE_NAME` and `SCHEMA_VERSION` are unchanged,
-so the filename is unchanged — but the repository artifact and the published asset are **no longer
-byte-identical**:
+SPR-093, SPR-095 and then the UX sprints **UX-002A** and **UX-002B** changed production source, so the
+portable build was regenerated from source as `CLAUDE.md` §10 and §19 require. `APP_VERSION`,
+`APP_RELEASE_NAME` and `SCHEMA_VERSION` are unchanged, so the filename is unchanged — but the
+repository artifact and the published asset are **no longer byte-identical**:
 
 | | Repository `main` | Published v2.8.4 Release asset |
 |---|---|---|
-| `dist/tam-intelligence-os-v2.8.4.html` | **934,518 bytes** | 914,409 bytes |
-| SHA-256 | `3b7204a04e…51eae10e` | `09c622b3a6…3aea02c6` |
+| `dist/tam-intelligence-os-v2.8.4.html` | **948,782 bytes** | 914,409 bytes |
+| SHA-256 | `7217b44b99…f78911ceb` | `09c622b3a6…3aea02c6` |
 
 The tag, Release, and published asset are unchanged and were **not** republished. No version has been
 assigned to this divergence and no release is implied or recommended here.
@@ -215,16 +215,37 @@ A capability status matrix (Available / Planned) is maintained in [`README.md`](
 
 Client-only, single shared global scope of classic-script modules organized into
 `core / ui / finance / people / import / analytics / domain / platform / transport / repository / cli`,
-assembled into one portable HTML file. **65 JS modules** exist in the source: **64 are browser-loaded**
-(the load-order manifest and `index.html` agree on all 64), and `js/cli/cli.js` is the CLI-only ingress,
+assembled into one portable HTML file. **66 JS modules** exist in the source: **65 are browser-loaded**
+(the load-order manifest and `index.html` agree on all 65), and `js/cli/cli.js` is the CLI-only ingress,
 deliberately outside the browser load order. There are no ES modules and no bundler; module load order is
 the critical invariant. The full structure, provenance, and diagrams (application structure, payroll
 workflow, release pipeline) live in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
+**Shell / view separation (UX-002A).** The application shell is mounted once and then persists.
+`renderShell()` builds the sidebar, brand, nav tree and the `#main` container and binds its listeners
+once; ordinary navigation replaces only the content inside the persistent `#main` (`renderView()`) and
+reapplies the nav's derived state in place (`syncShellState()` — active item, group collapse, chevron,
+`aria-expanded`, brand subtitle). `render()` is retained as a compatibility facade with unchanged
+observable behaviour, so every existing caller works untouched. Three verifier invariants hold the
+shape: `render()` never assigns `.innerHTML` or emits shell markup; `renderShell()` and
+`syncShellState()` must exist and both be invoked by `render()`; and `bindShell()` must be invoked
+exactly once repository-wide, only from `renderShell()`.
+
+**Presentation system (UX-002B).** CSS resolves from token scales defined in `css/tokens.css` — six
+font sizes, six 4px-based spacing steps, four radii — with `--brand` (identity) split from
+`--interactive` (selection and primary action), a `--warn` semantic token, and six `--chart-*` series
+tokens. The serif survives on the wordmark only; UI chrome is sans. Chart series colours resolve
+through `themeVar('--token', fallback)` at render time, so charts follow the active theme; the
+remaining exemptions are the `constants.js` status/category palette (deferred), the browser
+theme-colour meta, and `themeVar()` fallback arguments. Five static invariants enforce this: no
+fractional `font-size`; `var(--serif)` exactly once on `.brand .mark`; every `:root` token also defined
+for `:root[data-theme="light"]`; spacing and radius resolve from tokens; and no theme-sensitive hex
+literal in a production-JS colour position.
+
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1561** on current `main`),
+  the portable single file, and a verifier runs a suite of invariant checks (**1569** on current `main`),
   joined by ten runtime harnesses (**984** checks). PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
@@ -283,9 +304,10 @@ Approved → Posted → Executed; reuses the finance transaction model and Execu
 
 At a glance: `index.html` + `css/` + `js/` (modular source), `tools/` (build/verify), `dist/`
 (portable build), `docs/` and root Markdown (governance/knowledge), `.github/` (CI, release,
-templates), and a frozen reference HTML used as the invariant golden master. The authoritative,
-detailed layout is in [`README.md`](README.md#project-structure) and
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
+templates), `audit/` (immutable dated records), and a frozen reference HTML (`tam-intelligence-os-v2.5.2.html`)
+retained as the **JS provenance** golden master. Since UX-002B it is no longer the CSS comparator —
+CSS is pinned by digest instead (see §19). The authoritative, detailed layout is in
+[`README.md`](README.md#project-structure) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## 13. Current Engineering Practices
 
@@ -370,11 +392,23 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1561** checks) plus ten
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1569** checks) plus ten
   Node runtime harnesses (**984** checks total: integrity warning rules 146, integrity payroll rules 144,
   Contract Core 129, monthly plan 118, payroll posting 106, contract persistence 74, payroll committed
   state 72, contract renewal 67, integrity rules 67, `saveAllData` 61) plus manual browser validation. The runtime harnesses drive real
   behaviour against the live engine and UI seams, but they are not a general test suite.
+- **One theme-blind colour path remains.** UX-002B tokenized every chart series colour, but the shared
+  `STATUS_META` / `CATEGORY_COLOR` palette in `js/core/constants.js` is still hardcoded hex. It is
+  consumed by **both** status pills and charts, so tokenizing it is cross-cutting and was deliberately
+  deferred out of UX-002B. The visible symptom is the Monthly Trends *category* series keeping its
+  dark-theme gold under the light theme. The verifier's colour invariant exempts this file explicitly.
+- **No automated visual-regression coverage.** The UX-002B Phase 1 narrow-width regression was caught
+  only because a later phase validated with a richer fixture. The standing controls are the canonical
+  12-month transaction-bearing QA fixture and the rule that every width assertion captures
+  `innerWidth`, `clientWidth`, `scrollWidth` and overflow in the same instant — both recorded in
+  [`audit/ux-002b-2026-08-05/`](audit/ux-002b-2026-08-05/CSS-GOLDEN-MASTER-REVISION.md). Dashboard
+  information-integrity and alert-reachability are likewise protected by documented behavioural probes,
+  not by static invariants.
 - **External CDN references** for the spreadsheet parser and fonts mean the fully offline experience
   depends on those assets (no user data is sent to them).
 - **Single-owner project** — response and review timelines are best-effort.
@@ -422,6 +456,22 @@ Directions (no committed release numbers unless already approved):
 - **Explicitly not authorised:** a Unit of Work; a Transaction Coordinator; a `StorageAdapter` journal;
   a single-key envelope; any backend assumption. Generic compound-persistence coordination is an **open
   question**, not an approved direction.
+- **UX roadmap (workspace refresh).** **UX-001** (discovery) and **GOV-008** (governance) are complete
+  and authorized nothing by themselves. **UX-002A — Shell/View Structural Foundation** and **UX-002B —
+  Minimal Workspace Foundation** are **merged**: UX-002A separated the persistent shell from view
+  rendering; UX-002B delivered the CSS golden-master revision (PD-A), the typography and token
+  foundation (PD-B, PD-C), chart theme tokenization, and the dashboard density pass (20 metric
+  containers → 13 on the Executive Dashboard, with no unique value removed). UX-002B carried an
+  authorized fourth commit — a **Phase 1 narrow-width remediation** — after Phase 2 validation exposed a
+  480px grid-containment regression that Phase 1 had introduced and mis-reported as resolved; the
+  correction and the mandated fixture/measurement method are recorded in
+  [`audit/ux-002b-2026-08-05/`](audit/ux-002b-2026-08-05/CSS-GOLDEN-MASTER-REVISION.md).
+  **Still open and not started:** **UX-003** Contract Timeline Integrity (expiry horizon model,
+  `Scheduled` state, the `daysUntilEnd(refKey)` reference-date defect, canonical horizon counters);
+  **UX-004** Adaptive Sidebar (collapsed rail, hover expansion, pinning, mobile drawer — needs an
+  icon-technology decision first); **UX-005** Navigation and Responsive Simplification (command palette,
+  narrow-width layout pass, merging the Finance Overview exception tables). None is scheduled or
+  authorized.
 - **Planned:** Payroll Reporting suite expansion; supplemental sources beyond overtime; ongoing
   repository maintenance.
 - **Under consideration:** authentication and role-based access control; attachment/evidence
@@ -445,6 +495,17 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
   confidential data on-device.
 - **Classic scripts in one global scope** were kept deliberately (not migrated to modules) to
   preserve a verified, byte-checked golden master and avoid a bundler.
+- **CSS is pinned by digest, not derived from a reference artifact** (UX-002B / PD-A). The verifier
+  previously reconstructed the expected stylesheet from the v2.5.2 artifact plus one enumerated string
+  patch; that chain could not express an authorized multi-file revision without accumulating opaque,
+  order-dependent patches. It was replaced **one-for-one** by an exact SHA-256 of `concat(css/*.css)`,
+  which is stricter and makes every future revision one reviewable line plus a diff. The current pin is
+  `b1cec5dd8b789f49d3967c5e49786961418f87b6f21975965315981c6f6e507c`; every superseded anchor is
+  preserved in [`audit/ux-002b-2026-08-05/`](audit/ux-002b-2026-08-05/CSS-GOLDEN-MASTER-REVISION.md).
+- **The application shell is mounted once** (UX-002A). `renderShell()` builds the sidebar, nav tree and
+  the `#main` container; ordinary navigation replaces only the view content inside the persistent
+  `#main` and syncs the nav's derived state in place via `syncShellState()`. `render()` survives as a
+  compatibility facade, so all existing callers are unchanged.
 - **Version derived from one constant** so the build, filename, and identity can never drift.
 - **Operational payroll stages are a display mapping** over stored statuses, so UX can evolve without
   schema migrations.
@@ -457,8 +518,11 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
 
 - **Modular source** — the human-edited `index.html` + `css/` + `js/` application.
 - **Portable build** — the single self-contained HTML file under `dist/`, generated from source.
-- **Golden master** — the frozen reference HTML used as the source of truth for CSS/data-safety
-  invariants.
+- **Golden master** — the frozen reference HTML (`tam-intelligence-os-v2.5.2.html`) used as the source
+  of truth for **JS provenance** and data-safety invariants. Since UX-002B the **CSS** golden master is
+  a separate mechanism: a pinned SHA-256 digest of `concat(css/*.css)` asserted by the verifier.
+- **CSS pin** — the pinned digest of the concatenated stylesheet. Changing CSS requires an approved
+  revision, a new dated record under `audit/`, and a one-line pin update.
 - **Load-order manifest** — the single file defining JS script load order, mirrored by `index.html`.
 - **Verifier** — the Node script that enforces build fidelity and data-safety invariants.
 - **Payroll stage** — the operational label (Draft/Review/Approved/Posted/Executed) derived from a
