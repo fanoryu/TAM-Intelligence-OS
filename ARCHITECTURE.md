@@ -4,24 +4,34 @@
 from annotated tag `v2.8.4`, which peels to the published baseline commit
 `bd8819af0287af02711898cf43d22fb70cc3bcd5` on `main`
 **Previous release:** v2.8.3 — Payroll Posting Integrity (still published and unchanged; no longer Latest)
-**Current distributable:** `dist/tam-intelligence-os-v2.8.4.html` — 934,518 bytes, SHA-256
-`3b7204a04ed9bba6e0db0a6fa00fc354ed0ea868d745ecdc63f1cb2251eae10e`, rebuilt from source by SPR-095.
+**Current distributable:** `dist/tam-intelligence-os-v2.8.4.html` — 948,782 bytes, SHA-256
+`7217b44b99e67afe08cc96e08ea16b0ff1b98542a030d793c104a2bf78911ceb`, rebuilt from source by UX-002B.
 The **published** v2.8.4 asset remains the 914,409-byte artifact published at the tag
 (`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`) and was not republished, so the
 repository artifact and the published asset are **no longer byte-identical** — `main` carries
 production changes beyond the published Release. Version, release name and schema are unchanged.
-**Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for the
-CSS/data-safety invariants)
+**Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for **JS provenance**
+and the data-safety invariants). Since UX-002B it is **no longer the CSS comparator**: CSS is asserted
+against a pinned SHA-256 of `concat(css/*.css)` — currently
+`b1cec5dd8b789f49d3967c5e49786961418f87b6f21975965315981c6f6e507c` — with every superseded anchor kept
+in [`audit/ux-002b-2026-08-05/`](audit/ux-002b-2026-08-05/CSS-GOLDEN-MASTER-REVISION.md).
 **Shape today:** a modular source of **66 classic-script JS modules** (in `core/ ui/ finance/ people/
 import/ analytics/ domain/ platform/ transport/ repository/ cli/`) + 5 CSS files, assembled into one
 portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **65 of the 66 are browser-loaded** — the
 load-order manifest and `index.html` agree on all 65 — and `js/cli/cli.js` is the CLI-only ingress,
 deliberately outside the browser load order. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
-**Verification:** `tools/verify-build.js` — **1561** checks; ten Node runtime harnesses — **984**
+**Verification:** `tools/verify-build.js` — **1569** checks; ten Node runtime harnesses — **984**
 checks (integrity warning rules 146, integrity payroll rules 144, Contract Core 129, monthly plan 118,
 payroll posting 106, contract persistence 74, payroll committed state 72, contract renewal 67,
 integrity rules 67, `saveAllData` 61).
+**Presentation architecture (UX-002A / UX-002B):** the application shell is mounted once by
+`renderShell()` and persists; ordinary navigation replaces only the content inside `#main`
+(`renderView()`) and reapplies the nav's derived state in place (`syncShellState()`), with `render()`
+kept as a compatibility facade. CSS resolves from token scales in `css/tokens.css` (6 font sizes, 6
+spacing steps, 4 radii, `--brand` / `--interactive` / `--warn` / six `--chart-*` series tokens); chart
+colours resolve via `themeVar('--token', fallback)` at render time. Eight invariants guard this — three
+shell-persistence, four token/typography, one production-JS colour-literal ban.
 
 > **How to read this document.** The header block above and **§18** (Repository layer) describe the
 > architecture **as it stands today**; start there. Everything below §18 is a dated release record,
@@ -80,7 +90,7 @@ flowchart TD
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>1561 invariant checks"]
+  VERIFY["tools/verify-build.js<br/>1569 invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX

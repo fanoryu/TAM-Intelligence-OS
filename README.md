@@ -38,7 +38,7 @@ Design principles:
   app. The only external network references are the XLSX parser and web fonts (CDN).
 - **Two shippable forms.** A modular development source and a single portable HTML file that behaves
   identically.
-- **Data-safety first.** A 1561-check verifier guards the persisted-data schema, storage keys,
+- **Data-safety first.** A 1569-check verifier guards the persisted-data schema, storage keys,
   migration flags, and build fidelity on every change.
 
 ---
@@ -189,7 +189,7 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(1561 checks)"]
+    VERIFY["tools/verify-build.js<br/>(1569 checks)"]
   end
   DIST["dist/tam-intelligence-os-v2.8.4.html<br/>(portable single file)"]
 
@@ -307,7 +307,7 @@ Build the portable single file from the modular source:
 node tools/build-single-file.js
 ```
 
-Verify (1561 checks):
+Verify (1569 checks):
 
 ```bash
 node tools/verify-build.js
@@ -350,7 +350,7 @@ Releases are tag-driven and guarded end-to-end (see [`docs/RELEASE-PROCESS.md`](
 
 ```mermaid
 flowchart LR
-  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1561)"]
+  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1569)"]
   V --> C["commit source + dist"] --> T["push tag vX.Y.Z"]
   T --> GA["GitHub Actions: Release"]
   GA --> GATE{"tag matches<br/>v-APP_VERSION?"}
