@@ -2346,8 +2346,6 @@ function renderDashboard(main){
       </div>
     </div>`; })()}
 
-    <div style="margin-top:14px;">${hrStatStripHTML(key)}</div>
-
     <div class="grid grid-2" style="margin-top:14px;">
       <div class="card">
         <h3>Planned vs. Actual by Category</h3>
@@ -4658,6 +4656,43 @@ function computeExecutiveAlerts(key, months){
   if(partialCount>=2) alerts.push({type:'info', text:`${partialCount} transactions this month are partially paid and awaiting completion.`});
   return alerts;
 }
+/* ---- Executive Alerts: deterministic order + capped initial list (UX-002B Phase 3) ----
+   Severity uses the repository's existing alert vocabulary — warn (needs action)
+   before info (context) before good (positive outcome). The sort is STABLE on the
+   generators' original emission order, so the same inputs always produce the same
+   sequence. Nothing is ever dropped: alerts beyond the cap are rendered and hidden,
+   the total is always shown, and one click reveals every one of them. */
+const EXEC_ALERT_SEVERITY = {warn:0, info:1, good:2};
+const EXEC_ALERT_VISIBLE = 6;
+function sortExecutiveAlerts(list){
+  const rank = (a)=> (EXEC_ALERT_SEVERITY[a && a.type] !== undefined ? EXEC_ALERT_SEVERITY[a.type] : EXEC_ALERT_SEVERITY.info);
+  return list.map((a,i)=>({a,i}))
+    .sort((x,y)=> rank(x.a)-rank(y.a) || x.i-y.i)
+    .map(x=>x.a);
+}
+function executiveAlertsCardHTML(list){
+  const all = sortExecutiveAlerts(list);
+  const hiddenCount = Math.max(0, all.length - EXEC_ALERT_VISIBLE);
+  const items = all.map((a,i)=>{
+    const hide = i >= EXEC_ALERT_VISIBLE ? ' data-exec-alert-extra style="display:none;"' : '';
+    return `<div class="insight-item ${a.type}"${hide}>${a.text}</div>`;
+  }).join('');
+  return `<div class="card" style="margin-bottom:14px;">
+    <h3>Executive Alerts<span class="tag">${all.length} total</span></h3>
+    <div class="insight-list">${all.length ? items : '<div class="empty">No alerts for this period.</div>'}</div>
+    ${hiddenCount ? `<button class="btn btn-sm" id="execAlertsToggle" style="margin-top:var(--space-2);">Show all ${all.length} alerts</button>` : ''}
+  </div>`;
+}
+function bindExecutiveAlerts(main){
+  const btn = main.querySelector('#execAlertsToggle'); if(!btn) return;
+  btn.addEventListener('click', ()=>{
+    const extras = main.querySelectorAll('[data-exec-alert-extra]');
+    const expanded = btn.dataset.expanded === '1';
+    extras.forEach(el=>{ el.style.display = expanded ? 'none' : ''; });
+    btn.dataset.expanded = expanded ? '' : '1';
+    btn.textContent = expanded ? ('Show all ' + (extras.length + EXEC_ALERT_VISIBLE) + ' alerts') : 'Show fewer alerts';
+  });
+}
 function renderExecutiveDashboard(main){
   const months = getMonths();
   if(!months.length){
@@ -4684,16 +4719,13 @@ function renderExecutiveDashboard(main){
   const prev = idx>0 ? months[idx-1] : null;
   const prevTot = prev ? monthTotals(prev.key) : null;
   const prevInfo = prev ? monthActualInfo(prev.key) : null;
-  const rows = trendRows(months);
-  const withData = rows.filter(r=>r.info.hasData);
-  const avgActual = withData.length ? withData.reduce((s,r)=>s+r.tot.actual,0)/withData.length : null;
-  const highest = withData.length ? withData.reduce((a,b)=>b.tot.actual>a.tot.actual?b:a) : null;
+  // Average Monthly Actual and Highest-Spending Month moved to Monthly Trends, which
+  // renders both as dedicated stat cards over the same computation. Their inputs
+  // (trendRows/withData) had no other consumer here and are gone with them.
   const budgetUsedPct = (info.hasData && tot.planned) ? (tot.actual/tot.planned*100) : null;
-  const remaining = info.hasData ? tot.planned-tot.actual : null;
 
   const recent = months.slice(-6);
   const recentRows = trendRows(recent);
-  const sparkPlanned = sparklineSVG(recentRows.map(r=>r.tot.planned), themeVar('--chart-planned','#96A1BA'));
   const sparkActual = sparklineSVG(recentRows.map(r=>r.info.hasData?r.tot.actual:null), themeVar('--chart-actual','#C9A15C'));
 
   const dPlanned = prev ? {abs: tot.planned-prevTot.planned, pctv: prevTot.planned?(tot.planned-prevTot.planned)/prevTot.planned:null} : {abs:null,pctv:null};
@@ -4713,26 +4745,39 @@ function renderExecutiveDashboard(main){
     ${onboardingChecklistHTML()}
 
     <div class="grid grid-4" style="margin-bottom:14px;">
-      ${kpiCard('Current Month Planned', fmtIDRShort(tot.planned), {deltaAbs:dPlanned.abs, deltaPct:dPlanned.pctv, sparkline:sparkPlanned})}
-      ${kpiCard('Current Month Actual', info.hasData?fmtIDRShort(tot.actual):'<span class="faint">no data</span>', {deltaAbs:dActual.abs, deltaPct:dActual.pctv, incomplete: info.hasData && !info.complete, sparkline:sparkActual})}
-      ${kpiCard('Budget Used', budgetUsedPct!==null?budgetUsedPct.toFixed(0)+'%':'<span class="faint">—</span>', {sub: budgetUsedPct!==null?(budgetUsedPct>100?'over planned budget':'within planned budget'):'no actual data yet'})}
-      ${kpiCard('Remaining Budget', remaining!==null?fmtIDRShort(remaining):'<span class="faint">—</span>', {sub: remaining!==null?(remaining>=0?'under plan':'over plan'):'no actual data yet'})}
-    </div>
-    <div class="grid grid-4" style="margin-bottom:14px;">
+      ${(()=>{
+        // MERGED (Phase 3): Current Month Planned + Current Month Actual + Budget Used.
+        // All three values, both prior-month deltas and the incomplete flag survive —
+        // one card instead of three.
+        const actualTxt = info.hasData ? fmtIDRShort(tot.actual) : '<span class="faint">no data</span>';
+        const dPlannedTxt = dPlanned.abs!==null ? ` <span class="faint">(${dPlanned.abs>0?'▲':'▼'} ${fmtIDR(Math.abs(dPlanned.abs))}${dPlanned.pctv!=null?' '+pct(dPlanned.pctv):''})</span>` : '';
+        const usedTxt = budgetUsedPct!==null
+          ? `<b class="mono">${budgetUsedPct.toFixed(0)}%</b> used · ${budgetUsedPct>100?'over planned budget':'within planned budget'}`
+          : '<span class="faint">no actual data yet</span>';
+        const dActualTxt = dActual.abs!==null
+          ? `<div class="stat-sub" style="color:${dActual.abs>0?'var(--brick)':'var(--green)'};">${dActual.abs>0?'▲':'▼'} ${fmtIDR(Math.abs(dActual.abs))}${dActual.pctv!=null?` (${pct(dActual.pctv)})`:''} vs prior month</div>`
+          : '';
+        return `<div class="card stat-card">
+          <div class="stat-label">Plan vs Actual${info.hasData && !info.complete?'<span class="pill pill-dup" style="margin-left:6px;">incomplete</span>':''}</div>
+          <div class="stat-value">${actualTxt}</div>
+          <div class="stat-sub dim">planned <b class="mono">${fmtIDRShort(tot.planned)}</b>${dPlannedTxt}</div>
+          <div class="stat-sub dim">${usedTxt}</div>
+          ${dActualTxt}
+          <div style="margin-top:8px;">${sparkActual}</div>
+        </div>`;
+      })()}
       ${kpiCard('Budget Variance', info.hasData?fmtIDRShort(tot.variance):'<span class="faint">—</span>', {deltaAbs:dVariance.abs, sub: !info.hasData?'no actual data yet':undefined})}
       ${kpiCard('Net Cash Flow', incomeInfo.status==='none'?'<span class="faint">no income data</span>':(netCashFlowVal!==null?fmtIDRShort(netCashFlowVal):'<span class="faint">—</span>'), {sub:'income − actual expense'})}
-      ${kpiCard('Average Monthly Actual', avgActual!==null?fmtIDRShort(avgActual):'<span class="faint">no data</span>', {sub:`across ${withData.length} month${withData.length!==1?'s':''} with actuals`})}
-      ${kpiCard('Highest-Spending Month', highest?escapeHtml(monthLabel(highest.m)):'<span class="faint">—</span>', {sub: highest?fmtIDR(highest.tot.actual):undefined})}
+      ${payrollCycleTileHTML(key)}
     </div>
 
-    ${hrStatStripHTML(key)}
-    ${overtimeStripHTML(key)}
-    ${payrollStripHTML(key)}
+    <div class="grid grid-4" style="margin-bottom:14px;">
+      ${hrStatStripHTML(key)}
+      ${payrollStripHTML(key)}
+      ${overtimeStripHTML(key)}
+    </div>
 
-    ${(()=>{ const combined = alerts.concat(hrDashboardAlerts(key)).concat(overtimeDashboardAlerts(key)).concat(payrollDashboardAlerts(key)); return `<div class="card" style="margin-bottom:14px;">
-      <h3>Executive Alerts</h3>
-      <div class="insight-list">${combined.length?combined.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join(''):'<div class="empty">No alerts for this period.</div>'}</div>
-    </div>`; })()}
+    ${executiveAlertsCardHTML(alerts.concat(hrDashboardAlerts(key)).concat(overtimeDashboardAlerts(key)).concat(payrollDashboardAlerts(key)))}
 
     <div class="card">
       <h3>Executive Trend — Planned vs. Actual</h3>
@@ -4742,6 +4787,7 @@ function renderExecutiveDashboard(main){
   `;
   document.getElementById('execMonth').addEventListener('change', e=>{ State.selectedMonth=e.target.value; render(); });
   bindOnboarding(main);
+  bindExecutiveAlerts(main);
   const chartMonths = months.slice(-12);
   const cRows = trendRows(chartMonths);
   const el = document.getElementById('execTrendChart');
@@ -7842,14 +7888,22 @@ function hrDashboardAlerts(monthKey){
   if(dup) alerts.push({type:'warn', text:`${dup} potential duplicate payroll transaction(s) detected for ${escapeHtml(keyToMonthObj(monthKey).month)}.`});
   return alerts;
 }
+/* UX-002B Phase 3 — the "Payroll Planned" tile that used to sit here was a duplicate
+   of "Total Payroll Planned" in the payroll strip. The two are merged; the surviving
+   tile lives in payrollStripHTML() and now carries the committed-plan count that this
+   one used to show. The expiring-soon value is rendered ONCE, here, as the Active
+   Contracts sub-value — the composite payroll tile no longer repeats it.
+   contractEffectiveStatus() and hrDashboardStats() are untouched: expiry semantics
+   are UX-003's, not this phase's. */
+/* Returns TILES ONLY — the caller supplies the grid. The three operational strips are
+   rendered inside one shared grid so they pack into the fewest rows at every width.
+   Three separate 3-column grids would collapse to 3 SINGLE columns below 1050px
+   (.grid-3's media rule), which is why they are no longer wrapped individually. */
 function hrStatStripHTML(monthKey){
   const st = hrDashboardStats(monthKey);
-  return `<div class="grid grid-4" style="margin-bottom:14px;">
-    <div class="card stat-card"><div class="stat-label">Active Employees</div><div class="stat-value">${st.activeEmployees}</div><div class="stat-sub dim">eligible for payroll</div></div>
+  return `<div class="card stat-card"><div class="stat-label">Active Employees</div><div class="stat-value">${st.activeEmployees}</div><div class="stat-sub dim">eligible for payroll</div></div>
     <div class="card stat-card"><div class="stat-label">Active Contracts</div><div class="stat-value">${st.activeContracts}</div><div class="stat-sub ${st.expiringSoon?'neg':'dim'}">${st.expiringSoon} expiring soon</div></div>
-    <div class="card stat-card"><div class="stat-label">Payroll Planned (${escapeHtml(keyToMonthObj(monthKey).month)})</div><div class="stat-value">${fmtIDRShort(st.payrollPlanned)}</div><div class="stat-sub dim">${st.payrollCount} committed plan${st.payrollCount===1?'':'s'}</div></div>
-    <div class="card stat-card"><div class="stat-label">Monthly Plan</div><div class="stat-value" style="font-size:15px;">${st.planStatus==='Not started'?'<span class="faint">Not started</span>':hrStatusBadge(st.planStatus,PLAN_STATUS_META)}</div><div class="stat-sub dim">Payroll: ${escapeHtml(st.payrollGen)}</div></div>
-  </div>`;
+    <div class="card stat-card"><div class="stat-label">Monthly Plan</div><div class="stat-value" style="font-size:15px;">${st.planStatus==='Not started'?'<span class="faint">Not started</span>':hrStatusBadge(st.planStatus,PLAN_STATUS_META)}</div><div class="stat-sub dim">Payroll: ${escapeHtml(st.payrollGen)}</div></div>`;
 }
 
 /* ---------- HR reports ---------- */
@@ -9149,14 +9203,16 @@ function overtimeMonthStats(monthKey){
   const approvedNotCommitted = recs.filter(o=>o.status==='Approved').length;
   return {hours, cost, emps, pending, approvedNotCommitted, count:recs.length};
 }
+/* UX-002B Phase 3 — Overtime Hours and Overtime Cost are merged. Hours remains the
+   headline; cost stays visible as a secondary value on the same card, alongside the
+   employee count it always carried. Pending Review and Approved-Not-Committed are
+   preserved as their own tiles — they are the two actionable numbers here.
+   overtimeMonthStats() is untouched: no overtime calculation changes. */
 function overtimeStripHTML(monthKey){
   const s = overtimeMonthStats(monthKey);
-  return `<div class="grid grid-4" style="margin-bottom:14px;">
-    <div class="card stat-card"><div class="stat-label">Overtime Hours (${escapeHtml(keyToMonthObj(monthKey).month)})</div><div class="stat-value">${s.hours.toLocaleString('id-ID',{maximumFractionDigits:2})}</div><div class="stat-sub dim">${s.emps} employee(s)</div></div>
-    <div class="card stat-card"><div class="stat-label">Overtime Cost</div><div class="stat-value">${fmtIDRShort(s.cost)}</div><div class="stat-sub dim">this month</div></div>
+  return `<div class="card stat-card"><div class="stat-label">Overtime (${escapeHtml(keyToMonthObj(monthKey).month)})</div><div class="stat-value">${s.hours.toLocaleString('id-ID',{maximumFractionDigits:2})} <span class="dim" style="font-size:var(--fs-2);">hrs</span></div><div class="stat-sub dim">cost <b class="mono">${fmtIDRShort(s.cost)}</b> · ${s.emps} employee(s)</div></div>
     <div class="card stat-card"><div class="stat-label">Pending Review</div><div class="stat-value" style="color:${s.pending?'var(--accent)':'inherit'}">${s.pending}</div><div class="stat-sub dim">draft / submitted / reviewed</div></div>
-    <div class="card stat-card"><div class="stat-label">Approved, Not Committed</div><div class="stat-value" style="color:${s.approvedNotCommitted?'var(--brick)':'inherit'}">${s.approvedNotCommitted}</div><div class="stat-sub dim">not yet in payroll</div></div>
-  </div>`;
+    <div class="card stat-card"><div class="stat-label">Approved, Not Committed</div><div class="stat-value" style="color:${s.approvedNotCommitted?'var(--brick)':'inherit'}">${s.approvedNotCommitted}</div><div class="stat-sub dim">not yet in payroll</div></div>`;
 }
 function overtimeDashboardAlerts(monthKey){
   const alerts = [];
@@ -9176,17 +9232,29 @@ function overtimeDashboardAlerts(monthKey){
 }
 
 /* ---------- payroll operations dashboard (Part 16) ---------- */
-function payrollStripHTML(monthKey){
+/* UX-002B Phase 3 — the Payroll Cycle tile is promoted into the Executive Dashboard's
+   primary row (payrollCycleTileHTML below), so the strip carries the three remaining
+   payroll figures. "Total Payroll Planned" is the survivor of its merge with the HR
+   strip's duplicate "Payroll Planned" and now shows the committed-plan count too.
+   The composite "Committed / Contracts Soon" is SPLIT: Committed keeps its own tile,
+   and the expiring-soon value is rendered once, on Active Contracts in the HR strip.
+   No payroll calculation changes — payrollMonthTotals()/payrollCycleStatus() are as
+   they were, and contract-expiry semantics are untouched. */
+function payrollCycleTileHTML(monthKey){
   const tot = payrollMonthTotals(monthKey);
   const cs = payrollCycleStatus(monthKey);
   const excluded = State.employees.filter(e=>payrollExclusionReason(e, monthKey)).length;
-  const soon = State.contracts.filter(c=>contractEffectiveStatus(c)==='Expiring Soon').length;
-  return `<div class="grid grid-4" style="margin-bottom:14px;">
-    <div class="card stat-card"><div class="stat-label">Payroll Cycle (${escapeHtml(keyToMonthObj(monthKey).month)})</div><div class="stat-value" style="font-size:15px;">${cycleStatusPill(cs)}</div><div class="stat-sub dim">${tot.count} included · ${excluded} excluded</div></div>
-    <div class="card stat-card"><div class="stat-label">Total Payroll Planned</div><div class="stat-value">${fmtIDRShort(tot.planned)}</div><div class="stat-sub dim">overtime ${fmtIDRShort(tot.overtime)}</div></div>
-    <div class="card stat-card"><div class="stat-label">Payroll Paid / Remaining</div><div class="stat-value">${fmtIDRShort(tot.paid)}</div><div class="stat-sub dim">remaining ${fmtIDRShort(tot.remaining)}</div></div>
-    <div class="card stat-card"><div class="stat-label">Committed / Contracts Soon</div><div class="stat-value">${tot.committed}</div><div class="stat-sub ${soon?'neg':'dim'}">${soon} contract(s) expiring soon</div></div>
+  return `<div class="card stat-card">
+    <div class="stat-label">Payroll Cycle (${escapeHtml(keyToMonthObj(monthKey).month)})</div>
+    <div class="stat-value" style="font-size:15px;">${cycleStatusPill(cs)}</div>
+    <div class="stat-sub dim">${tot.count} included · ${excluded} excluded</div>
   </div>`;
+}
+function payrollStripHTML(monthKey){
+  const tot = payrollMonthTotals(monthKey);
+  return `<div class="card stat-card"><div class="stat-label">Total Payroll Planned</div><div class="stat-value">${fmtIDRShort(tot.planned)}</div><div class="stat-sub dim">overtime ${fmtIDRShort(tot.overtime)}</div></div>
+    <div class="card stat-card"><div class="stat-label">Payroll Paid / Remaining</div><div class="stat-value">${fmtIDRShort(tot.paid)}</div><div class="stat-sub dim">remaining ${fmtIDRShort(tot.remaining)}</div></div>
+    <div class="card stat-card"><div class="stat-label">Committed</div><div class="stat-value">${tot.committed}</div><div class="stat-sub dim">payroll plans committed</div></div>`;
 }
 function payrollDashboardAlerts(monthKey){
   const alerts=[]; const mo=keyToMonthObj(monthKey); const cs=payrollCycleStatus(monthKey);

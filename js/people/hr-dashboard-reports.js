@@ -33,14 +33,22 @@ function hrDashboardAlerts(monthKey){
   if(dup) alerts.push({type:'warn', text:`${dup} potential duplicate payroll transaction(s) detected for ${escapeHtml(keyToMonthObj(monthKey).month)}.`});
   return alerts;
 }
+/* UX-002B Phase 3 — the "Payroll Planned" tile that used to sit here was a duplicate
+   of "Total Payroll Planned" in the payroll strip. The two are merged; the surviving
+   tile lives in payrollStripHTML() and now carries the committed-plan count that this
+   one used to show. The expiring-soon value is rendered ONCE, here, as the Active
+   Contracts sub-value — the composite payroll tile no longer repeats it.
+   contractEffectiveStatus() and hrDashboardStats() are untouched: expiry semantics
+   are UX-003's, not this phase's. */
+/* Returns TILES ONLY — the caller supplies the grid. The three operational strips are
+   rendered inside one shared grid so they pack into the fewest rows at every width.
+   Three separate 3-column grids would collapse to 3 SINGLE columns below 1050px
+   (.grid-3's media rule), which is why they are no longer wrapped individually. */
 function hrStatStripHTML(monthKey){
   const st = hrDashboardStats(monthKey);
-  return `<div class="grid grid-4" style="margin-bottom:14px;">
-    <div class="card stat-card"><div class="stat-label">Active Employees</div><div class="stat-value">${st.activeEmployees}</div><div class="stat-sub dim">eligible for payroll</div></div>
+  return `<div class="card stat-card"><div class="stat-label">Active Employees</div><div class="stat-value">${st.activeEmployees}</div><div class="stat-sub dim">eligible for payroll</div></div>
     <div class="card stat-card"><div class="stat-label">Active Contracts</div><div class="stat-value">${st.activeContracts}</div><div class="stat-sub ${st.expiringSoon?'neg':'dim'}">${st.expiringSoon} expiring soon</div></div>
-    <div class="card stat-card"><div class="stat-label">Payroll Planned (${escapeHtml(keyToMonthObj(monthKey).month)})</div><div class="stat-value">${fmtIDRShort(st.payrollPlanned)}</div><div class="stat-sub dim">${st.payrollCount} committed plan${st.payrollCount===1?'':'s'}</div></div>
-    <div class="card stat-card"><div class="stat-label">Monthly Plan</div><div class="stat-value" style="font-size:15px;">${st.planStatus==='Not started'?'<span class="faint">Not started</span>':hrStatusBadge(st.planStatus,PLAN_STATUS_META)}</div><div class="stat-sub dim">Payroll: ${escapeHtml(st.payrollGen)}</div></div>
-  </div>`;
+    <div class="card stat-card"><div class="stat-label">Monthly Plan</div><div class="stat-value" style="font-size:15px;">${st.planStatus==='Not started'?'<span class="faint">Not started</span>':hrStatusBadge(st.planStatus,PLAN_STATUS_META)}</div><div class="stat-sub dim">Payroll: ${escapeHtml(st.payrollGen)}</div></div>`;
 }
 
 /* ---------- HR reports ---------- */

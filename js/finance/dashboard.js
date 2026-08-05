@@ -57,8 +57,6 @@ function renderDashboard(main){
       </div>
     </div>`; })()}
 
-    <div style="margin-top:14px;">${hrStatStripHTML(key)}</div>
-
     <div class="grid grid-2" style="margin-top:14px;">
       <div class="card">
         <h3>Planned vs. Actual by Category</h3>

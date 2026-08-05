@@ -68,6 +68,43 @@ function computeExecutiveAlerts(key, months){
   if(partialCount>=2) alerts.push({type:'info', text:`${partialCount} transactions this month are partially paid and awaiting completion.`});
   return alerts;
 }
+/* ---- Executive Alerts: deterministic order + capped initial list (UX-002B Phase 3) ----
+   Severity uses the repository's existing alert vocabulary — warn (needs action)
+   before info (context) before good (positive outcome). The sort is STABLE on the
+   generators' original emission order, so the same inputs always produce the same
+   sequence. Nothing is ever dropped: alerts beyond the cap are rendered and hidden,
+   the total is always shown, and one click reveals every one of them. */
+const EXEC_ALERT_SEVERITY = {warn:0, info:1, good:2};
+const EXEC_ALERT_VISIBLE = 6;
+function sortExecutiveAlerts(list){
+  const rank = (a)=> (EXEC_ALERT_SEVERITY[a && a.type] !== undefined ? EXEC_ALERT_SEVERITY[a.type] : EXEC_ALERT_SEVERITY.info);
+  return list.map((a,i)=>({a,i}))
+    .sort((x,y)=> rank(x.a)-rank(y.a) || x.i-y.i)
+    .map(x=>x.a);
+}
+function executiveAlertsCardHTML(list){
+  const all = sortExecutiveAlerts(list);
+  const hiddenCount = Math.max(0, all.length - EXEC_ALERT_VISIBLE);
+  const items = all.map((a,i)=>{
+    const hide = i >= EXEC_ALERT_VISIBLE ? ' data-exec-alert-extra style="display:none;"' : '';
+    return `<div class="insight-item ${a.type}"${hide}>${a.text}</div>`;
+  }).join('');
+  return `<div class="card" style="margin-bottom:14px;">
+    <h3>Executive Alerts<span class="tag">${all.length} total</span></h3>
+    <div class="insight-list">${all.length ? items : '<div class="empty">No alerts for this period.</div>'}</div>
+    ${hiddenCount ? `<button class="btn btn-sm" id="execAlertsToggle" style="margin-top:var(--space-2);">Show all ${all.length} alerts</button>` : ''}
+  </div>`;
+}
+function bindExecutiveAlerts(main){
+  const btn = main.querySelector('#execAlertsToggle'); if(!btn) return;
+  btn.addEventListener('click', ()=>{
+    const extras = main.querySelectorAll('[data-exec-alert-extra]');
+    const expanded = btn.dataset.expanded === '1';
+    extras.forEach(el=>{ el.style.display = expanded ? 'none' : ''; });
+    btn.dataset.expanded = expanded ? '' : '1';
+    btn.textContent = expanded ? ('Show all ' + (extras.length + EXEC_ALERT_VISIBLE) + ' alerts') : 'Show fewer alerts';
+  });
+}
 function renderExecutiveDashboard(main){
   const months = getMonths();
   if(!months.length){
@@ -94,16 +131,13 @@ function renderExecutiveDashboard(main){
   const prev = idx>0 ? months[idx-1] : null;
   const prevTot = prev ? monthTotals(prev.key) : null;
   const prevInfo = prev ? monthActualInfo(prev.key) : null;
-  const rows = trendRows(months);
-  const withData = rows.filter(r=>r.info.hasData);
-  const avgActual = withData.length ? withData.reduce((s,r)=>s+r.tot.actual,0)/withData.length : null;
-  const highest = withData.length ? withData.reduce((a,b)=>b.tot.actual>a.tot.actual?b:a) : null;
+  // Average Monthly Actual and Highest-Spending Month moved to Monthly Trends, which
+  // renders both as dedicated stat cards over the same computation. Their inputs
+  // (trendRows/withData) had no other consumer here and are gone with them.
   const budgetUsedPct = (info.hasData && tot.planned) ? (tot.actual/tot.planned*100) : null;
-  const remaining = info.hasData ? tot.planned-tot.actual : null;
 
   const recent = months.slice(-6);
   const recentRows = trendRows(recent);
-  const sparkPlanned = sparklineSVG(recentRows.map(r=>r.tot.planned), themeVar('--chart-planned','#96A1BA'));
   const sparkActual = sparklineSVG(recentRows.map(r=>r.info.hasData?r.tot.actual:null), themeVar('--chart-actual','#C9A15C'));
 
   const dPlanned = prev ? {abs: tot.planned-prevTot.planned, pctv: prevTot.planned?(tot.planned-prevTot.planned)/prevTot.planned:null} : {abs:null,pctv:null};
@@ -123,26 +157,39 @@ function renderExecutiveDashboard(main){
     ${onboardingChecklistHTML()}
 
     <div class="grid grid-4" style="margin-bottom:14px;">
-      ${kpiCard('Current Month Planned', fmtIDRShort(tot.planned), {deltaAbs:dPlanned.abs, deltaPct:dPlanned.pctv, sparkline:sparkPlanned})}
-      ${kpiCard('Current Month Actual', info.hasData?fmtIDRShort(tot.actual):'<span class="faint">no data</span>', {deltaAbs:dActual.abs, deltaPct:dActual.pctv, incomplete: info.hasData && !info.complete, sparkline:sparkActual})}
-      ${kpiCard('Budget Used', budgetUsedPct!==null?budgetUsedPct.toFixed(0)+'%':'<span class="faint">—</span>', {sub: budgetUsedPct!==null?(budgetUsedPct>100?'over planned budget':'within planned budget'):'no actual data yet'})}
-      ${kpiCard('Remaining Budget', remaining!==null?fmtIDRShort(remaining):'<span class="faint">—</span>', {sub: remaining!==null?(remaining>=0?'under plan':'over plan'):'no actual data yet'})}
-    </div>
-    <div class="grid grid-4" style="margin-bottom:14px;">
+      ${(()=>{
+        // MERGED (Phase 3): Current Month Planned + Current Month Actual + Budget Used.
+        // All three values, both prior-month deltas and the incomplete flag survive —
+        // one card instead of three.
+        const actualTxt = info.hasData ? fmtIDRShort(tot.actual) : '<span class="faint">no data</span>';
+        const dPlannedTxt = dPlanned.abs!==null ? ` <span class="faint">(${dPlanned.abs>0?'▲':'▼'} ${fmtIDR(Math.abs(dPlanned.abs))}${dPlanned.pctv!=null?' '+pct(dPlanned.pctv):''})</span>` : '';
+        const usedTxt = budgetUsedPct!==null
+          ? `<b class="mono">${budgetUsedPct.toFixed(0)}%</b> used · ${budgetUsedPct>100?'over planned budget':'within planned budget'}`
+          : '<span class="faint">no actual data yet</span>';
+        const dActualTxt = dActual.abs!==null
+          ? `<div class="stat-sub" style="color:${dActual.abs>0?'var(--brick)':'var(--green)'};">${dActual.abs>0?'▲':'▼'} ${fmtIDR(Math.abs(dActual.abs))}${dActual.pctv!=null?` (${pct(dActual.pctv)})`:''} vs prior month</div>`
+          : '';
+        return `<div class="card stat-card">
+          <div class="stat-label">Plan vs Actual${info.hasData && !info.complete?'<span class="pill pill-dup" style="margin-left:6px;">incomplete</span>':''}</div>
+          <div class="stat-value">${actualTxt}</div>
+          <div class="stat-sub dim">planned <b class="mono">${fmtIDRShort(tot.planned)}</b>${dPlannedTxt}</div>
+          <div class="stat-sub dim">${usedTxt}</div>
+          ${dActualTxt}
+          <div style="margin-top:8px;">${sparkActual}</div>
+        </div>`;
+      })()}
       ${kpiCard('Budget Variance', info.hasData?fmtIDRShort(tot.variance):'<span class="faint">—</span>', {deltaAbs:dVariance.abs, sub: !info.hasData?'no actual data yet':undefined})}
       ${kpiCard('Net Cash Flow', incomeInfo.status==='none'?'<span class="faint">no income data</span>':(netCashFlowVal!==null?fmtIDRShort(netCashFlowVal):'<span class="faint">—</span>'), {sub:'income − actual expense'})}
-      ${kpiCard('Average Monthly Actual', avgActual!==null?fmtIDRShort(avgActual):'<span class="faint">no data</span>', {sub:`across ${withData.length} month${withData.length!==1?'s':''} with actuals`})}
-      ${kpiCard('Highest-Spending Month', highest?escapeHtml(monthLabel(highest.m)):'<span class="faint">—</span>', {sub: highest?fmtIDR(highest.tot.actual):undefined})}
+      ${payrollCycleTileHTML(key)}
     </div>
 
-    ${hrStatStripHTML(key)}
-    ${overtimeStripHTML(key)}
-    ${payrollStripHTML(key)}
+    <div class="grid grid-4" style="margin-bottom:14px;">
+      ${hrStatStripHTML(key)}
+      ${payrollStripHTML(key)}
+      ${overtimeStripHTML(key)}
+    </div>
 
-    ${(()=>{ const combined = alerts.concat(hrDashboardAlerts(key)).concat(overtimeDashboardAlerts(key)).concat(payrollDashboardAlerts(key)); return `<div class="card" style="margin-bottom:14px;">
-      <h3>Executive Alerts</h3>
-      <div class="insight-list">${combined.length?combined.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join(''):'<div class="empty">No alerts for this period.</div>'}</div>
-    </div>`; })()}
+    ${executiveAlertsCardHTML(alerts.concat(hrDashboardAlerts(key)).concat(overtimeDashboardAlerts(key)).concat(payrollDashboardAlerts(key)))}
 
     <div class="card">
       <h3>Executive Trend — Planned vs. Actual</h3>
@@ -152,6 +199,7 @@ function renderExecutiveDashboard(main){
   `;
   document.getElementById('execMonth').addEventListener('change', e=>{ State.selectedMonth=e.target.value; render(); });
   bindOnboarding(main);
+  bindExecutiveAlerts(main);
   const chartMonths = months.slice(-12);
   const cRows = trendRows(chartMonths);
   const el = document.getElementById('execTrendChart');
