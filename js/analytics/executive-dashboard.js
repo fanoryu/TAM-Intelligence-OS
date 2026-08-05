@@ -103,8 +103,8 @@ function renderExecutiveDashboard(main){
 
   const recent = months.slice(-6);
   const recentRows = trendRows(recent);
-  const sparkPlanned = sparklineSVG(recentRows.map(r=>r.tot.planned), '#96A1BA');
-  const sparkActual = sparklineSVG(recentRows.map(r=>r.info.hasData?r.tot.actual:null), '#C9A15C');
+  const sparkPlanned = sparklineSVG(recentRows.map(r=>r.tot.planned), themeVar('--chart-planned','#96A1BA'));
+  const sparkActual = sparklineSVG(recentRows.map(r=>r.info.hasData?r.tot.actual:null), themeVar('--chart-actual','#C9A15C'));
 
   const dPlanned = prev ? {abs: tot.planned-prevTot.planned, pctv: prevTot.planned?(tot.planned-prevTot.planned)/prevTot.planned:null} : {abs:null,pctv:null};
   const dActual = (prev && info.hasData && prevInfo.hasData) ? {abs: tot.actual-prevTot.actual, pctv: prevTot.actual?(tot.actual-prevTot.actual)/prevTot.actual:null} : {abs:null,pctv:null};
@@ -159,8 +159,8 @@ function renderExecutiveDashboard(main){
     drawLineChart(el, {
       labels: chartMonths.map(mm=>mm.month.slice(0,3)+" '"+String(mm.year).slice(2)),
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data: cRows.map(r=>r.tot.planned)},
-        {key:'actual', label:'Actual', color:'#C9A15C', fill:true, data: cRows.map(r=>r.info.hasData?r.tot.actual:null),
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data: cRows.map(r=>r.tot.planned)},
+        {key:'actual', label:'Actual', color:themeVar('--chart-actual','#C9A15C'), fill:true, data: cRows.map(r=>r.info.hasData?r.tot.actual:null),
           pointColor: cRows.map(r=>actualPointColor(r)), pointHollow: cRows.map(r=>r.info.hasData && !r.info.complete)},
       ],
       formatY: fmtIDRShort, height:320,

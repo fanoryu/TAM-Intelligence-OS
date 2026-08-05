@@ -1035,7 +1035,7 @@ function drawLineChart(container, opts){
 
     // hover crosshair + click-to-navigate over the full plot area
     const tip = chartTooltip(container.querySelector('div'));
-    const guide = svgLine(svg, 0,padT, 0,padT+plotH, '#5E6A87', 1, {'stroke-dasharray':'3,3', opacity:'0'});
+    const guide = svgLine(svg, 0,padT, 0,padT+plotH, themeVar('--chart-muted','#5E6A87'), 1, {'stroke-dasharray':'3,3', opacity:'0'});
     const hitRect = document.createElementNS(SVGNS,'rect');
     hitRect.setAttribute('x',padL); hitRect.setAttribute('y',padT); hitRect.setAttribute('width',plotW); hitRect.setAttribute('height',plotH);
     hitRect.setAttribute('fill','transparent');
@@ -1141,7 +1141,7 @@ function drawBarChart(container, opts){
           const barH = Math.max(Math.abs(zeroY-yScale(v)),1);
           const barRect = document.createElementNS(SVGNS,'rect');
           barRect.setAttribute('x',bx); barRect.setAttribute('y',barY); barRect.setAttribute('width',Math.max(barW-4,4)); barRect.setAttribute('height',barH); barRect.setAttribute('rx','2');
-          const fill = signed ? (v>=0?'#4FAE7C':'#C1543F') : ((s.colors && s.colors[i]) || s.color);
+          const fill = signed ? (v>=0?themeVar('--chart-positive','#4FAE7C'):themeVar('--chart-negative','#C1543F')) : ((s.colors && s.colors[i]) || s.color);
           barRect.setAttribute('fill', fill);
           g2.appendChild(barRect);
         }
@@ -2418,8 +2418,8 @@ function renderDashboard(main){
     drawBarChart(catChartEl, {
       labels: cats.map(c=>c.category),
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data:cats.map(c=>c.planned)},
-        {key:'actual', label:'Actual', color:'#C9A15C', data:cats.map(c=>c.hasActual?c.actual:null), colors:cats.map(c=>CATEGORY_COLOR[c.category]||'#C9A15C')},
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data:cats.map(c=>c.planned)},
+        {key:'actual', label:'Actual', color:themeVar('--chart-actual','#C9A15C'), data:cats.map(c=>c.hasActual?c.actual:null), colors:cats.map(c=>CATEGORY_COLOR[c.category]||themeVar('--chart-actual','#C9A15C'))},
       ],
       formatY: fmtIDRShort, height:260,
       emptyMessage:'No category data for this month yet.',
@@ -2432,7 +2432,7 @@ function renderDashboard(main){
           <div>Planned: <b class="mono">${fmtIDR(c.planned)}</b></div>
           <div>Actual: <b class="mono">${c.hasActual?fmtIDR(c.actual):'no data'}</b></div>
           ${c.hasActual?`<div>Variance: <b class="mono">${fmtIDR(v)}</b> (${pct(c.planned?v/c.planned:0)})</div>`:''}
-          <div style="margin-top:3px;color:${!c.hasActual?'#96A1BA':v>=0?'#4FAE7C':'#C1543F'};">${status}</div>`;
+          <div style="margin-top:3px;color:${!c.hasActual?themeVar('--chart-planned','#96A1BA'):v>=0?themeVar('--chart-positive','#4FAE7C'):themeVar('--chart-negative','#C1543F')};">${status}</div>`;
       },
     });
   }
@@ -4236,8 +4236,8 @@ function renderCompare(main){
     drawLineChart(trendChartEl, {
       labels: trendMonths.map(m=>m.month.slice(0,3)+" '"+String(m.year).slice(2)),
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data: tRows.map(r=>r.tot.planned)},
-        {key:'actual', label:'Actual', color:'#C9A15C', fill:true, data: tRows.map(r=>r.info.hasData?r.tot.actual:null),
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data: tRows.map(r=>r.tot.planned)},
+        {key:'actual', label:'Actual', color:themeVar('--chart-actual','#C9A15C'), fill:true, data: tRows.map(r=>r.info.hasData?r.tot.actual:null),
           pointColor: tRows.map(r=>actualPointColor(r)), pointHollow: tRows.map(r=>r.info.hasData && !r.info.complete)},
       ],
       formatY: fmtIDRShort, height:320,
@@ -4256,11 +4256,11 @@ function applyQuickRange(months, range){
   return months;
 }
 function actualPointColor(row){
-  if(!row.info.hasData) return '#5E6A87';
-  if(!row.info.complete) return '#5E6A87';
-  if(row.tot.actual>row.tot.planned) return '#C1543F';
-  if(row.tot.actual<row.tot.planned) return '#4FAE7C';
-  return '#C9A15C';
+  if(!row.info.hasData) return themeVar('--chart-muted','#5E6A87');
+  if(!row.info.complete) return themeVar('--chart-muted','#5E6A87');
+  if(row.tot.actual>row.tot.planned) return themeVar('--chart-negative','#C1543F');
+  if(row.tot.actual<row.tot.planned) return themeVar('--chart-positive','#4FAE7C');
+  return themeVar('--chart-actual','#C9A15C');
 }
 function budgetStatusLabel(row){
   if(!row.info.hasData) return 'No Actual Recorded';
@@ -4271,12 +4271,12 @@ function budgetStatusLabel(row){
 }
 function trendTooltip(row){
   const status = budgetStatusLabel(row);
-  const statusColor = status==='Over Budget'?'#C1543F':status==='Under Budget'?'#4FAE7C':status==='On Budget'?'#C9A15C':'#96A1BA';
+  const statusColor = status==='Over Budget'?themeVar('--chart-negative','#C1543F'):status==='Under Budget'?themeVar('--chart-positive','#4FAE7C'):status==='On Budget'?themeVar('--chart-actual','#C9A15C'):themeVar('--chart-planned','#96A1BA');
   const v = row.info.hasData ? row.tot.planned-row.tot.actual : null;
   const vp = (v!==null && row.tot.planned) ? v/row.tot.planned : null;
   let mom = '';
   if(row.growthAbs!==null && row.growthAbs!==undefined){
-    mom = `<div>MoM Change: <b class="mono" style="color:${row.growthAbs>0?'#C1543F':'#4FAE7C'}">${row.growthAbs>0?'+':''}${fmtIDR(row.growthAbs)}</b> (${pct(row.growthPct)})</div>`;
+    mom = `<div>MoM Change: <b class="mono" style="color:${row.growthAbs>0?themeVar('--chart-negative','#C1543F'):themeVar('--chart-positive','#4FAE7C')}">${row.growthAbs>0?'+':''}${fmtIDR(row.growthAbs)}</b> (${pct(row.growthPct)})</div>`;
   }
   return `<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(monthLabel(row.m))}</div>
     <div>Planned: <b class="mono">${fmtIDR(row.tot.planned)}</b></div>
@@ -4491,8 +4491,8 @@ function renderTrends(main){
     drawLineChart(paEl, {
       labels,
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data: rows.map(r=>r.tot.planned)},
-        {key:'actual', label:'Actual', color:'#C9A15C', fill:true, data: rows.map(r=>r.info.hasData?r.tot.actual:null),
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data: rows.map(r=>r.tot.planned)},
+        {key:'actual', label:'Actual', color:themeVar('--chart-actual','#C9A15C'), fill:true, data: rows.map(r=>r.info.hasData?r.tot.actual:null),
           pointColor: rows.map(r=>actualPointColor(r)), pointHollow: rows.map(r=>r.info.hasData && !r.info.complete)},
       ],
       formatY: fmtIDRShort, height:320,
@@ -4506,7 +4506,7 @@ function renderTrends(main){
   if(vcEl){
     drawBarChart(vcEl, {
       labels,
-      series: [{key:'variance', label:'Variance', color:'#4FAE7C', data: rows.map(r=>r.info.hasData?r.tot.variance:null)}],
+      series: [{key:'variance', label:'Variance', color:themeVar('--chart-positive','#4FAE7C'), data: rows.map(r=>r.info.hasData?r.tot.variance:null)}],
       formatY: fmtIDRShort, height:260, signed:true, legend:false,
       emptyMessage:'No data in the selected date range.',
       ariaLabel:'Budget variance by month',
@@ -4525,7 +4525,7 @@ function renderTrends(main){
   if(gcEl){
     drawBarChart(gcEl, {
       labels,
-      series: [{key:'growth', label:'MoM Actual Change', color:'#6FA3D8', data: rows.map(r=>r.growthAbs)}],
+      series: [{key:'growth', label:'MoM Actual Change', color:themeVar('--chart-neutral','#6FA3D8'), data: rows.map(r=>r.growthAbs)}],
       formatY: fmtIDRShort, height:200, signed:true, legend:false,
       emptyMessage:'Not enough consecutive months with actuals yet.',
       ariaLabel:'Month over month actual spending change',
@@ -4548,8 +4548,8 @@ function renderTrends(main){
     drawLineChart(ccEl, {
       labels,
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data: series.map(s=>s.planned)},
-        {key:'actual', label:'Actual', color: CATEGORY_COLOR[f.category]||'#C9A15C', fill:true, data: series.map(s=>s.hasActual?s.actual:null)},
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data: series.map(s=>s.planned)},
+        {key:'actual', label:'Actual', color: CATEGORY_COLOR[f.category]||themeVar('--chart-actual','#C9A15C'), fill:true, data: series.map(s=>s.hasActual?s.actual:null)},
       ],
       formatY: fmtIDRShort, height:260,
       emptyMessage:`No ${f.category} data in the selected date range.`,
@@ -4693,8 +4693,8 @@ function renderExecutiveDashboard(main){
 
   const recent = months.slice(-6);
   const recentRows = trendRows(recent);
-  const sparkPlanned = sparklineSVG(recentRows.map(r=>r.tot.planned), '#96A1BA');
-  const sparkActual = sparklineSVG(recentRows.map(r=>r.info.hasData?r.tot.actual:null), '#C9A15C');
+  const sparkPlanned = sparklineSVG(recentRows.map(r=>r.tot.planned), themeVar('--chart-planned','#96A1BA'));
+  const sparkActual = sparklineSVG(recentRows.map(r=>r.info.hasData?r.tot.actual:null), themeVar('--chart-actual','#C9A15C'));
 
   const dPlanned = prev ? {abs: tot.planned-prevTot.planned, pctv: prevTot.planned?(tot.planned-prevTot.planned)/prevTot.planned:null} : {abs:null,pctv:null};
   const dActual = (prev && info.hasData && prevInfo.hasData) ? {abs: tot.actual-prevTot.actual, pctv: prevTot.actual?(tot.actual-prevTot.actual)/prevTot.actual:null} : {abs:null,pctv:null};
@@ -4749,8 +4749,8 @@ function renderExecutiveDashboard(main){
     drawLineChart(el, {
       labels: chartMonths.map(mm=>mm.month.slice(0,3)+" '"+String(mm.year).slice(2)),
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data: cRows.map(r=>r.tot.planned)},
-        {key:'actual', label:'Actual', color:'#C9A15C', fill:true, data: cRows.map(r=>r.info.hasData?r.tot.actual:null),
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data: cRows.map(r=>r.tot.planned)},
+        {key:'actual', label:'Actual', color:themeVar('--chart-actual','#C9A15C'), fill:true, data: cRows.map(r=>r.info.hasData?r.tot.actual:null),
           pointColor: cRows.map(r=>actualPointColor(r)), pointHollow: cRows.map(r=>r.info.hasData && !r.info.complete)},
       ],
       formatY: fmtIDRShort, height:320,
@@ -4813,7 +4813,7 @@ function renderCashFlow(main){
   if(el){
     drawBarChart(el, {
       labels: months.map(m=>m.month.slice(0,3)+" '"+String(m.year).slice(2)),
-      series: [{key:'net', label:'Net Cash Flow', color:'#4FAE7C', data: rows.map(r=>r.net)}],
+      series: [{key:'net', label:'Net Cash Flow', color:themeVar('--chart-positive','#4FAE7C'), data: rows.map(r=>r.net)}],
       formatY: fmtIDRShort, height:260, signed:true, legend:false,
       emptyMessage:'Not enough income and expense data recorded yet.',
       ariaLabel:'Net cash flow by month',
@@ -4916,8 +4916,8 @@ function renderBudgetCenter(main){
     drawLineChart(bmEl, {
       labels: yearMonths.map(m=>m.month.slice(0,3)),
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data: yRows.map(r=>r.tot.planned)},
-        {key:'actual', label:'Actual', color:'#C9A15C', fill:true, data: yRows.map(r=>r.info.hasData?r.tot.actual:null),
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data: yRows.map(r=>r.tot.planned)},
+        {key:'actual', label:'Actual', color:themeVar('--chart-actual','#C9A15C'), fill:true, data: yRows.map(r=>r.info.hasData?r.tot.actual:null),
           pointColor: yRows.map(r=>actualPointColor(r)), pointHollow: yRows.map(r=>r.info.hasData && !r.info.complete)},
       ],
       formatY: fmtIDRShort, height:260,

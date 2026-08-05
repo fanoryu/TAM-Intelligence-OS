@@ -85,8 +85,8 @@ function renderBudgetCenter(main){
     drawLineChart(bmEl, {
       labels: yearMonths.map(m=>m.month.slice(0,3)),
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data: yRows.map(r=>r.tot.planned)},
-        {key:'actual', label:'Actual', color:'#C9A15C', fill:true, data: yRows.map(r=>r.info.hasData?r.tot.actual:null),
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data: yRows.map(r=>r.tot.planned)},
+        {key:'actual', label:'Actual', color:themeVar('--chart-actual','#C9A15C'), fill:true, data: yRows.map(r=>r.info.hasData?r.tot.actual:null),
           pointColor: yRows.map(r=>actualPointColor(r)), pointHollow: yRows.map(r=>r.info.hasData && !r.info.complete)},
       ],
       formatY: fmtIDRShort, height:260,

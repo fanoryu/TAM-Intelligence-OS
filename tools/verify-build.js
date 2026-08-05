@@ -2284,6 +2284,37 @@ check(ux2bRaw.length === 0,
   'spacing and radius in CSS resolve from tokens (exceptions: sub-4px hairlines, td/th density freeze)'
   + (ux2bRaw.length ? ' >> VIOLATION: ' + [...new Set(ux2bRaw)].join(' | ') : ''));
 
+// (5) UX-002B PHASE 2 — no theme-sensitive colour literal in production JS.
+// Chart series colours used to be passed in as hex, so they never responded to the
+// light theme. They now resolve through themeVar('--token', fallback). This check
+// scans every production module for a QUOTED hex colour literal — the form all 27
+// migrated sites used — after removing the constructs that are legitimately allowed
+// to hold one. It cannot be satisfied by declaring a token elsewhere: the literal
+// itself must be gone from the colour position.
+// Documented exemptions, and why each is not debt:
+//   - themeVar('--token', '#fallback') — the fallback IS the contract for a missing
+//     token; stripped before scanning, so only unguarded literals remain.
+//   - core/constants.js — STATUS_META / CATEGORY_COLOR, the shared semantic palette
+//     consumed by BOTH pills and charts. Tokenizing it is cross-cutting and is
+//     deliberately deferred out of UX-002B.
+//   - core/stabilization.js — assigns the browser <meta name="theme-color">, which
+//     must be a literal per theme by definition.
+//   - ui/charts.js GRID_COLOR — its only use is as a themeVar() fallback argument.
+console.log('== UX-002B CHART / THEME COLOUR TOKENIZATION ==');
+const ux2bColourExemptFiles = new Set(['core/constants.js','core/stabilization.js']);
+const ux2bHexHits = [];
+jsFiles.forEach((rel)=>{
+  if(ux2bColourExemptFiles.has(rel)) return;
+  let src = stripComments(read(path.join(root,'js',rel)));
+  src = src.replace(/themeVar\s*\([^)]*\)/g, '');                        // fallback arguments
+  src = src.replace(/const\s+GRID_COLOR\s*=\s*['"]#[0-9a-fA-F]{6}['"]\s*;/, ''); // themeVar fallback constant
+  const hits = src.match(/['"]#[0-9a-fA-F]{6}['"]/g);
+  if(hits) ux2bHexHits.push(rel + ' -> ' + [...new Set(hits)].join(', '));
+});
+check(ux2bHexHits.length === 0,
+  'no theme-sensitive hex colour literal in production JS colour positions (chart colours resolve via themeVar tokens)'
+  + (ux2bHexHits.length ? ' >> VIOLATION: ' + ux2bHexHits.join(' | ') : ''));
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');

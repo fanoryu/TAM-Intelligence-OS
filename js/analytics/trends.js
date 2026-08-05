@@ -203,8 +203,8 @@ function renderTrends(main){
     drawLineChart(paEl, {
       labels,
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data: rows.map(r=>r.tot.planned)},
-        {key:'actual', label:'Actual', color:'#C9A15C', fill:true, data: rows.map(r=>r.info.hasData?r.tot.actual:null),
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data: rows.map(r=>r.tot.planned)},
+        {key:'actual', label:'Actual', color:themeVar('--chart-actual','#C9A15C'), fill:true, data: rows.map(r=>r.info.hasData?r.tot.actual:null),
           pointColor: rows.map(r=>actualPointColor(r)), pointHollow: rows.map(r=>r.info.hasData && !r.info.complete)},
       ],
       formatY: fmtIDRShort, height:320,
@@ -218,7 +218,7 @@ function renderTrends(main){
   if(vcEl){
     drawBarChart(vcEl, {
       labels,
-      series: [{key:'variance', label:'Variance', color:'#4FAE7C', data: rows.map(r=>r.info.hasData?r.tot.variance:null)}],
+      series: [{key:'variance', label:'Variance', color:themeVar('--chart-positive','#4FAE7C'), data: rows.map(r=>r.info.hasData?r.tot.variance:null)}],
       formatY: fmtIDRShort, height:260, signed:true, legend:false,
       emptyMessage:'No data in the selected date range.',
       ariaLabel:'Budget variance by month',
@@ -237,7 +237,7 @@ function renderTrends(main){
   if(gcEl){
     drawBarChart(gcEl, {
       labels,
-      series: [{key:'growth', label:'MoM Actual Change', color:'#6FA3D8', data: rows.map(r=>r.growthAbs)}],
+      series: [{key:'growth', label:'MoM Actual Change', color:themeVar('--chart-neutral','#6FA3D8'), data: rows.map(r=>r.growthAbs)}],
       formatY: fmtIDRShort, height:200, signed:true, legend:false,
       emptyMessage:'Not enough consecutive months with actuals yet.',
       ariaLabel:'Month over month actual spending change',
@@ -260,8 +260,8 @@ function renderTrends(main){
     drawLineChart(ccEl, {
       labels,
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data: series.map(s=>s.planned)},
-        {key:'actual', label:'Actual', color: CATEGORY_COLOR[f.category]||'#C9A15C', fill:true, data: series.map(s=>s.hasActual?s.actual:null)},
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data: series.map(s=>s.planned)},
+        {key:'actual', label:'Actual', color: CATEGORY_COLOR[f.category]||themeVar('--chart-actual','#C9A15C'), fill:true, data: series.map(s=>s.hasActual?s.actual:null)},
       ],
       formatY: fmtIDRShort, height:260,
       emptyMessage:`No ${f.category} data in the selected date range.`,
