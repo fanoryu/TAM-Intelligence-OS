@@ -2149,6 +2149,54 @@ check(/module-order\.js/.test(ccrSrc) && /vm\.runInContext/.test(ccrSrc), 'SPR-0
 check(/Domain\.command\('contract\.core\.update'/.test(ccrSrc), 'SPR-095 harness exercises the real Domain command path (aggregate then handler)');
 check(/const ADR014_CORE_FIELDS = \[/.test(ccrSrc), 'SPR-095 harness asserts ownership against its OWN copy of the ADR-014 matrix (not production'+"'"+'s)');
 
+// UX-002A — SHELL/VIEW PERSISTENCE. The shell (sidebar + nav tree + #main container)
+// is mounted ONCE by renderShell(); ordinary navigation replaces only the #main
+// CONTENT and syncs the nav's derived state in place. These three checks inspect the
+// real function bodies — not stray words anywhere in the file — so a regression that
+// reintroduced full-shell rebuilds cannot pass verification.
+console.log('== UX-002A SHELL/VIEW PERSISTENCE (structural invariants) ==');
+const shellSrcUx2a = stripComments(read(path.join(root,'js','ui','shell-render.js')));
+// Top-level function bodies: a declaration at column 0 through the next line that
+// begins with a closing brace at column 0.
+const ux2aBodyOf = (name)=>{
+  const m = shellSrcUx2a.match(new RegExp('^function '+name+'\\(\\)\\{[\\s\\S]*?\\n\\}','m'));
+  return m ? m[0] : '';
+};
+const ux2aRenderBody = ux2aBodyOf('render');
+const ux2aRenderShellBody = ux2aBodyOf('renderShell');
+
+// (1) render() must never rebuild the complete application shell.
+const ux2aR1 = [];
+if(ux2aRenderBody === '') ux2aR1.push('render() could not be located as a top-level function');
+if(/\.innerHTML\s*=/.test(ux2aRenderBody)) ux2aR1.push('render() assigns .innerHTML (full-shell rebuild reintroduced)');
+if(/class="sidebar"/.test(ux2aRenderBody)) ux2aR1.push('render() emits shell markup directly');
+check(ux2aR1.length === 0,
+  'render() never rebuilds the application shell — no .innerHTML assignment, no shell markup in its body'
+  + (ux2aR1.length ? ' >> VIOLATION: ' + ux2aR1.join('; ') : ''));
+
+// (2) The two structural functions must exist AND render() must invoke both.
+const ux2aR2 = [];
+if(!/^function renderShell\(\)\{/m.test(shellSrcUx2a)) ux2aR2.push('renderShell() is not defined at top level');
+if(!/^function syncShellState\(\)\{/m.test(shellSrcUx2a)) ux2aR2.push('syncShellState() is not defined at top level');
+if(!/\brenderShell\(\)/.test(ux2aRenderBody)) ux2aR2.push('render() does not invoke renderShell()');
+if(!/\bsyncShellState\(\)/.test(ux2aRenderBody)) ux2aR2.push('render() does not invoke syncShellState()');
+check(ux2aR2.length === 0,
+  'renderShell() and syncShellState() are defined and render() invokes both (shell mount + in-place state sync)'
+  + (ux2aR2.length ? ' >> VIOLATION: ' + ux2aR2.join('; ') : ''));
+
+// (3) bindShell() binds shell listeners once — it must be reachable ONLY from renderShell().
+const ux2aProd = stripComments(srcJs);
+const ux2aDefs = (ux2aProd.match(/\bfunction\s+bindShell\s*\(/g)||[]).length;
+const ux2aSites = (ux2aProd.match(/\bbindShell\s*\(/g)||[]).length - ux2aDefs;
+const ux2aInShell = (ux2aRenderShellBody.match(/\bbindShell\s*\(/g)||[]).length;
+const ux2aR3 = [];
+if(ux2aDefs !== 1) ux2aR3.push('bindShell() must have exactly ONE definition repository-wide (found ' + ux2aDefs + ')');
+if(ux2aSites !== 1) ux2aR3.push('bindShell() must have exactly ONE call site repository-wide (found ' + ux2aSites + ') — it must not be called from ordinary navigation or any other production path');
+if(ux2aInShell !== 1) ux2aR3.push('the single bindShell() call must live inside renderShell() (found ' + ux2aInShell + ' there)');
+check(ux2aR3.length === 0,
+  'bindShell() is invoked exactly once repository-wide, and only from renderShell() (listeners bound once, never per navigation)'
+  + (ux2aR3.length ? ' >> VIOLATION: ' + ux2aR3.join('; ') : ''));
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');
