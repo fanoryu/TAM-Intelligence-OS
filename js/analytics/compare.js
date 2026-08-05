@@ -68,8 +68,8 @@ function renderCompare(main){
     drawLineChart(trendChartEl, {
       labels: trendMonths.map(m=>m.month.slice(0,3)+" '"+String(m.year).slice(2)),
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data: tRows.map(r=>r.tot.planned)},
-        {key:'actual', label:'Actual', color:'#C9A15C', fill:true, data: tRows.map(r=>r.info.hasData?r.tot.actual:null),
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data: tRows.map(r=>r.tot.planned)},
+        {key:'actual', label:'Actual', color:themeVar('--chart-actual','#C9A15C'), fill:true, data: tRows.map(r=>r.info.hasData?r.tot.actual:null),
           pointColor: tRows.map(r=>actualPointColor(r)), pointHollow: tRows.map(r=>r.info.hasData && !r.info.complete)},
       ],
       formatY: fmtIDRShort, height:320,
@@ -88,11 +88,11 @@ function applyQuickRange(months, range){
   return months;
 }
 function actualPointColor(row){
-  if(!row.info.hasData) return '#5E6A87';
-  if(!row.info.complete) return '#5E6A87';
-  if(row.tot.actual>row.tot.planned) return '#C1543F';
-  if(row.tot.actual<row.tot.planned) return '#4FAE7C';
-  return '#C9A15C';
+  if(!row.info.hasData) return themeVar('--chart-muted','#5E6A87');
+  if(!row.info.complete) return themeVar('--chart-muted','#5E6A87');
+  if(row.tot.actual>row.tot.planned) return themeVar('--chart-negative','#C1543F');
+  if(row.tot.actual<row.tot.planned) return themeVar('--chart-positive','#4FAE7C');
+  return themeVar('--chart-actual','#C9A15C');
 }
 function budgetStatusLabel(row){
   if(!row.info.hasData) return 'No Actual Recorded';
@@ -103,12 +103,12 @@ function budgetStatusLabel(row){
 }
 function trendTooltip(row){
   const status = budgetStatusLabel(row);
-  const statusColor = status==='Over Budget'?'#C1543F':status==='Under Budget'?'#4FAE7C':status==='On Budget'?'#C9A15C':'#96A1BA';
+  const statusColor = status==='Over Budget'?themeVar('--chart-negative','#C1543F'):status==='Under Budget'?themeVar('--chart-positive','#4FAE7C'):status==='On Budget'?themeVar('--chart-actual','#C9A15C'):themeVar('--chart-planned','#96A1BA');
   const v = row.info.hasData ? row.tot.planned-row.tot.actual : null;
   const vp = (v!==null && row.tot.planned) ? v/row.tot.planned : null;
   let mom = '';
   if(row.growthAbs!==null && row.growthAbs!==undefined){
-    mom = `<div>MoM Change: <b class="mono" style="color:${row.growthAbs>0?'#C1543F':'#4FAE7C'}">${row.growthAbs>0?'+':''}${fmtIDR(row.growthAbs)}</b> (${pct(row.growthPct)})</div>`;
+    mom = `<div>MoM Change: <b class="mono" style="color:${row.growthAbs>0?themeVar('--chart-negative','#C1543F'):themeVar('--chart-positive','#4FAE7C')}">${row.growthAbs>0?'+':''}${fmtIDR(row.growthAbs)}</b> (${pct(row.growthPct)})</div>`;
   }
   return `<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(monthLabel(row.m))}</div>
     <div>Planned: <b class="mono">${fmtIDR(row.tot.planned)}</b></div>

@@ -57,8 +57,6 @@ function renderDashboard(main){
       </div>
     </div>`; })()}
 
-    <div style="margin-top:14px;">${hrStatStripHTML(key)}</div>
-
     <div class="grid grid-2" style="margin-top:14px;">
       <div class="card">
         <h3>Planned vs. Actual by Category</h3>
@@ -129,8 +127,8 @@ function renderDashboard(main){
     drawBarChart(catChartEl, {
       labels: cats.map(c=>c.category),
       series: [
-        {key:'planned', label:'Planned', color:'#96A1BA', data:cats.map(c=>c.planned)},
-        {key:'actual', label:'Actual', color:'#C9A15C', data:cats.map(c=>c.hasActual?c.actual:null), colors:cats.map(c=>CATEGORY_COLOR[c.category]||'#C9A15C')},
+        {key:'planned', label:'Planned', color:themeVar('--chart-planned','#96A1BA'), data:cats.map(c=>c.planned)},
+        {key:'actual', label:'Actual', color:themeVar('--chart-actual','#C9A15C'), data:cats.map(c=>c.hasActual?c.actual:null), colors:cats.map(c=>CATEGORY_COLOR[c.category]||themeVar('--chart-actual','#C9A15C'))},
       ],
       formatY: fmtIDRShort, height:260,
       emptyMessage:'No category data for this month yet.',
@@ -143,7 +141,7 @@ function renderDashboard(main){
           <div>Planned: <b class="mono">${fmtIDR(c.planned)}</b></div>
           <div>Actual: <b class="mono">${c.hasActual?fmtIDR(c.actual):'no data'}</b></div>
           ${c.hasActual?`<div>Variance: <b class="mono">${fmtIDR(v)}</b> (${pct(c.planned?v/c.planned:0)})</div>`:''}
-          <div style="margin-top:3px;color:${!c.hasActual?'#96A1BA':v>=0?'#4FAE7C':'#C1543F'};">${status}</div>`;
+          <div style="margin-top:3px;color:${!c.hasActual?themeVar('--chart-planned','#96A1BA'):v>=0?themeVar('--chart-positive','#4FAE7C'):themeVar('--chart-negative','#C1543F')};">${status}</div>`;
       },
     });
   }

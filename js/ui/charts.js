@@ -234,7 +234,7 @@ function drawLineChart(container, opts){
 
     // hover crosshair + click-to-navigate over the full plot area
     const tip = chartTooltip(container.querySelector('div'));
-    const guide = svgLine(svg, 0,padT, 0,padT+plotH, '#5E6A87', 1, {'stroke-dasharray':'3,3', opacity:'0'});
+    const guide = svgLine(svg, 0,padT, 0,padT+plotH, themeVar('--chart-muted','#5E6A87'), 1, {'stroke-dasharray':'3,3', opacity:'0'});
     const hitRect = document.createElementNS(SVGNS,'rect');
     hitRect.setAttribute('x',padL); hitRect.setAttribute('y',padT); hitRect.setAttribute('width',plotW); hitRect.setAttribute('height',plotH);
     hitRect.setAttribute('fill','transparent');
@@ -340,7 +340,7 @@ function drawBarChart(container, opts){
           const barH = Math.max(Math.abs(zeroY-yScale(v)),1);
           const barRect = document.createElementNS(SVGNS,'rect');
           barRect.setAttribute('x',bx); barRect.setAttribute('y',barY); barRect.setAttribute('width',Math.max(barW-4,4)); barRect.setAttribute('height',barH); barRect.setAttribute('rx','2');
-          const fill = signed ? (v>=0?'#4FAE7C':'#C1543F') : ((s.colors && s.colors[i]) || s.color);
+          const fill = signed ? (v>=0?themeVar('--chart-positive','#4FAE7C'):themeVar('--chart-negative','#C1543F')) : ((s.colors && s.colors[i]) || s.color);
           barRect.setAttribute('fill', fill);
           g2.appendChild(barRect);
         }

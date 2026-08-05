@@ -49,7 +49,7 @@ function renderCashFlow(main){
   if(el){
     drawBarChart(el, {
       labels: months.map(m=>m.month.slice(0,3)+" '"+String(m.year).slice(2)),
-      series: [{key:'net', label:'Net Cash Flow', color:'#4FAE7C', data: rows.map(r=>r.net)}],
+      series: [{key:'net', label:'Net Cash Flow', color:themeVar('--chart-positive','#4FAE7C'), data: rows.map(r=>r.net)}],
       formatY: fmtIDRShort, height:260, signed:true, legend:false,
       emptyMessage:'Not enough income and expense data recorded yet.',
       ariaLabel:'Net cash flow by month',

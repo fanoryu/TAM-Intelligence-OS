@@ -20,6 +20,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { readAppMeta } = require('./app-version.js');
 const root = path.resolve(__dirname, '..');
 const LF = '\n';
@@ -41,18 +42,32 @@ const check = (cond, msg) => { if (cond) { passes++; console.log('  [PASS] ' + m
 function extractStyle(h){ const a=h.indexOf('<style>'), b=h.indexOf('</style>'); if(a<0||b<0) return null; return trimLF(h.substring(a+7,b)); }
 function extractMainScript(h){ const i=h.indexOf('const APP_VERSION'); if(i<0) return null; const o=h.lastIndexOf('<script>',i), c=h.indexOf('</script>',i); return trimLF(h.substring(o+8,c)); }
 
-const distCss = extractStyle(dist), origCss = extractStyle(orig), distJs = extractMainScript(dist);
-
-console.log('== CSS vs v2.5.2 (only the v2.6.3b floating-menu rule added) ==');
-const cssAnchor = '.actions-dropdown{position:absolute;right:0;top:calc(100% + 4px);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:20;min-width:170px;box-shadow:0 8px 28px rgba(0,0,0,.45);}';
-const cssAdded = cssAnchor + "\n/* v2.6.3b — floating layer: portaled to #menu-root and positioned with position:fixed\n   via JS (getBoundingClientRect), so it is never clipped by a table's overflow. */\n.actions-dropdown.floating{position:fixed;right:auto;z-index:990;}";
-const expectedCss = origCss.split(cssAnchor).join(cssAdded);
-check(distCss === expectedCss, 'dist CSS == v2.5.2 CSS + ONLY the v2.6.3b floating rule (no other style change)');
+const distCss = extractStyle(dist), distJs = extractMainScript(dist);
 
 const cssFiles = ['tokens.css','base.css','shell.css','components.css','charts.css'];
 const jsFiles = require('./module-order.js');
 const srcCss = cssFiles.map((f)=>read(path.join(root,'css',f))).join(LF);
 const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
+
+// CSS GOLDEN MASTER (UX-002B / PD-A).
+// Until v2.8.4 this check RECONSTRUCTED the expected stylesheet from the tracked
+// v2.5.2 artifact plus one enumerated string patch. That derivation chain could not
+// express an authorized multi-file revision without accumulating opaque, order-
+// dependent literal patches — it would have looked stricter while getting weaker.
+// It is replaced 1-for-1 by an exact pinned digest of concat(css/*.css) under the
+// same normalization. Same count, strictly stronger guarantee: whole-file, exact,
+// and every future revision is one reviewable line plus a diff.
+// Pin history (each superseded value is preserved; see audit/ux-002b-2026-08-05/):
+//   pre-UX-002B      b311990b405d4d8ac86efb406e9cfefafee2a53b29dec6a201e0690387a8100d
+//   Phase 1          47413d6eb2e864367aed98e50e8d9a9ed80c14605092b853b08a0c775e35d712
+//   Phase 1 remediation (current) — restores narrow-width grid containment
+const CSS_GOLDEN_SHA256 = 'b1cec5dd8b789f49d3967c5e49786961418f87b6f21975965315981c6f6e507c';
+console.log('== CSS GOLDEN MASTER (pinned digest of concat(css/*.css)) ==');
+const cssDigest = crypto.createHash('sha256').update(trimLF(srcCss), 'utf8').digest('hex');
+check(cssDigest === CSS_GOLDEN_SHA256,
+  'concat(css/*.css) matches the pinned CSS golden master'
+  + (cssDigest === CSS_GOLDEN_SHA256 ? '' : ' >> VIOLATION: expected ' + CSS_GOLDEN_SHA256 + ', got ' + cssDigest + ' — an unapproved style change, or an approved revision whose pin was not updated'));
+
 console.log('== BUILD FIDELITY (source -> dist) ==');
 check(trimLF(srcCss) === distCss, 'concat(css/*.css) == dist CSS payload');
 check(trimLF(srcJs) === distJs, 'concat(js/*.js) == dist JS payload');
@@ -2196,6 +2211,109 @@ if(ux2aInShell !== 1) ux2aR3.push('the single bindShell() call must live inside 
 check(ux2aR3.length === 0,
   'bindShell() is invoked exactly once repository-wide, and only from renderShell() (listeners bound once, never per navigation)'
   + (ux2aR3.length ? ' >> VIOLATION: ' + ux2aR3.join('; ') : ''));
+
+// UX-002B PHASE 1 — TYPOGRAPHY / TOKEN / THEME INVARIANTS.
+// These convert design rules that were previously only conventions into
+// mechanically enforced invariants, so they cannot silently regress.
+console.log('== UX-002B TOKEN + TYPOGRAPHY INVARIANTS ==');
+const ux2bCssFiles = cssFiles.map((f)=>({name:f, src:read(path.join(root,'css',f))}));
+const ux2bStrip = (s)=>s.replace(/\/\*[\s\S]*?\*\//g,'');   // CSS has no // comments
+
+// (1) No fractional font-size anywhere in CSS — the scale is integer-only.
+const ux2bFrac = [];
+ux2bCssFiles.forEach(({name,src})=>{
+  const m = ux2bStrip(src).match(/font-size:\s*\d+\.\d+px/g);
+  if(m) ux2bFrac.push(name + ' -> ' + m.join(', '));
+});
+check(ux2bFrac.length === 0,
+  'no fractional font-size values in CSS (integer type scale only)'
+  + (ux2bFrac.length ? ' >> VIOLATION: ' + ux2bFrac.join(' | ') : ''));
+
+// (2) The serif is identity-only: it may appear on the wordmark and nowhere else.
+const ux2bSerifSites = [];
+ux2bCssFiles.forEach(({name,src})=>{
+  ux2bStrip(src).split('\n').forEach((line,i)=>{
+    if(/var\(--serif\)/.test(line))
+      ux2bSerifSites.push({at:name + ':' + (i+1), brand:/^\.brand \.mark\{/.test(line.trim())});
+  });
+});
+const ux2bSerifBad = ux2bSerifSites.filter(s=>!s.brand).map(s=>s.at);
+check(ux2bSerifSites.length === 1 && ux2bSerifBad.length === 0,
+  'var(--serif) is used exactly once in CSS, on .brand .mark (UI chrome is sans)'
+  + ((ux2bSerifSites.length === 1 && ux2bSerifBad.length === 0) ? ''
+     : ' >> VIOLATION: ' + ux2bSerifSites.length + ' usage site(s)'
+       + (ux2bSerifBad.length ? ', non-brand: ' + ux2bSerifBad.join(', ') : '')));
+
+// (3) Dark/light parity: every custom property declared in :root must also be
+//     declared in :root[data-theme="light"]. A theme cannot be half-defined.
+const ux2bTokensSrc = ux2bStrip(read(path.join(root,'css','tokens.css')));
+const ux2bBlock = (sel)=>{
+  const i = ux2bTokensSrc.indexOf(sel); if(i<0) return null;
+  const a = ux2bTokensSrc.indexOf('{', i), b = ux2bTokensSrc.indexOf('}', a);
+  return (a<0||b<0) ? null : ux2bTokensSrc.slice(a+1,b);
+};
+const ux2bNames = (blk)=> new Set(((blk||'').match(/--[a-z0-9-]+\s*:/gi)||[]).map(s=>s.replace(/\s*:$/,'').trim()));
+const ux2bDark = ux2bNames(ux2bBlock(':root, :root[data-theme="dark"]'));
+const ux2bLight = ux2bNames(ux2bBlock(':root[data-theme="light"]'));
+const ux2bMissing = [...ux2bDark].filter(t=>!ux2bLight.has(t));
+let ux2bParityMsg = '';
+if(ux2bDark.size === 0 || ux2bLight.size === 0) ux2bParityMsg = ' >> VIOLATION: a :root block could not be parsed';
+else if(ux2bMissing.length) ux2bParityMsg = ' >> VIOLATION: missing from light theme: ' + ux2bMissing.join(', ');
+check(ux2bDark.size > 0 && ux2bLight.size > 0 && ux2bMissing.length === 0,
+  'every :root token is also defined for :root[data-theme="light"] (dark/light parity)' + ux2bParityMsg);
+
+// (4) Spacing and radius resolve from tokens. Documented exceptions:
+//     values below 4px (hairlines / optical nudges finer than the smallest step),
+//     and td/th padding, which the table density invariant freezes.
+const ux2bRaw = [];
+ux2bCssFiles.forEach(({name,src})=>{
+  // A fresh regex per file — a shared /g regex would carry lastIndex across files.
+  const re = /(?:^|[;{])\s*(padding|margin|gap|row-gap|column-gap|border-radius)(-top|-right|-bottom|-left)?\s*:\s*([^;}]+)/gi;
+  let scan = ux2bStrip(src);
+  // Lookbehind so the preceding rule's closing brace is NOT consumed with the match.
+  [/(?<![\w.\-])th\s*\{[^}]*\}/g, /(?<![\w.\-])td\s*\{[^}]*\}/g].forEach((ex)=>{ scan = scan.replace(ex, ''); });
+  let m;
+  while((m = re.exec(scan)) !== null){
+    const val = m[3];
+    (val.match(/-?\d+(?:\.\d+)?px/g) || []).forEach(p=>{
+      if(Math.abs(parseFloat(p)) >= 4) ux2bRaw.push(name + ' -> ' + m[1] + (m[2]||'') + ':' + val.trim());
+    });
+  }
+});
+check(ux2bRaw.length === 0,
+  'spacing and radius in CSS resolve from tokens (exceptions: sub-4px hairlines, td/th density freeze)'
+  + (ux2bRaw.length ? ' >> VIOLATION: ' + [...new Set(ux2bRaw)].join(' | ') : ''));
+
+// (5) UX-002B PHASE 2 — no theme-sensitive colour literal in production JS.
+// Chart series colours used to be passed in as hex, so they never responded to the
+// light theme. They now resolve through themeVar('--token', fallback). This check
+// scans every production module for a QUOTED hex colour literal — the form all 27
+// migrated sites used — after removing the constructs that are legitimately allowed
+// to hold one. It cannot be satisfied by declaring a token elsewhere: the literal
+// itself must be gone from the colour position.
+// Documented exemptions, and why each is not debt:
+//   - themeVar('--token', '#fallback') — the fallback IS the contract for a missing
+//     token; stripped before scanning, so only unguarded literals remain.
+//   - core/constants.js — STATUS_META / CATEGORY_COLOR, the shared semantic palette
+//     consumed by BOTH pills and charts. Tokenizing it is cross-cutting and is
+//     deliberately deferred out of UX-002B.
+//   - core/stabilization.js — assigns the browser <meta name="theme-color">, which
+//     must be a literal per theme by definition.
+//   - ui/charts.js GRID_COLOR — its only use is as a themeVar() fallback argument.
+console.log('== UX-002B CHART / THEME COLOUR TOKENIZATION ==');
+const ux2bColourExemptFiles = new Set(['core/constants.js','core/stabilization.js']);
+const ux2bHexHits = [];
+jsFiles.forEach((rel)=>{
+  if(ux2bColourExemptFiles.has(rel)) return;
+  let src = stripComments(read(path.join(root,'js',rel)));
+  src = src.replace(/themeVar\s*\([^)]*\)/g, '');                        // fallback arguments
+  src = src.replace(/const\s+GRID_COLOR\s*=\s*['"]#[0-9a-fA-F]{6}['"]\s*;/, ''); // themeVar fallback constant
+  const hits = src.match(/['"]#[0-9a-fA-F]{6}['"]/g);
+  if(hits) ux2bHexHits.push(rel + ' -> ' + [...new Set(hits)].join(', '));
+});
+check(ux2bHexHits.length === 0,
+  'no theme-sensitive hex colour literal in production JS colour positions (chart colours resolve via themeVar tokens)'
+  + (ux2bHexHits.length ? ' >> VIOLATION: ' + ux2bHexHits.join(' | ') : ''));
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

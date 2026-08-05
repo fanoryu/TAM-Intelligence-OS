@@ -160,14 +160,16 @@ function overtimeMonthStats(monthKey){
   const approvedNotCommitted = recs.filter(o=>o.status==='Approved').length;
   return {hours, cost, emps, pending, approvedNotCommitted, count:recs.length};
 }
+/* UX-002B Phase 3 — Overtime Hours and Overtime Cost are merged. Hours remains the
+   headline; cost stays visible as a secondary value on the same card, alongside the
+   employee count it always carried. Pending Review and Approved-Not-Committed are
+   preserved as their own tiles — they are the two actionable numbers here.
+   overtimeMonthStats() is untouched: no overtime calculation changes. */
 function overtimeStripHTML(monthKey){
   const s = overtimeMonthStats(monthKey);
-  return `<div class="grid grid-4" style="margin-bottom:14px;">
-    <div class="card stat-card"><div class="stat-label">Overtime Hours (${escapeHtml(keyToMonthObj(monthKey).month)})</div><div class="stat-value">${s.hours.toLocaleString('id-ID',{maximumFractionDigits:2})}</div><div class="stat-sub dim">${s.emps} employee(s)</div></div>
-    <div class="card stat-card"><div class="stat-label">Overtime Cost</div><div class="stat-value">${fmtIDRShort(s.cost)}</div><div class="stat-sub dim">this month</div></div>
+  return `<div class="card stat-card"><div class="stat-label">Overtime (${escapeHtml(keyToMonthObj(monthKey).month)})</div><div class="stat-value">${s.hours.toLocaleString('id-ID',{maximumFractionDigits:2})} <span class="dim" style="font-size:var(--fs-2);">hrs</span></div><div class="stat-sub dim">cost <b class="mono">${fmtIDRShort(s.cost)}</b> · ${s.emps} employee(s)</div></div>
     <div class="card stat-card"><div class="stat-label">Pending Review</div><div class="stat-value" style="color:${s.pending?'var(--accent)':'inherit'}">${s.pending}</div><div class="stat-sub dim">draft / submitted / reviewed</div></div>
-    <div class="card stat-card"><div class="stat-label">Approved, Not Committed</div><div class="stat-value" style="color:${s.approvedNotCommitted?'var(--brick)':'inherit'}">${s.approvedNotCommitted}</div><div class="stat-sub dim">not yet in payroll</div></div>
-  </div>`;
+    <div class="card stat-card"><div class="stat-label">Approved, Not Committed</div><div class="stat-value" style="color:${s.approvedNotCommitted?'var(--brick)':'inherit'}">${s.approvedNotCommitted}</div><div class="stat-sub dim">not yet in payroll</div></div>`;
 }
 function overtimeDashboardAlerts(monthKey){
   const alerts = [];
@@ -187,17 +189,29 @@ function overtimeDashboardAlerts(monthKey){
 }
 
 /* ---------- payroll operations dashboard (Part 16) ---------- */
-function payrollStripHTML(monthKey){
+/* UX-002B Phase 3 — the Payroll Cycle tile is promoted into the Executive Dashboard's
+   primary row (payrollCycleTileHTML below), so the strip carries the three remaining
+   payroll figures. "Total Payroll Planned" is the survivor of its merge with the HR
+   strip's duplicate "Payroll Planned" and now shows the committed-plan count too.
+   The composite "Committed / Contracts Soon" is SPLIT: Committed keeps its own tile,
+   and the expiring-soon value is rendered once, on Active Contracts in the HR strip.
+   No payroll calculation changes — payrollMonthTotals()/payrollCycleStatus() are as
+   they were, and contract-expiry semantics are untouched. */
+function payrollCycleTileHTML(monthKey){
   const tot = payrollMonthTotals(monthKey);
   const cs = payrollCycleStatus(monthKey);
   const excluded = State.employees.filter(e=>payrollExclusionReason(e, monthKey)).length;
-  const soon = State.contracts.filter(c=>contractEffectiveStatus(c)==='Expiring Soon').length;
-  return `<div class="grid grid-4" style="margin-bottom:14px;">
-    <div class="card stat-card"><div class="stat-label">Payroll Cycle (${escapeHtml(keyToMonthObj(monthKey).month)})</div><div class="stat-value" style="font-size:15px;">${cycleStatusPill(cs)}</div><div class="stat-sub dim">${tot.count} included · ${excluded} excluded</div></div>
-    <div class="card stat-card"><div class="stat-label">Total Payroll Planned</div><div class="stat-value">${fmtIDRShort(tot.planned)}</div><div class="stat-sub dim">overtime ${fmtIDRShort(tot.overtime)}</div></div>
-    <div class="card stat-card"><div class="stat-label">Payroll Paid / Remaining</div><div class="stat-value">${fmtIDRShort(tot.paid)}</div><div class="stat-sub dim">remaining ${fmtIDRShort(tot.remaining)}</div></div>
-    <div class="card stat-card"><div class="stat-label">Committed / Contracts Soon</div><div class="stat-value">${tot.committed}</div><div class="stat-sub ${soon?'neg':'dim'}">${soon} contract(s) expiring soon</div></div>
+  return `<div class="card stat-card">
+    <div class="stat-label">Payroll Cycle (${escapeHtml(keyToMonthObj(monthKey).month)})</div>
+    <div class="stat-value" style="font-size:15px;">${cycleStatusPill(cs)}</div>
+    <div class="stat-sub dim">${tot.count} included · ${excluded} excluded</div>
   </div>`;
+}
+function payrollStripHTML(monthKey){
+  const tot = payrollMonthTotals(monthKey);
+  return `<div class="card stat-card"><div class="stat-label">Total Payroll Planned</div><div class="stat-value">${fmtIDRShort(tot.planned)}</div><div class="stat-sub dim">overtime ${fmtIDRShort(tot.overtime)}</div></div>
+    <div class="card stat-card"><div class="stat-label">Payroll Paid / Remaining</div><div class="stat-value">${fmtIDRShort(tot.paid)}</div><div class="stat-sub dim">remaining ${fmtIDRShort(tot.remaining)}</div></div>
+    <div class="card stat-card"><div class="stat-label">Committed</div><div class="stat-value">${tot.committed}</div><div class="stat-sub dim">payroll plans committed</div></div>`;
 }
 function payrollDashboardAlerts(monthKey){
   const alerts=[]; const mo=keyToMonthObj(monthKey); const cs=payrollCycleStatus(monthKey);
