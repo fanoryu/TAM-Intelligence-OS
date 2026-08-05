@@ -252,6 +252,12 @@ select:focus, .input:focus{border-color:var(--interactive);}
 .grid-2{grid-template-columns:1.3fr 1fr;}
 .grid-3{grid-template-columns:repeat(3,1fr);}
 @media(max-width:1050px){.grid-4{grid-template-columns:repeat(2,1fr);} .grid-2{grid-template-columns:1fr;} .grid-3{grid-template-columns:1fr;}}
+/* A `1fr` track is minmax(auto,1fr), so its floor is the content's min-content
+   width — a wide table or chart then forces the track past its container and the
+   page scrolls horizontally, with .table-wrap's overflow-x:auto powerless because
+   the track already blew out. Letting grid children shrink restores containment
+   and hands scrolling back to the inner .table-wrap where it belongs. */
+.grid > *, .two-col > *{min-width:0;}
 
 .card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:var(--space-4);}
 .card h3{font-family:var(--sans);font-weight:650;font-size:var(--fs-4);letter-spacing:-.1px;margin:0 0 var(--space-3) 0;color:var(--text);}
@@ -394,6 +400,11 @@ td.num, th.num{text-align:right;font-family:var(--mono);}
 .chart-legend{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-3);padding-top:2px;}
 .chart-legend button{font-family:var(--sans);}
 .chart-mini-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-2);margin-top:var(--space-3);}
+/* Same `1fr` floor as .grid: four mono figures hold the tracks open wider than the
+   container on a narrow card. Two columns below 640px keeps every value readable
+   instead of clipped. */
+.chart-mini-stats > *{min-width:0;}
+@media(max-width:640px){ .chart-mini-stats{grid-template-columns:repeat(2,1fr);} }
 .chart-mini-stat{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);}
 .chart-mini-stat .lbl{font-size:var(--fs-1);text-transform:uppercase;letter-spacing:.4px;color:var(--text-faint);margin-bottom:var(--space-1);}
 .chart-mini-stat .val{font-family:var(--mono);font-size:var(--fs-3);font-weight:600;}

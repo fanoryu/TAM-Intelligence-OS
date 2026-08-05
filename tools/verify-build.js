@@ -57,8 +57,11 @@ const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
 // It is replaced 1-for-1 by an exact pinned digest of concat(css/*.css) under the
 // same normalization. Same count, strictly stronger guarantee: whole-file, exact,
 // and every future revision is one reviewable line plus a diff.
-// Superseded pin (pre-UX-002B): b311990b405d4d8ac86efb406e9cfefafee2a53b29dec6a201e0690387a8100d
-const CSS_GOLDEN_SHA256 = '47413d6eb2e864367aed98e50e8d9a9ed80c14605092b853b08a0c775e35d712';
+// Pin history (each superseded value is preserved; see audit/ux-002b-2026-08-05/):
+//   pre-UX-002B      b311990b405d4d8ac86efb406e9cfefafee2a53b29dec6a201e0690387a8100d
+//   Phase 1          47413d6eb2e864367aed98e50e8d9a9ed80c14605092b853b08a0c775e35d712
+//   Phase 1 remediation (current) — restores narrow-width grid containment
+const CSS_GOLDEN_SHA256 = 'b1cec5dd8b789f49d3967c5e49786961418f87b6f21975965315981c6f6e507c';
 console.log('== CSS GOLDEN MASTER (pinned digest of concat(css/*.css)) ==');
 const cssDigest = crypto.createHash('sha256').update(trimLF(srcCss), 'utf8').digest('hex');
 check(cssDigest === CSS_GOLDEN_SHA256,
