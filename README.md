@@ -6,7 +6,7 @@ dependencies.
 
 [![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.8.4-blue)
+![Version](https://img.shields.io/badge/version-2.8.5-blue)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
@@ -38,62 +38,54 @@ Design principles:
   app. The only external network references are the XLSX parser and web fonts (CDN).
 - **Two shippable forms.** A modular development source and a single portable HTML file that behaves
   identically.
-- **Data-safety first.** A 1700-check verifier guards the persisted-data schema, storage keys,
+- **Data-safety first.** A 1713-check verifier guards the persisted-data schema, storage keys,
   migration flags, and build fidelity on every change.
 
 ---
 
 ## Current release
 
-**v2.8.4 — Monthly Plan Result Integrity** · `SCHEMA_VERSION` 6
+**v2.8.5 — Workspace & Contract Timeline Integrity** · `SCHEMA_VERSION` 6
 
-> **Release state.** v2.8.4 is **published and marked Latest**, released from annotated tag `v2.8.4` at
-> commit `bd8819a`. The prior release, **v2.8.3 — Payroll Posting Integrity**, remains published and
-> unchanged; it is simply no longer the Latest release. See
-> [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a release is cut.
+> **Release state.** v2.8.5 is **prepared but not yet tagged or published**. The latest published
+> release remains **v2.8.4 — Monthly Plan Result Integrity**, released from annotated tag `v2.8.4` at
+> commit `bd8819a`, and it stays published and unchanged. Tagging and publication are a separately
+> authorized event — see [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) §11–§14.
 
-A correctness release for committing a Monthly Plan. The commit previously ignored whether its two saves
-actually succeeded, so a failed commit could still report success and leave a partial state that nothing
-detected. The commit now checks both writes, reports failure honestly, keeps your preview on screen, and
-Integrity Check surfaces the partial state. No schema change, no new storage key, no data migration, and
-**no change to how or when data is written**.
+A workspace-presentation and contract-timeline correctness release, packaging the merged UX-002A,
+UX-002B, UX-003A, UX-003B and UX-003C sprints. No schema change, no new or renamed storage key, no data
+migration, and **no change to how or when data is written**.
 
-- **The commit checks both of its saves** — it writes finance transactions, then the monthly plan. It
-  previously discarded both results; it now reports success only when both succeeded, and names the step
-  that failed along with the steps that completed.
-- **A failed commit no longer shows success behavior** — no completion toast when the commit did not
-  complete.
-- **Your preview rows stay on screen after a failed commit** — they are no longer discarded, so you can
-  see exactly what was involved while you review it.
-- **The failure message tells you what to do** — it states that the commit did not complete, that some
-  data may already have been saved, and that you should run Integrity Check and review the Monthly Plan
-  and Finance transaction before retrying. It never claims your data was rolled back.
-- **Integrity Check reports orphaned Monthly Plan transactions as Critical** — a planned transaction
-  whose Monthly Plan is **missing entirely**, or which **exists but does not list that transaction**, is
-  now surfaced instead of going unnoticed. The existing `corrupt-plan-ref` warning still covers the
-  opposite direction (a plan pointing at transactions that no longer exist).
-- **Retrying does not create duplicate planned transactions** — rebuilding the preview after a failure
-  still recognises rows that already exist and skips them.
+- **The application shell is built once and stays mounted** — switching views replaces only the view
+  content, so the sidebar and navigation keep their identity instead of being rebuilt on every
+  navigation.
+- **Refreshed UI chrome** — a sans-serif UI typeface with shared spacing, radius and type token scales.
+  Chart colours now come from the theme tokens, and the light-theme chart colours were corrected.
+- **A calmer Executive Dashboard** — reduced from 20 metric containers to 13, with the alert list capped
+  while every alert remains reachable.
+- **Contract timeline figures use one coherent reference date** — today-facing results are unchanged;
+  results advised for a historical date are now correct.
+- **Contract state and contract expiry are two separate derived facts** — a contract can be Active and
+  at the same time be flagged as ending today, this week, this month or next month. Scheduled is derived
+  from the dates and is never stored, and the calendar horizons do not depend on the warning-days
+  setting.
+- **Contract progress wording is fixed** — on a three-month contract, month 1 reads `1/3` with 2 months
+  remaining, month 2 reads `2/3` with 1 month remaining, and month 3 reads `3/3` as the final month with
+  0 months remaining. **`3/3` no longer implies a month is still left**; the month after the end reads
+  Expired.
+- **Every contract counter resolves through one shared helper** — the dashboard counts, the status
+  filters and the badges agree. Active includes active contracts that are ending soon, and excludes
+  Scheduled and Expired. Wording follows a fixed priority: Ends Today → Ends This Week → Final Month →
+  Ends Next Month → Ending Soon, and the exported CSV Status column uses the same words.
 
-**What this release does not do.** The commit **still writes two storage keys one after another, and it
-is not atomic.** No rollback and no compensating action were introduced. A failure message therefore
-means *the commit did not complete* — not *nothing was written*; the earlier write may well have
-persisted, and reloading reads whatever was successfully persisted.
+**What this release does not do.** **UX-001 was discovery only** — its direction is recorded, not
+shipped. The redesigned sidebar and navigation (**UX-004**), breadcrumbs and quick actions, the
+collapsed / pinned / hover-expand rail, and the mobile drawer (**UX-005**) are **not included** and
+remain future work. **OQ-2 and OQ-3 remain OPEN**; no contract editor authority migration and no
+deletion-command migration occurred. Payroll and committed-payroll semantics are unchanged, and existing
+backups remain compatible.
 
-**Integrity Check detects; it does not repair.** The findings tell you a partial state exists and where
-it is — they do not fix it.
-
-**Retry prevents duplicates; it does not reconcile linkage.** Two residual states remain, and **manual
-review is the current operational response** to both. If the plan was created by the failing commit and
-only the transactions were saved, a retry creates no duplicate — but because those rows are skipped as
-duplicates they are never linked to the new plan, so the Critical finding **remains** after the retry
-succeeds. If only the plan was saved, a retry creates the missing transaction under a new id, but the
-stale references on the plan are **not removed**, so `corrupt-plan-ref` **remains** and the commit
-reports success while that finding still stands. After a failed commit, run Settings → Run Integrity
-Check and expect that manual review — or restoration from the pre-operation backup — may still be
-required.
-
-Builds on the **v2.8.3 Payroll Posting Integrity** release. See [`CHANGELOG.md`](CHANGELOG.md)
+Builds on the **v2.8.4 Monthly Plan Result Integrity** release. See [`CHANGELOG.md`](CHANGELOG.md)
 and [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
 
 Two supported outputs:
@@ -101,7 +93,7 @@ Two supported outputs:
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (66 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/ domain/ platform/ transport/ repository/ cli/` — 65 browser-loaded in one shared global scope, plus the CLI-only module), no ES modules | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.4.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.5.html` |
 
 ---
 
@@ -189,9 +181,9 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(1700 checks)"]
+    VERIFY["tools/verify-build.js<br/>(1713 checks)"]
   end
-  DIST["dist/tam-intelligence-os-v2.8.4.html<br/>(portable single file)"]
+  DIST["dist/tam-intelligence-os-v2.8.5.html<br/>(portable single file)"]
 
   IDX --> JS --> STATE --> LS
   CSS --> IDX
@@ -245,7 +237,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.8.4.html  Portable single-file release (build output, version-controlled)
+  tam-intelligence-os-v2.8.5.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact
@@ -307,7 +299,7 @@ Build the portable single file from the modular source:
 node tools/build-single-file.js
 ```
 
-Verify (1700 checks):
+Verify (1713 checks):
 
 ```bash
 node tools/verify-build.js
@@ -350,7 +342,7 @@ Releases are tag-driven and guarded end-to-end (see [`docs/RELEASE-PROCESS.md`](
 
 ```mermaid
 flowchart LR
-  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1700)"]
+  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1713)"]
   V --> C["commit source + dist"] --> T["push tag vX.Y.Z"]
   T --> GA["GitHub Actions: Release"]
   GA --> GATE{"tag matches<br/>v-APP_VERSION?"}
@@ -444,13 +436,12 @@ Complete and merged to `main` (no version assigned; see [`AI_CONTEXT.md`](AI_CON
 
 Next, in order:
 
-1. UX-001–UX-003 documentation reconciliation
-2. v2.8.5 release
-3. **UX-004** — Sidebar & Navigation: sidebar grouped by business domain (Dashboard, People,
+1. v2.8.5 release (**prepared; not yet tagged or published**)
+2. **UX-004** — Sidebar & Navigation: sidebar grouped by business domain (Dashboard, People,
    Finance, Analytics, System), with Executive and HR dashboards under Dashboard, Employees and
    Contracts under People, Payroll under Finance; context-aware navigation, breadcrumbs, quick
    actions, collapsed rail, pinned mode and hover-expand. **Not implemented.**
-4. **UX-005** — Responsive/Mobile Refinement, including the mobile drawer where appropriate.
+3. **UX-005** — Responsive/Mobile Refinement, including the mobile drawer where appropriate.
    **Not implemented.**
 
 **Released**

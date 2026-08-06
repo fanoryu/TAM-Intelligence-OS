@@ -6,27 +6,31 @@ AI assistants get productive quickly. It is descriptive (what *is*), whereas
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
 there rather than duplicating it.
 
-**As of the current source state:** v2.8.4 — "Monthly Plan Result Integrity"; `SCHEMA_VERSION` 6.
-v2.8.4 is **tagged and published, and is the latest published release** — annotated tag `v2.8.4` peels
-to the published baseline commit `bd8819af0287af02711898cf43d22fb70cc3bcd5` on `main`, and the GitHub
-Release *TAM Intelligence OS v2.8.4* is published (not draft, not prerelease) and marked Latest. v2.8.3
-remains published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub
-Release only — it changed no source commit, runtime behavior, schema, or storage key.
+**As of the current source state:** v2.8.5 — "Workspace & Contract Timeline Integrity";
+`SCHEMA_VERSION` 6. **v2.8.5 is prepared but not yet tagged or published.** The version constants,
+portable artifact, release notes, changelog and forward-looking pointers have been advanced as release
+preparation; the annotated tag `v2.8.5` does not exist and no GitHub Release for it exists. Tagging and
+publication are a separately authorized event (`docs/RELEASE-PROCESS.md` §11–§14).
 
-**Repository `main` now contains production changes beyond the published v2.8.4 Release artifact.**
+**v2.8.4 remains the latest published release** — annotated tag `v2.8.4` peels to the published baseline
+commit `bd8819af0287af02711898cf43d22fb70cc3bcd5` on `main`, and the GitHub Release *TAM Intelligence OS
+v2.8.4* is published (not draft, not prerelease) and marked Latest. v2.8.3 remains published and
+unchanged; it is no longer marked Latest.
+
+**Repository `main` therefore contains production changes beyond the published v2.8.4 Release artifact.**
 SPR-093, SPR-095 and then the UX sprints **UX-002A**, **UX-002B**, **UX-003A**, **UX-003B** and
-**UX-003C** changed production source, so the
-portable build was regenerated from source as `CLAUDE.md` §10 and §19 require. `APP_VERSION`,
-`APP_RELEASE_NAME` and `SCHEMA_VERSION` are unchanged, so the filename is unchanged — but the
-repository artifact and the published asset are **no longer byte-identical**:
+**UX-003C** changed production source, and v2.8.5 release preparation advanced `APP_VERSION` and
+`APP_RELEASE_NAME`. The repository artifact is now a different file from the published asset:
 
-| | Repository `main` | Published v2.8.4 Release asset |
+| | Repository `main` (v2.8.5, prepared) | Published v2.8.4 Release asset |
 |---|---|---|
-| `dist/tam-intelligence-os-v2.8.4.html` | **963,453 bytes** | 914,409 bytes |
-| SHA-256 | `0a8b745627…6e886927` | `09c622b3a6…3aea02c6` |
+| Artifact | `dist/tam-intelligence-os-v2.8.5.html` — **965,767 bytes** | `tam-intelligence-os-v2.8.4.html` — 914,409 bytes |
+| SHA-256 | `32e624a262…1c23a7db8cb` | `09c622b3a6…3aea02c6` |
 
-The tag, Release, and published asset are unchanged and were **not** republished. No version has been
-assigned to this divergence and no release is implied or recommended here.
+The v2.8.4 tag, Release, and published asset are unchanged and were **not** republished. The superseded
+`dist/tam-intelligence-os-v2.8.4.html` was removed from `dist/` by the release dist-swap, as
+`docs/RELEASE-PROCESS.md` §2 requires; the historical published asset is untouched.
+
 When these change, update this document (not `CLAUDE.md`).
 
 **Current baseline (aggregate-backed Repository adoption complete):**
@@ -294,7 +298,7 @@ labels so exported terminology matches the screen.
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1700** on current `main`),
+  the portable single file, and a verifier runs a suite of invariant checks (**1713** on current `main`),
   joined by **eleven** runtime harnesses (**1333** checks). PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
@@ -371,9 +375,10 @@ CSS is pinned by digest instead (see §19). The authoritative, detailed layout i
 
 Bump the version constants, add release notes, build + verify, present a Release Candidate, and — on
 approval — commit, tag, push, and let the tag-triggered workflow publish the GitHub Release and
-portable asset (guarded so it publishes only when the tag matches the source version). **v2.8.4 is the
-latest published release, published from annotated tag `v2.8.4` (commit `bd8819a`) and marked Latest;
-v2.8.3 remains published and unchanged but is no longer Latest.** Detailed steps:
+portable asset (guarded so it publishes only when the tag matches the source version). **v2.8.5 is
+prepared but not tagged or published. v2.8.4 remains the latest published release, published from
+annotated tag `v2.8.4` (commit `bd8819a`) and marked Latest; v2.8.3 remains published and unchanged but
+is no longer Latest.** Detailed steps:
 [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md). History: [`CHANGELOG.md`](CHANGELOG.md); latest
 summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
@@ -441,7 +446,7 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1700** checks) plus **eleven**
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1713** checks) plus **eleven**
   Node runtime harnesses (**1333** checks total: contract timeline 349, integrity warning rules 146,
   integrity payroll rules 144, Contract Core 129, monthly plan 118, payroll posting 106,
   contract persistence 74, payroll committed state 72, contract renewal 67, integrity rules 67,
@@ -478,8 +483,9 @@ Directions (no committed release numbers unless already approved):
 - **Released:** Supplemental Payroll Engine (v2.7.0); Payroll Integrity & Reporting Foundation (v2.7.1);
   Persistence & Transactional Integrity (v2.7.2); Supplemental-Aware Payroll History (v2.7.3);
   Aggregate-Owned Contract Renewal + Single Payroll Posting Authority (v2.8.1); Honest Persistence
-  Results (v2.8.2); Payroll Posting Integrity (v2.8.3); **Monthly Plan Result Integrity (v2.8.4 —
-  current, and the latest published release)**.
+  Results (v2.8.2); Payroll Posting Integrity (v2.8.3); **Monthly Plan Result Integrity (v2.8.4 — the
+  latest published release)**. **Prepared, not yet published:** Workspace & Contract Timeline Integrity
+  (v2.8.5).
 - **Immediate residuals** (evidence-backed, not yet scheduled): Monthly Plan retry linkage reconciliation
   (Scenarios A2 and B); the Smart Import undo in-memory/storage divergence — both described under
   *Known Limitations*, and both answered today by **manual review** only.
@@ -526,13 +532,13 @@ Directions (no committed release numbers unless already approved):
   Presentation** made every counter resolve through one canonical helper, moved the status filter onto
   the canonical effective state, and fixed the progress wording so `3/3` reads as the final month.
   See §5 for the model and §19 for the decisions.
-  **Next, in order:** UX-001–UX-003 documentation reconciliation; the **v2.8.5** release; then
+  **Next, in order:** the **v2.8.5** release (prepared; awaiting tag and publication); then
   **UX-004 — Sidebar & Navigation** (sidebar grouped by business domain — Dashboard, People, Finance,
   Analytics, System — with Executive and HR dashboards under Dashboard, Employees and Contracts under
   People, Payroll under Finance; plus context-aware navigation, breadcrumbs, quick actions, a collapsed
   rail, pinned mode and hover-expand); then **UX-005 — Responsive/Mobile Refinement** (including the
-  mobile drawer where appropriate). **Neither UX-004 nor UX-005 is implemented**, and v2.8.5 is not
-  released.
+  mobile drawer where appropriate). **Neither UX-004 nor UX-005 is implemented.** The **v2.8.5 release is
+  prepared but not yet tagged or published** — see the header of this document for its exact state.
 - **Planned:** Payroll Reporting suite expansion; supplemental sources beyond overtime; ongoing
   repository maintenance.
 - **Under consideration:** authentication and role-based access control; attachment/evidence
@@ -542,7 +548,7 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
 
 ## 18. Technical Debt
 
-- No general automated regression suite; coverage is the invariant verifier plus ten targeted runtime
+- No general automated regression suite; coverage is the invariant verifier plus eleven targeted runtime
   harnesses, with the remaining behavioural coverage manual.
 - Heavy use of direct DOM string rendering — safe today because user data is escaped, but a
   standing reason to keep escaping disciplined.
