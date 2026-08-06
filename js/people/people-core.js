@@ -111,20 +111,95 @@ function contractCalc(c, refKey){
   out.progress = `${out.current}/${dur}`;
   return out;
 }
+/* ---------- UX-003B canonical contract timeline model ---------- */
+// ISO-8601 week key ("YYYY-Www", Monday-start) for a YYYY-MM-DD date. Computed
+// in UTC so it never depends on the host timezone. Weeks legitimately span a
+// month or year boundary — that is why ExpiringThisWeek is tested BEFORE
+// ExpiringThisMonth in the classification order below.
+function isoWeekKey(iso){
+  const d = new Date(iso+'T00:00:00');
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;                     // Mon=1 .. Sun=7
+  t.setUTCDate(t.getUTCDate() + 4 - day);             // the Thursday of this week
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((t - yearStart)/86400000) + 1)/7);
+  return t.getUTCFullYear()+'-W'+String(week).padStart(2,'0');
+}
+/* THE canonical expiry-band helper. The 30/60/90 literals live here and ONLY
+   here — the inline ladders that used to sit in contracts.js and
+   payroll-ops-engine.js now call this. Pure: days in, band out. */
+function contractExpiryBand(days){
+  if(days==null || !isFinite(days)) return null;
+  return days<=30 ? 30 : days<=60 ? 60 : 90;
+}
+/* THE canonical timeline classifier — the single source of truth for BOTH
+   timeline questions, computed once (PD-T1..PD-T4):
+
+     { state:   one of CONTRACT_EFFECTIVE_STATES   — always present
+       horizon: one of CONTRACT_EXPIRY_HORIZONS    — 'None' unless state==='Active'
+       daysUntilEnd, withinWarningWindow }
+
+   The two dimensions are INDEPENDENT. A contract ending this month is
+   state 'Active' with horizon 'EndingThisMonth' — the horizon never replaces
+   the effective state.
+
+   CALENDAR HORIZONS ARE NOT GATED BY THE WARNING SETTING. EndingToday /
+   ThisWeek / ThisMonth / NextMonth are calendar facts and hold at any
+   contractExpiryWarningDays, including 1. Only WithinWarningWindow — the
+   residual band — depends on that threshold.
+
+   withinWarningWindow is the COMPATIBILITY ALIAS behind the legacy
+   'Expiring Soon' label. It is computed here, once, so the facade below never
+   re-reads the setting and no second rulebook can appear.
+
+   Everything is measured against refKey through contractCalc()/contractRefDate();
+   no branch here calls isoToday() independently. */
+function contractTimeline(c, refKey){
+  const none = (state)=>({state:state, horizon:'None', daysUntilEnd:null, withinWarningWindow:false});
+  if(!c) return null;
+  if(c.status==='Cancelled') return none('Cancelled');
+  if(c.status==='Renewed')   return none('Renewed');
+  if(c.status==='Draft')     return none('Draft');
+  const ref = refKey || todayKey();
+  const calc = contractCalc(c, ref);
+  if(!calc.valid)      return none('Draft');           // unusable dates read as Draft
+  if(calc.beforeStart) return Object.assign(none('Scheduled'), {daysUntilEnd:calc.daysUntilEnd});
+  if(calc.expiredForRef) return Object.assign(none('Expired'), {daysUntilEnd:calc.daysUntilEnd});
+  // --- effectively Active: resolve the independent horizon dimension ---
+  const days = calc.daysUntilEnd;
+  const warn = Number(State.settings.contractExpiryWarningDays)||90;
+  const within = days!=null && days <= warn;
+  const refDate = contractRefDate(ref);
+  let horizon;
+  if(calc.endDate === refDate)                          horizon = 'EndingToday';
+  else if(isoWeekKey(calc.endDate) === isoWeekKey(refDate)) horizon = 'EndingThisWeek';
+  else {
+    const refM = refDate.slice(0,7), endM = calc.endDate.slice(0,7);
+    const rp = keyParts(refM);
+    const nextM = mkKey(rp.m===12 ? rp.y+1 : rp.y, rp.m===12 ? 1 : rp.m+1);
+    if(endM === refM)       horizon = 'EndingThisMonth';
+    else if(endM === nextM) horizon = 'EndingNextMonth';
+    else if(within)         horizon = 'WithinWarningWindow';
+    else                    horizon = 'None';
+  }
+  return {state:'Active', horizon:horizon, daysUntilEnd:days, withinWarningWindow:within};
+}
+// Thin readers over the one canonical computation — no duplicated calculation.
+function contractEffectiveState(c, refKey){ const t = contractTimeline(c, refKey); return t ? t.state : null; }
+function contractExpiryHorizon(c, refKey){ const t = contractTimeline(c, refKey); return t ? t.horizon : null; }
 // Effective status string (derived) — Draft/Cancelled/Renewed are stored;
 // Active-family contracts resolve to Active / Expiring Soon / Expired by date.
+// UX-003B: a LEGACY COMPATIBILITY FACADE over the two-dimensional model. It
+// returns exactly the six values it always has, so every existing badge, filter,
+// counter, alert and report is byte-identical. 'Expiring Soon' is the
+// compatibility alias for "effectively Active and inside the warning window" —
+// it is neither a canonical state nor a canonical horizon. UX-003C owns
+// surfacing Scheduled and the horizon labels.
 function contractEffectiveStatus(c, refKey){
   if(!c) return '—';
-  if(c.status==='Cancelled') return 'Cancelled';
-  if(c.status==='Renewed') return 'Renewed';
-  if(c.status==='Draft') return 'Draft';
-  const calc = contractCalc(c, refKey||todayKey());
-  if(!calc.valid) return 'Draft';
-  if(calc.beforeStart) return 'Active';                 // confirmed, not yet started
-  if(calc.expiredForRef) return 'Expired';
-  const warn = Number(State.settings.contractExpiryWarningDays)||90;
-  if(calc.daysUntilEnd!=null && calc.daysUntilEnd <= warn) return 'Expiring Soon';
-  return 'Active';
+  const t = contractTimeline(c, refKey);
+  if(t.state==='Active' && t.withinWarningWindow) return CONTRACT_LEGACY_EXPIRING_ALIAS;
+  return CONTRACT_LEGACY_STATE_DISPLAY[t.state];
 }
 function contractsForEmployee(empId){ return State.contracts.filter(c=>c.employeeId===empId); }
 // The contract that funds payroll for a given month: covers it, and is not

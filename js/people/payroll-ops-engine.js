@@ -650,7 +650,9 @@ function payrollHealth(monthKey){
   const out=[]; const prevKey=prevMonthKey(monthKey);
   payrollPlansForMonth(monthKey).forEach(p=>{
     const ct=contractById(p.contractId);
-    if(ct){ const cc=contractCalc(ct, monthKey); if(cc.valid && cc.daysUntilEnd!=null && cc.daysUntilEnd>=0 && cc.daysUntilEnd<=30) out.push({sev:'warn', title:'Contract expiring within 30 days', detail:`${p.employeeName}: ${ct.contractNumber||'contract'} ends in ${cc.daysUntilEnd} day(s).`}); }
+    // UX-003B — the inline "<=30" band is gone; the 30-day band is resolved by the
+    // canonical contractExpiryBand() helper. Same threshold, same message.
+    if(ct){ const cc=contractCalc(ct, monthKey); if(cc.valid && cc.daysUntilEnd!=null && cc.daysUntilEnd>=0 && contractExpiryBand(cc.daysUntilEnd)===30) out.push({sev:'warn', title:'Contract expiring within 30 days', detail:`${p.employeeName}: ${ct.contractNumber||'contract'} ends in ${cc.daysUntilEnd} day(s).`}); }
     const prev=State.payrollPlans.find(x=>x.monthKey===prevKey && x.employeeId===p.employeeId && x.status!=='Cancelled');
     if(prev){ const a=computePayrollPlanned(prev), b=computePayrollPlanned(p); if(a>0){ const d=(b-a)/a;
       if(d>=0.2) out.push({sev:'warn', title:'Payroll increased more than 20%', detail:`${p.employeeName}: ${fmtIDRShort(a)} → ${fmtIDRShort(b)} (+${Math.round(d*100)}%).`});

@@ -69,7 +69,16 @@ function loadRuntime(){
     + ' coveringContract: coveringContract, activeContractToday: activeContractToday,'
     + ' payrollExclusionReason: payrollExclusionReason, generatePayrollForMonth: generatePayrollForMonth,'
     + ' payrollHealth: payrollHealth, computePayrollPlanned: computePayrollPlanned,'
-    + ' isoToday: isoToday, todayKey: todayKey, daysBetween: daysBetween };';
+    + ' isoToday: isoToday, todayKey: todayKey, daysBetween: daysBetween,'
+    // UX-003B — canonical two-dimensional timeline model
+    + ' contractTimeline: contractTimeline, contractEffectiveState: contractEffectiveState,'
+    + ' contractExpiryHorizon: contractExpiryHorizon, contractExpiryBand: contractExpiryBand,'
+    + ' isoWeekKey: isoWeekKey, keyParts: keyParts, mkKey: mkKey,'
+    + ' CONTRACT_EFFECTIVE_STATES: CONTRACT_EFFECTIVE_STATES,'
+    + ' CONTRACT_EXPIRY_HORIZONS: CONTRACT_EXPIRY_HORIZONS,'
+    + ' CONTRACT_LEGACY_STATE_DISPLAY: CONTRACT_LEGACY_STATE_DISPLAY,'
+    + ' CONTRACT_LEGACY_EXPIRING_ALIAS: CONTRACT_LEGACY_EXPIRING_ALIAS,'
+    + ' CONTRACT_STORED_STATUSES: CONTRACT_STORED_STATUSES };';
   const noop = function(){};
   const memStore = {};
   const memStorage = {
@@ -98,7 +107,7 @@ function loadRuntime(){
 const RT = loadRuntime();
 const { State, contractCalc, contractEffectiveStatus, contractRefDate,
         coveringContract, payrollExclusionReason, generatePayrollForMonth,
-        payrollHealth, isoToday, todayKey, daysBetween } = RT;
+        payrollHealth, isoToday, todayKey, daysBetween, keyParts } = RT;
 
 // ---------- fabricated fixture helpers ----------
 let seq = 0;
@@ -470,7 +479,329 @@ check(!!jReported && Number(jReported[1]) >= 0,
   'J10. the advisory never renders a NEGATIVE day count');
 check(!!jReported && Number(jReported[1]) === daysBetween('2025-06-01','2025-06-30'),
   'J11. the reported day count equals the reference-month distance exactly');
+/* ============================================================
+   UX-003B — CANONICAL TWO-DIMENSIONAL TIMELINE MODEL
+   ------------------------------------------------------------
+   PD-T1..PD-T4: "where is this contract in its lifecycle?" and "how close is it
+   to ending?" are INDEPENDENT questions, so the canonical model has TWO
+   dimensions and never one flattened list:
 
+     contractTimeline(c, refKey) -> { state, horizon, daysUntilEnd, withinWarningWindow }
+
+     state   : Draft | Cancelled | Renewed | Scheduled | Active | Expired
+     horizon : EndingToday | EndingThisWeek | EndingThisMonth |
+               EndingNextMonth | WithinWarningWindow | None
+
+   A contract ending this month is state 'Active' WITH horizon
+   'EndingThisMonth' — the horizon never replaces the effective state.
+
+   CALENDAR HORIZONS ARE NOT GATED BY contractExpiryWarningDays. They are
+   calendar facts and hold at any threshold, including 1. Only
+   WithinWarningWindow — the residual band — depends on the setting.
+
+   'Expiring Soon' is a COMPATIBILITY ALIAS (effectively Active AND inside the
+   warning window), not a canonical state and not a canonical horizon.
+
+   MODEL NOTE (structural, deliberate): contractRefDate() resolves a non-current
+   reference month to that month's FIRST day, and a derived endDate is always a
+   month's LAST day. The day-granular horizons (EndingToday / EndingThisWeek)
+   are therefore reachable only through the CURRENT-month reference path, where
+   the reference date is isoToday(). Family N tests them through that path
+   against an INDEPENDENTLY computed expectation.
+
+   Families:
+     K  effective-state vocabulary: exhaustive, mutually exclusive, derived-only
+     L  Scheduled
+     M  ISO-week key correctness (incl. year/leap boundaries)
+     N  horizon dimension: the six values, and Active x horizon pairings
+     O  warning-threshold independence (1 / 7 / 30 / 90 / 3650) + band helper
+     P  legacy facade byte-compatibility, today-equivalence, payroll immutability
+   ============================================================ */
+const { contractTimeline, contractEffectiveState, contractExpiryHorizon,
+        contractExpiryBand, isoWeekKey,
+        CONTRACT_EFFECTIVE_STATES, CONTRACT_EXPIRY_HORIZONS,
+        CONTRACT_LEGACY_STATE_DISPLAY, CONTRACT_LEGACY_EXPIRING_ALIAS,
+        CONTRACT_STORED_STATUSES } = RT;
+
+console.log('== UX-003B CANONICAL TWO-DIMENSIONAL TIMELINE MODEL ==');
+
+/* ---------- K. effective-state dimension ---------- */
+console.log('-- K. effective-state vocabulary (exhaustive, exclusive, derived-only) --');
+const K_STATES   = ['Draft','Cancelled','Renewed','Scheduled','Active','Expired'];
+const K_HORIZONS = ['EndingToday','EndingThisWeek','EndingThisMonth','EndingNextMonth','WithinWarningWindow','None'];
+check(Array.isArray(CONTRACT_EFFECTIVE_STATES) && CONTRACT_EFFECTIVE_STATES.length === 6,
+  'K1. the effective-state vocabulary has exactly six members');
+check(JSON.stringify(CONTRACT_EFFECTIVE_STATES) === JSON.stringify(K_STATES),
+  'K2. effective-state vocabulary matches the approved model (harness holds its OWN copy)');
+check(Array.isArray(CONTRACT_EXPIRY_HORIZONS) && CONTRACT_EXPIRY_HORIZONS.length === 6,
+  'K3. the horizon vocabulary has exactly six members');
+check(JSON.stringify(CONTRACT_EXPIRY_HORIZONS) === JSON.stringify(K_HORIZONS),
+  'K4. horizon vocabulary matches the approved model (harness holds its OWN copy)');
+// The two dimensions must be DISTINCT — no value may appear in both.
+check(CONTRACT_EFFECTIVE_STATES.filter(s=>CONTRACT_EXPIRY_HORIZONS.indexOf(s) !== -1).length === 0,
+  'K5. effective state and expiry horizon are disjoint vocabularies (two dimensions, not one)');
+check(K_HORIZONS.every(h=>K_STATES.indexOf(h) === -1),
+  'K6. no horizon value is an effective state (a horizon never replaces Active)');
+// Scheduled is DERIVED ONLY.
+check(JSON.stringify(CONTRACT_STORED_STATUSES) === JSON.stringify(['Draft','Active','Renewed','Cancelled']),
+  'K7. CONTRACT_STORED_STATUSES is unchanged by UX-003B');
+check(CONTRACT_STORED_STATUSES.indexOf('Scheduled') === -1, 'K8. Scheduled is NOT a stored status');
+check(CONTRACT_STORED_STATUSES.indexOf('Expired') === -1, 'K9. Expired remains derived, not stored');
+// Exhaustiveness + well-formedness across a wide sweep.
+const kShapes = [
+  ct('2025-01-01', 12), ct('2025-01-01', 1), ct('2026-06-15', 24),
+  ct('2024-02-29', 12), ct('2025-11-01', 4), ct('2027-01-01', 12),
+  ct('2025-01-01', 12, {status:'Draft'}), ct('2025-01-01', 12, {status:'Cancelled'}),
+  ct('2025-01-01', 12, {status:'Renewed'}), ct(null, 12), ct('2025-01-01', 0)
+];
+let kTotal = 0, kBadState = 0, kBadHorizon = 0, kHorizonOnNonActive = 0;
+const kSeenStates = new Set(), kSeenHorizons = new Set();
+kShapes.forEach(c=>{
+  for(let y=2023; y<=2029; y++) for(let m=1; m<=12; m++){
+    const t = contractTimeline(c, `${y}-${String(m).padStart(2,'0')}`);
+    kTotal++;
+    if(!t || K_STATES.indexOf(t.state) === -1) kBadState++;
+    else kSeenStates.add(t.state);
+    if(!t || K_HORIZONS.indexOf(t.horizon) === -1) kBadHorizon++;
+    else kSeenHorizons.add(t.horizon);
+    // ONLY effectively Active contracts may carry a non-None horizon.
+    if(t && t.state !== 'Active' && t.horizon !== 'None') kHorizonOnNonActive++;
+  }
+});
+check(kTotal === kShapes.length*84, `K10. sweep ran every shape x 84 reference months (${kTotal} classifications)`);
+check(kBadState === 0, 'K11. every classification yields a member of the effective-state vocabulary (exhaustive)');
+check(kBadHorizon === 0, 'K12. every classification yields a member of the horizon vocabulary (exhaustive)');
+check(kHorizonOnNonActive === 0, 'K13. ONLY effectively Active contracts ever carry a non-None horizon');
+check(kSeenStates.size >= 5, `K14. the sweep exercised ${kSeenStates.size} distinct effective states`);
+check(kSeenHorizons.size >= 3, `K15. the sweep exercised ${kSeenHorizons.size} distinct horizons`);
+// Mutual exclusivity is structural: one call yields exactly one state and one horizon.
+check(kShapes.every(c=>{ const t = contractTimeline(c,'2026-03');
+  return typeof t.state === 'string' && typeof t.horizon === 'string'; }),
+  'K16. each classification returns exactly one state and exactly one horizon');
+check(contractTimeline(null, '2026-03') === null, 'K17. a null contract yields null (no state invented)');
+// The thin readers must agree with the canonical computation (no second rulebook).
+check(kShapes.every(c=>contractEffectiveState(c,'2026-03') === contractTimeline(c,'2026-03').state),
+  'K18. contractEffectiveState() agrees with contractTimeline().state');
+check(kShapes.every(c=>contractExpiryHorizon(c,'2026-03') === contractTimeline(c,'2026-03').horizon),
+  'K19. contractExpiryHorizon() agrees with contractTimeline().horizon');
+
+/* ---------- L. Scheduled ---------- */
+console.log('-- L. Scheduled (derived, never Active, horizon always None) --');
+const lC = ct('2027-06-01', 12);
+check(contractTimeline(lC, '2026-01').state === 'Scheduled', 'L1. a contract starting later is Scheduled');
+check(contractTimeline(lC, '2027-05').state === 'Scheduled', 'L2. still Scheduled the month before it starts');
+check(contractTimeline(lC, '2027-06').state !== 'Scheduled', 'L3. NOT Scheduled once its own month is reached');
+check(contractTimeline(lC, '2026-01').state !== 'Active', 'L4. Scheduled is never the Active state');
+check(contractTimeline(lC, '2026-01').horizon === 'None', 'L5. Scheduled always has horizon None');
+check(contractTimeline(lC, '2020-01').state === 'Scheduled', 'L6. Scheduled holds for a far-past reference month');
+check(contractCalc(lC, '2026-01').beforeStart === true, 'L7. Scheduled corresponds exactly to beforeStart');
+// Stored lifecycle outranks Scheduled, and all of those carry horizon None.
+[['Draft','L8'],['Cancelled','L9'],['Renewed','L10']].forEach(([st,id])=>{
+  const t = contractTimeline(ct('2027-06-01',12,{status:st}), '2026-01');
+  check(t.state === st && t.horizon === 'None', `${id}. a stored ${st} outranks Scheduled and has horizon None`);
+});
+// Expired always has horizon None.
+const lExpired = ct('2024-01-01', 12);
+check(contractTimeline(lExpired,'2026-03').state === 'Expired' && contractTimeline(lExpired,'2026-03').horizon === 'None',
+  'L11. Expired always has horizon None');
+
+/* ---------- M. ISO-8601 week key ---------- */
+console.log('-- M. ISO-8601 week key --');
+check(isoWeekKey('2026-01-01') === '2026-W01', 'M1. 2026-01-01 (Thursday) is 2026-W01');
+check(isoWeekKey('2026-03-01') === '2026-W09', 'M2. 2026-03-01 (Sunday) closes 2026-W09');
+check(isoWeekKey('2026-03-02') === '2026-W10', 'M3. 2026-03-02 (Monday) opens 2026-W10');
+check(isoWeekKey('2025-01-01') === '2025-W01', 'M4. 2025-01-01 (Wednesday) is 2025-W01');
+check(isoWeekKey('2024-12-30') === '2025-W01', 'M5. 2024-12-30 belongs to 2025-W01 (year boundary)');
+check(isoWeekKey('2023-01-01') === '2022-W52', 'M6. 2023-01-01 (Sunday) belongs to 2022-W52');
+check(isoWeekKey('2024-02-29') === '2024-W09', 'M7. leap day 2024-02-29 resolves to 2024-W09');
+check(isoWeekKey('2020-12-31') === '2020-W53', 'M8. 2020 has a W53');
+const mWeek = isoWeekKey('2026-03-02');
+check(['2026-03-02','2026-03-03','2026-03-04','2026-03-05','2026-03-06','2026-03-07','2026-03-08']
+  .every(d=>isoWeekKey(d) === mWeek), 'M9. all seven days Mon..Sun share one week key');
+check(isoWeekKey('2026-03-09') !== mWeek, 'M10. the next Monday starts a new week key');
+check(isoWeekKey('2026-03-01') !== mWeek, 'M11. the preceding Sunday is the PREVIOUS week (Monday-start)');
+
+/* ---------- N. horizon dimension ---------- */
+console.log('-- N. expiry horizon (Active keeps its state) --');
+// Non-current reference month => reference date is that month's 1st.
+const nThisMonth = ct('2025-04-01', 12);                 // ends 2026-03-31
+check(contractCalc(nThisMonth,'2026-03').endDate === '2026-03-31', 'N1. this-month fixture ends 2026-03-31');
+const nT1 = contractTimeline(nThisMonth,'2026-03');
+check(nT1.state === 'Active', 'N2. a contract ending this month is STILL effectively Active');
+check(nT1.horizon === 'EndingThisMonth', 'N3. ... with horizon EndingThisMonth (Active + EndingThisMonth is valid)');
+const nNextMonth = ct('2025-04-01', 13);                 // ends 2026-04-30
+const nT2 = contractTimeline(nNextMonth,'2026-03');
+check(nT2.state === 'Active' && nT2.horizon === 'EndingNextMonth',
+  'N4. Active + EndingNextMonth is valid');
+const nBeyond = ct('2025-04-01', 14);                    // ends 2026-05-31, 91 days out
+const nT3 = contractTimeline(nBeyond,'2026-03');
+check(nT3.state === 'Active' && nT3.horizon === 'None',
+  'N5. beyond next month and outside a 90-day window is Active + None');
+// Year rollover: December reference -> next month is January of the next year.
+const nDec = ct('2025-02-01', 12);                       // ends 2026-01-31
+check(contractCalc(nDec,'2025-12').endDate === '2026-01-31', 'N6. year-boundary fixture ends 2026-01-31');
+check(contractExpiryHorizon(nDec,'2025-12') === 'EndingNextMonth',
+  'N7. December reference treats the following January as next month (year rollover)');
+check(contractEffectiveState(nDec,'2025-12') === 'Active', 'N8. ... and the contract is still Active');
+// Current-month path: reference date is isoToday(), so day-granular horizons are reachable.
+const nEndOfThisMonth = (function(){
+  const p = keyParts(TODAY_KEY);
+  const d = new Date(p.y, p.m, 0);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+})();
+const nCurrent = ct(TODAY_KEY+'-01', 1);
+check(contractCalc(nCurrent, TODAY_KEY).endDate === nEndOfThisMonth,
+  'N9. current-month fixture ends on the last day of the current month');
+const nExpected = (TODAY === nEndOfThisMonth) ? 'EndingToday'
+  : (isoWeekKey(nEndOfThisMonth) === isoWeekKey(TODAY)) ? 'EndingThisWeek'
+  : 'EndingThisMonth';
+const nT4 = contractTimeline(nCurrent, TODAY_KEY);
+check(nT4.horizon === nExpected,
+  `N10. the current-month horizon matches the independently computed expectation (${nExpected})`);
+check(nT4.state === 'Active', 'N11. ... and the current-month contract is still effectively Active');
+check(['EndingToday','EndingThisWeek','EndingThisMonth'].indexOf(nT4.horizon) !== -1,
+  'N12. a contract ending this month lands in a day/month horizon, never NextMonth or WithinWarningWindow');
+check([TODAY === nEndOfThisMonth,
+       TODAY !== nEndOfThisMonth && isoWeekKey(nEndOfThisMonth) === isoWeekKey(TODAY),
+       TODAY !== nEndOfThisMonth && isoWeekKey(nEndOfThisMonth) !== isoWeekKey(TODAY)]
+      .filter(Boolean).length === 1,
+  'N13. exactly one of today / this-week / this-month applies (horizons are mutually exclusive)');
+// Every horizon value is reachable at least once across the sweep + explicit probes.
+const nOrigWarn0 = State.settings.contractExpiryWarningDays;
+State.settings.contractExpiryWarningDays = 3650;
+check(contractExpiryHorizon(nBeyond,'2026-03') === 'WithinWarningWindow',
+  'N14. Active + WithinWarningWindow is valid (residual band inside a wide window)');
+State.settings.contractExpiryWarningDays = nOrigWarn0;
+
+/* ---------- O. warning-threshold independence ---------- */
+console.log('-- O. calendar horizons are independent of contractExpiryWarningDays --');
+const oOrigWarn = State.settings.contractExpiryWarningDays;
+[1, 7, 30, 90, 3650].forEach((w)=>{
+  State.settings.contractExpiryWarningDays = w;
+  check(contractExpiryHorizon(nThisMonth,'2026-03') === 'EndingThisMonth',
+    `O1.${w}. EndingThisMonth survives warningDays=${w} (calendar horizon, not gated)`);
+  check(contractExpiryHorizon(nNextMonth,'2026-03') === 'EndingNextMonth',
+    `O2.${w}. EndingNextMonth survives warningDays=${w} (calendar horizon, not gated)`);
+  check(contractEffectiveState(nThisMonth,'2026-03') === 'Active',
+    `O3.${w}. effective state stays Active at warningDays=${w}`);
+});
+// Only WithinWarningWindow moves with the threshold.
+State.settings.contractExpiryWarningDays = 30;
+check(contractExpiryHorizon(nBeyond,'2026-03') === 'None',
+  'O4. the residual band is None when the contract is outside a 30-day window');
+State.settings.contractExpiryWarningDays = 120;
+check(contractExpiryHorizon(nBeyond,'2026-03') === 'WithinWarningWindow',
+  'O5. the same contract becomes WithinWarningWindow at 120 days (threshold-dependent)');
+State.settings.contractExpiryWarningDays = 3650;
+check(contractExpiryHorizon(nBeyond,'2026-03') === 'WithinWarningWindow',
+  'O6. it stays WithinWarningWindow at 3650 days');
+State.settings.contractExpiryWarningDays = oOrigWarn;
+check(Number(State.settings.contractExpiryWarningDays) === oOrigWarn, 'O7. warning setting restored after the sweep');
+// Canonical band helper — the 30/60/90 literals live in exactly one place.
+check(contractExpiryBand(0) === 30,  'O8. 0 days -> band 30');
+check(contractExpiryBand(30) === 30, 'O9. 30 days -> band 30 (inclusive)');
+check(contractExpiryBand(31) === 60, 'O10. 31 days -> band 60');
+check(contractExpiryBand(60) === 60, 'O11. 60 days -> band 60 (inclusive)');
+check(contractExpiryBand(61) === 90, 'O12. 61 days -> band 90');
+check(contractExpiryBand(365) === 90,'O13. far-out distances saturate at band 90');
+check(contractExpiryBand(null) === null, 'O14. null distance yields no band');
+check(contractExpiryBand(NaN) === null, 'O15. NaN distance yields no band');
+
+/* ---------- P. legacy facade, today-equivalence, payroll immutability ---------- */
+console.log('-- P. legacy compatibility facade / today-equivalence / payroll immutability --');
+const P_DISPLAY = ['Draft','Active','Expiring Soon','Expired','Renewed','Cancelled'];
+check(CONTRACT_LEGACY_EXPIRING_ALIAS === 'Expiring Soon', 'P1. the compatibility alias is the legacy label');
+check(Object.keys(CONTRACT_LEGACY_STATE_DISPLAY).length === 6,
+  'P2. the legacy display map covers all six effective states');
+check(CONTRACT_LEGACY_STATE_DISPLAY['Scheduled'] === 'Active',
+  'P3. Scheduled maps to Active FOR THE LEGACY FACADE ONLY');
+check(CONTRACT_EFFECTIVE_STATES.indexOf(CONTRACT_LEGACY_EXPIRING_ALIAS) === -1 &&
+      CONTRACT_EXPIRY_HORIZONS.indexOf(CONTRACT_LEGACY_EXPIRING_ALIAS) === -1,
+  'P4. \'Expiring Soon\' is neither a canonical state nor a canonical horizon (alias only)');
+// The facade must emit only the six historical values, and must equal the
+// alias rule exactly — recomputed here from the model, independently.
+let pOutside = 0, pMismatch = 0;
+kShapes.forEach(c=>{
+  for(let y=2023; y<=2029; y++) for(let m=1; m<=12; m++){
+    const k = `${y}-${String(m).padStart(2,'0')}`;
+    const disp = contractEffectiveStatus(c, k);
+    const t = contractTimeline(c, k);
+    const expected = (t.state==='Active' && t.withinWarningWindow)
+      ? CONTRACT_LEGACY_EXPIRING_ALIAS : CONTRACT_LEGACY_STATE_DISPLAY[t.state];
+    if(P_DISPLAY.indexOf(disp) === -1) pOutside++;
+    if(disp !== expected) pMismatch++;
+  }
+});
+check(pOutside === 0, 'P5. the facade only ever emits the six historical display values');
+check(pMismatch === 0, 'P6. the facade is exactly the documented alias rule over the model (one rulebook)');
+check(contractEffectiveStatus(lC, '2026-01') === 'Active',
+  'P7. Scheduled still displays as Active (no new UI vocabulary in UX-003B)');
+check(contractEffectiveStatus(nThisMonth, '2026-03') === 'Expiring Soon',
+  'P8. an in-window horizon still displays as Expiring Soon');
+check(contractEffectiveStatus(nBeyond, '2026-03') === 'Active',
+  'P9. outside the window still displays as Active');
+check(contractEffectiveStatus(lExpired, '2026-03') === 'Expired', 'P10. Expired display unchanged');
+check(contractEffectiveStatus(null) === '—', 'P11. a null contract still displays as em-dash');
+// The alias must track the SETTING, exactly as the pre-UX-003B build did.
+const pOrigWarn = State.settings.contractExpiryWarningDays;
+State.settings.contractExpiryWarningDays = 1;
+check(contractEffectiveStatus(nThisMonth, '2026-03') === 'Active',
+  'P12. with warningDays=1 an EndingThisMonth contract displays Active (legacy alias respects the setting)');
+check(contractExpiryHorizon(nThisMonth, '2026-03') === 'EndingThisMonth',
+  'P13. ... while the CALENDAR horizon is still EndingThisMonth (dimensions are independent)');
+State.settings.contractExpiryWarningDays = pOrigWarn;
+// Today-equivalence survives the model change.
+const pFixtures = [ct(addMonths(TODAY_KEY,-6)+'-01',12), ct(addMonths(TODAY_KEY,-24)+'-01',12),
+                   ct(addMonths(TODAY_KEY,6)+'-01',12), ct(TODAY_KEY+'-01',1)];
+pFixtures.forEach((c,i)=>{
+  check(contractEffectiveStatus(c) === contractEffectiveStatus(c, TODAY_KEY),
+    `P14.${i+1} facade: omitted refKey === explicit current month`);
+  check(JSON.stringify(contractTimeline(c)) === JSON.stringify(contractTimeline(c, TODAY_KEY)),
+    `P15.${i+1} model: omitted refKey === explicit current month (state, horizon and alias)`);
+});
+// UX-003A reference-date fallbacks still hold through the model.
+check(contractRefDate('2025-13') === TODAY && contractRefDate('2025-00') === TODAY,
+  'P16. out-of-range month: the reference DATE still falls back to isoToday()');
+check(contractTimeline(pFixtures[0], 'garbage').state === contractTimeline(pFixtures[0], TODAY_KEY).state,
+  'P17. malformed refKey falls back to the current-month classification');
+check(contractTimeline(pFixtures[0], null).state === contractTimeline(pFixtures[0], TODAY_KEY).state,
+  'P18. null refKey falls back to the current-month classification');
+check(contractCalc(pFixtures[0], '2025-13').beforeStart === true,
+  'P19. out-of-range month: the PROGRESS math still uses the overflowed month (pre-existing, unfixed)');
+// Duration / validity edges.
+check(contractTimeline(ct('2025-05-01', 0), '2025-05').state === 'Draft',
+  'P20. duration 0 (invalid) classifies as Draft with horizon None');
+check(contractTimeline(ct('2025-05-01', 0), '2025-05').horizon === 'None', 'P21. ... horizon is None');
+check(contractTimeline(ct(null, 12), '2025-05').state === 'Draft', 'P22. a missing start date classifies as Draft');
+check(contractTimeline(ct('2025-05-01', 1), '2025-05').state === 'Active', 'P23. duration 1 in its own month is Active');
+check(contractTimeline(ct('2025-01-01',12), '1975-01').state === 'Scheduled', 'P24. far-past reference -> Scheduled');
+check(contractTimeline(ct('2025-01-01',12), '2199-12').state === 'Expired', 'P25. far-future reference -> Expired');
+// PAYROLL IMMUTABILITY.
+State.employees = [{ id:'emp-ux3b-1', employeeId:'EMP-UX3B-001', fullName:'Fixture Person UX3B',
+  active:true, employmentStatus:'Active', monthlyBaseSalary: 9000000,
+  workDaysPerWeek:5, workHoursPerDay:8 }];
+State.contracts = [ct('2025-01-01', 24, {id:'ct-ux3b-1', employeeId:'emp-ux3b-1', monthlySalary: 12000000})];
+State.payrollPlans = []; State.overtimeRecords = []; State.txns = []; State.monthlyPlans = [];
+const pCtBefore = JSON.stringify(State.contracts[0]);
+const pGen = generatePayrollForMonth('2025-06');
+const pPlan = State.payrollPlans.find(p=>p.monthKey==='2025-06');
+check(pGen.generated === 1 && !!pPlan, 'P26. payroll still generates for a historical covered month');
+check(pPlan.plannedAmount === 12000000, 'P27. generated payroll value is unchanged by the timeline model');
+check(payrollExclusionReason(State.employees[0], '2025-06') === null, 'P28. eligibility unchanged (mid-term)');
+check(payrollExclusionReason(State.employees[0], '2024-12') === 'Contract not started', 'P29. pre-start exclusion reason unchanged');
+check(payrollExclusionReason(State.employees[0], '2027-06') === 'No active contract covering this month',
+  'P30. post-end exclusion reason unchanged (pre-existing unreachable branch still untouched)');
+pPlan.status = 'Committed';
+const pSnap = JSON.stringify(pPlan);
+const pAfter = generatePayrollForMonth('2025-06');
+check(pAfter.skippedCommitted === 1, 'P31. committed payroll is still skipped by regeneration');
+check(JSON.stringify(State.payrollPlans.find(p=>p.monthKey==='2025-06')) === pSnap,
+  'P32. committed payroll row is byte-identical after the model change');
+for(let y=2023; y<=2029; y++) contractTimeline(State.contracts[0], y+'-06');
+check(JSON.stringify(State.contracts[0]) === pCtBefore,
+  'P33. contractTimeline() never mutates contract data');
+check(/const SCHEMA_VERSION = 6;/.test(fs.readFileSync(path.resolve(__dirname,'..','js','core','constants.js'),'utf8')),
+  'P34. SCHEMA_VERSION remains 6 (UX-003B is not a migration)');
 console.log('');
 if(failures.length === 0){
   console.log('RUNTIME VERIFICATION PASSED -- ' + passed + ' checks OK.');
