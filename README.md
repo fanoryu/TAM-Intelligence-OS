@@ -47,10 +47,11 @@ Design principles:
 
 **v2.8.5 — Workspace & Contract Timeline Integrity** · `SCHEMA_VERSION` 6
 
-> **Release state.** v2.8.5 is **prepared but not yet tagged or published**. The latest published
-> release remains **v2.8.4 — Monthly Plan Result Integrity**, released from annotated tag `v2.8.4` at
-> commit `bd8819a`, and it stays published and unchanged. Tagging and publication are a separately
-> authorized event — see [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) §11–§14.
+> **Release state.** v2.8.5 is **published and marked Latest**, released from annotated tag `v2.8.5` at
+> commit `96a8d17`. The published asset `tam-intelligence-os-v2.8.5.html` (965,767 bytes) is
+> byte-identical to the repository artifact. The prior release, **v2.8.4 — Monthly Plan Result
+> Integrity**, remains published and unchanged; it is simply no longer the Latest release. See
+> [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a release is cut.
 
 A workspace-presentation and contract-timeline correctness release, packaging the merged UX-002A,
 UX-002B, UX-003A, UX-003B and UX-003C sprints. No schema change, no new or renamed storage key, no data
@@ -414,37 +415,45 @@ Directions only — no release numbers are assigned unless already approved.
 
 **Workspace refresh (UX workstream)**
 
-Complete and merged to `main` (no version assigned; see [`AI_CONTEXT.md`](AI_CONTEXT.md) for detail):
+Complete, merged to `main`, and shipped in **v2.8.5** (see [`AI_CONTEXT.md`](AI_CONTEXT.md) for detail):
 
-- **UX-001** — Minimal Workspace Discovery. Discovery and product direction only: a minimal
+- ✅ **UX-001** — Minimal Workspace Discovery. Discovery and product direction only: a minimal
   enterprise workspace, less "AI dashboard" presentation, typography and density over decorative
   redesign, sidebar/navigation deferred. It authorized no implementation by itself.
-- **UX-002A** — Persistent Shell/View Foundation. The shell mounts once; navigation replaces view
+- ✅ **UX-002A** — Persistent Shell/View Foundation. The shell mounts once; navigation replaces view
   content without rebuilding it.
-- **UX-002B** — Visual Foundation and Dashboard Density. Sans UI chrome, spacing/radius/type tokens,
+- ✅ **UX-002B** — Visual Foundation and Dashboard Density. Sans UI chrome, spacing/radius/type tokens,
   digest-pinned CSS golden master, theme-token chart colours, Executive Dashboard density pass.
-- **UX-003A** — Reference-Date Correctness. `daysUntilEnd` shares one reference basis with the rest
+- ✅ **UX-003A** — Reference-Date Correctness. `daysUntilEnd` shares one reference basis with the rest
   of `contractCalc`.
-- **UX-003B** — Canonical Contract Timeline Model. Effective state and expiry horizon become two
+- ✅ **UX-003B** — Canonical Contract Timeline Model. Effective state and expiry horizon become two
   independent derived dimensions.
-- **UX-003C** — Contract Progress, Counters, Filters and Presentation. One canonical counter,
+- ✅ **UX-003C** — Contract Progress, Counters, Filters and Presentation. One canonical counter,
   canonical-state filters, lifecycle progress wording.
 
 > **Why a documentation milestone?** Documentation Reconciliation updates project documentation
 > only and introduces no production-code changes. It exists so the living documents match what
 > the repository actually contains after a run of implementation sprints.
 
+Milestone status:
+
+- ✅ **Documentation Reconciliation** — living documents reconciled with the repository state.
+- ✅ **v2.8.5 Published** — annotated tag `v2.8.5`, published GitHub Release, asset verified.
+
 Next, in order:
 
-1. v2.8.5 release (**prepared; not yet tagged or published**)
-2. **UX-004** — Sidebar & Navigation: sidebar grouped by business domain (Dashboard, People,
+1. **UX-004** — Sidebar & Navigation: sidebar grouped by business domain (Dashboard, People,
    Finance, Analytics, System), with Executive and HR dashboards under Dashboard, Employees and
    Contracts under People, Payroll under Finance; context-aware navigation, breadcrumbs, quick
-   actions, collapsed rail, pinned mode and hover-expand. **Not implemented.**
-3. **UX-005** — Responsive/Mobile Refinement, including the mobile drawer where appropriate.
-   **Not implemented.**
+   actions, collapsed rail, pinned mode and hover-expand. **Not started.**
+2. **UX-005** — Responsive/Mobile Refinement, including the mobile drawer where appropriate.
+   **Not started.**
 
 **Released**
+- Workspace & Contract Timeline Integrity — persistent application shell, sans UI chrome and token
+  scales, Executive Dashboard reduced to 13 metric containers, reference-date-correct contract
+  timeline, canonical two-dimensional timeline model, one canonical contract counter and corrected
+  `3/3` final-month progress wording (v2.8.5)
 - Monthly Plan Result Integrity — the commit inspects both save results, no false success, preview
   retained on failure, Critical Integrity Check finding for absent-plan and missing-backlink states;
   retry prevents duplicate transactions but does not reconcile linkage (v2.8.4)
