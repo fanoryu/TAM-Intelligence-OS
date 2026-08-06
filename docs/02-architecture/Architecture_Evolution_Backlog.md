@@ -540,9 +540,11 @@ the editor and `deleteContract` remain direct writers through `persistContracts(
 
 Because production source changed, the portable artifact was regenerated from it (`CLAUDE.md` §10, §19).
 `APP_VERSION` remains 2.8.4, `APP_RELEASE_NAME` remains *Monthly Plan Result Integrity*, and
-`SCHEMA_VERSION` remains 6, so the artifact filename is unchanged. **The current repository artifact is
-SPR-095's rebuild** (SPR-095 added production modules under ADR-014 step 1); the table below carries the
-current values, and `ARCHITECTURE.md` holds the authoritative header.
+`SCHEMA_VERSION` remains 6, so the artifact filename is unchanged. **The artifact recorded below is
+SPR-095's rebuild** (SPR-095 added production modules under ADR-014 step 1) — it is the snapshot as of
+this record and is retained as evidence, NOT the current repository artifact: the UX-002B, UX-003A,
+UX-003B and UX-003C sprints have rebuilt it since. `ARCHITECTURE.md` holds the authoritative current
+header.
 
 | | Repository `main` | Published v2.8.4 Release asset |
 |---|---|---|
