@@ -111,6 +111,38 @@ const CONTRACT_STATUS_META = {
   'Renewed':       {pill:'pill-status-scheduled'},
   'Cancelled':     {pill:'pill-status-cancelled'},
 };
+/* UX-003B — CANONICAL CONTRACT TIMELINE MODEL (DERIVED ONLY, TWO DIMENSIONS).
+   PD-T1..PD-T4: "where is this contract in its lifecycle?" and "how close is it
+   to ending?" are INDEPENDENT questions. They are two dimensions, never one
+   flattened list — a contract ending this month is still effectively Active.
+
+   Dimension 1 — EFFECTIVE STATE. Exactly one, always present.
+   Dimension 2 — EXPIRY HORIZON. Exactly one; 'None' for anything not
+   effectively Active. Calendar horizons are pure calendar facts and are NOT
+   gated by settings.contractExpiryWarningDays — only WithinWarningWindow
+   depends on that threshold.
+
+   NOTHING here is ever stored. The stored lifecycle remains exactly
+   CONTRACT_STORED_STATUSES above; 'Scheduled' is derived from startDate vs. the
+   reference date and must never become a stored status. */
+const CONTRACT_EFFECTIVE_STATES = ['Draft','Cancelled','Renewed','Scheduled','Active','Expired'];
+const CONTRACT_EXPIRY_HORIZONS  = ['EndingToday','EndingThisWeek','EndingThisMonth',
+  'EndingNextMonth','WithinWarningWindow','None'];
+/* LEGACY DISPLAY MAPPING — kept deliberately separate from both canonical
+   vocabularies. It maps the effective state onto the six values every existing
+   consumer (badges, filters, counters, alerts, reports) has always received.
+   UX-003B introduces the model ONLY; surfacing Scheduled or the horizon labels
+   in the UI is UX-003C. */
+const CONTRACT_LEGACY_STATE_DISPLAY = {
+  'Draft':'Draft', 'Cancelled':'Cancelled', 'Renewed':'Renewed',
+  'Scheduled':'Active',        // legacy facade only — Scheduled is NOT Active canonically
+  'Active':'Active',
+  'Expired':'Expired',
+};
+/* COMPATIBILITY ALIAS. 'Expiring Soon' is neither a canonical effective state
+   nor a canonical horizon: it is the de-facto legacy label for "effectively
+   Active and inside the configured warning window". Never stored. */
+const CONTRACT_LEGACY_EXPIRING_ALIAS = 'Expiring Soon';
 const RECUR_FREQUENCIES = {'Monthly':1, 'Quarterly':3, 'Semiannual':6, 'Annual':12};
 // Monthly planning workflow. Approved & Closed are future-ready (no multi-user
 // approval yet) — Draft, Reviewed, Committed are functional this release.

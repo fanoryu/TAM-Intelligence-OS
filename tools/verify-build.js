@@ -2333,6 +2333,8 @@ const ux3aBodyOf = (name)=>{
 const ux3aCalcBody = ux3aBodyOf('contractCalc');
 const ux3aStatusBody = ux3aBodyOf('contractEffectiveStatus');
 const ux3aRefDateBody = ux3aBodyOf('contractRefDate');
+// UX-003B: the classifier now owns the calc call the facade used to make directly.
+const ux3aStateBodyForTimeBasis = ux3aBodyOf('contractTimeline');
 check(ux3aCalcBody !== '' && ux3aStatusBody !== '' && ux3aRefDateBody !== '',
   'UX-003A: contractCalc(), contractEffectiveStatus() and contractRefDate() are all resolvable top-level functions');
 // 1. daysUntilEnd is not computed directly from isoToday() inside contractCalc().
@@ -2355,13 +2357,22 @@ check(/keyParts\s*\(/.test(ux3aRefDateBody) && /-01/.test(ux3aRefDateBody),
 // 4. contractEffectiveStatus() introduces no second, independent time source.
 check(!/isoToday\s*\(/.test(ux3aStatusBody) && !/daysBetween\s*\(/.test(ux3aStatusBody) && !/new\s+Date\s*\(/.test(ux3aStatusBody),
   'UX-003A: contractEffectiveStatus() introduces no independent today-based time source (no isoToday/daysBetween/new Date)');
-check(/contractCalc\(c,\s*refKey\s*\|\|\s*todayKey\(\)\)/.test(ux3aStatusBody),
-  'UX-003A: contractEffectiveStatus() derives its time basis solely from contractCalc()');
-// UX-003A is a reference-date correction ONLY — no vocabulary, storage or schema move.
+// UX-003B moved the time basis one level down: contractEffectiveStatus() is now a
+// display facade over contractTimelineState(), which is the single site that calls
+// contractCalc(c, refKey||todayKey()). The INTENT of this check — exactly one time
+// basis, reached only through the calc — is unchanged and now asserted on the
+// classifier. (Pre-UX-003B this regex matched the facade body directly.)
+check(/contractCalc\(c,\s*ref\)/.test(ux3aStateBodyForTimeBasis) ||
+      /contractCalc\(c,\s*refKey\s*\|\|\s*todayKey\(\)\)/.test(ux3aStatusBody),
+  'UX-003A: the effective-status path derives its time basis solely from contractCalc()');
+// UX-003A was a reference-date correction ONLY — no vocabulary, storage or schema move.
 check(/const CONTRACT_STORED_STATUSES = \['Draft','Active','Renewed','Cancelled'\];/.test(read(path.join(root,'js','core','constants.js'))),
   'UX-003A: stored contract status vocabulary is unchanged (no Scheduled state added)');
-check(!/Scheduled/.test(ux3aSrc),
-  'UX-003A: people-core.js introduces no Scheduled state (deferred to a later UX-003 phase)');
+// UX-003B introduced the DERIVED Scheduled state (this was UX-003A's "later phase").
+// The safety intent is preserved and strengthened: Scheduled may exist as a derived
+// classification, but people-core.js must never assign it to a stored status field.
+check(!/\.status\s*=\s*['"]Scheduled['"]/.test(ux3aSrc) && !/\bstatus\s*:\s*['"]Scheduled['"]/.test(ux3aSrc),
+  'UX-003A/B: people-core.js never writes Scheduled into a stored status field (derived only)');
 check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))),
   'UX-003A: SCHEMA_VERSION remains 6 (UX-003A is not a migration)');
 // 5. The dedicated runtime harness is DISCOVERABLE and honest (not executed here).
@@ -2382,6 +2393,219 @@ check(/payrollHealth/.test(ux3aHarness) && /generatePayrollForMonth/.test(ux3aHa
   'UX-003A harness exercises the real payroll paths (safety + historical advisory)');
 check(/daysBetween\(firstDayOf\(/.test(ux3aHarness),
   'UX-003A harness states its OWN reference-date expectation (not production\'s helper result)');
+
+// UX-003B — CANONICAL TWO-DIMENSIONAL CONTRACT TIMELINE MODEL (PD-T1..PD-T4).
+// Effective state ("where in the lifecycle?") and expiry horizon ("how close to
+// ending?") are INDEPENDENT dimensions, computed once by contractTimeline().
+// A contract ending this month is state 'Active' WITH horizon 'EndingThisMonth' —
+// a horizon never replaces the effective state. Calendar horizons are calendar
+// facts and are NOT gated by contractExpiryWarningDays; only WithinWarningWindow
+// depends on that threshold. These checks inspect real function bodies and the
+// whole js/ tree, so a regression that flattened the dimensions, gated the
+// calendar horizons, reintroduced a second rulebook or an inline band ladder, or
+// stored 'Scheduled', cannot pass verification.
+console.log('== UX-003B CANONICAL TWO-DIMENSIONAL TIMELINE MODEL ==');
+const ux3bCoreSrc = stripComments(read(path.join(root,'js','people','people-core.js')));
+const ux3bConstSrc = read(path.join(root,'js','core','constants.js'));
+const ux3bConstCode = stripComments(ux3bConstSrc);
+const ux3bBodyOf = (name)=>{
+  const m = ux3bCoreSrc.match(new RegExp('^function '+name+'\\([^)]*\\)\\{[\\s\\S]*?\\n\\}','m'));
+  return m ? m[0] : '';
+};
+const ux3bTimelineBody = ux3bBodyOf('contractTimeline');
+const ux3bBandBody     = ux3bBodyOf('contractExpiryBand');
+const ux3bWeekBody     = ux3bBodyOf('isoWeekKey');
+const ux3bFacadeBody   = ux3bBodyOf('contractEffectiveStatus');
+check(ux3bTimelineBody !== '' && ux3bBandBody !== '' && ux3bWeekBody !== '',
+  'UX-003B: contractTimeline(), contractExpiryBand() and isoWeekKey() are resolvable top-level functions');
+
+// 1. EFFECTIVE STATE AND HORIZON ARE DISTINCT CONCEPTS.
+const ux3bStatesLit  = (ux3bConstCode.match(/const CONTRACT_EFFECTIVE_STATES\s*=\s*\[[\s\S]*?\];/)||[''])[0];
+const ux3bHorizonLit = (ux3bConstCode.match(/const CONTRACT_EXPIRY_HORIZONS\s*=\s*\[[\s\S]*?\];/)||[''])[0];
+check(ux3bStatesLit !== '' && ux3bHorizonLit !== '',
+  'UX-003B: the effective-state and expiry-horizon vocabularies are declared separately (two dimensions)');
+['Draft','Cancelled','Renewed','Scheduled','Active','Expired'].forEach((s)=>{
+  check(new RegExp("'"+s+"'").test(ux3bStatesLit), 'UX-003B: effective-state vocabulary contains '+s);
+});
+['EndingToday','EndingThisWeek','EndingThisMonth','EndingNextMonth','WithinWarningWindow','None'].forEach((h)=>{
+  check(new RegExp("'"+h+"'").test(ux3bHorizonLit), 'UX-003B: horizon vocabulary contains '+h);
+});
+// No horizon value may masquerade as an effective state (the flattened-model bug).
+check(!/Ending(Today|ThisWeek|ThisMonth|NextMonth)|WithinWarningWindow/.test(ux3bStatesLit),
+  'UX-003B: no horizon value appears in the effective-state vocabulary (horizons never replace Active)');
+check(!/'Scheduled'|'Expired'|'Draft'/.test(ux3bHorizonLit),
+  'UX-003B: no effective state appears in the horizon vocabulary');
+// The classifier must return BOTH dimensions from one computation.
+check(/state\s*:/.test(ux3bTimelineBody) && /horizon\s*:/.test(ux3bTimelineBody),
+  'UX-003B: contractTimeline() returns both a state and a horizon from one computation');
+check(/state:'Active'/.test(ux3bTimelineBody.replace(/\s/g,'')),
+  'UX-003B: the horizon branch still yields effective state Active (the dimensions stay independent)');
+
+// 2. Scheduled is DERIVED ONLY and never persisted.
+check(/const CONTRACT_STORED_STATUSES = \['Draft','Active','Renewed','Cancelled'\];/.test(ux3bConstSrc),
+  'UX-003B: CONTRACT_STORED_STATUSES is unchanged (Draft/Active/Renewed/Cancelled)');
+check(!/CONTRACT_STORED_STATUSES\s*=\s*\[[^\]]*Scheduled/.test(ux3bConstSrc),
+  'UX-003B: Scheduled is not a member of the stored contract lifecycle');
+const ux3bStoredWrites = [];
+jsFiles.forEach((rel)=>{
+  const src = stripComments(read(path.join(root,'js',rel)));
+  if(/\.status\s*=\s*['"]Scheduled['"]/.test(src) || /\bstatus\s*:\s*['"]Scheduled['"]/.test(src)) ux3bStoredWrites.push(rel);
+});
+check(ux3bStoredWrites.length === 0,
+  'UX-003B: no production module ever writes \'Scheduled\' into a status field (derived only)'
+  + (ux3bStoredWrites.length ? ' >> VIOLATION: ' + ux3bStoredWrites.join(', ') : ''));
+check(!/'Scheduled'\s*:/.test((ux3bConstCode.match(/const CONTRACT_STATUS_META = \{[\s\S]*?\n\};/)||[''])[0]),
+  'UX-003B: CONTRACT_STATUS_META gains no Scheduled entry (no new UI vocabulary in this sprint)');
+check(!/Scheduled/.test(stripComments(read(path.join(root,'js','core','hr-persistence-portability.js')))),
+  'UX-003B: the persistence layer has no knowledge of Scheduled');
+
+// 3. ACTIVE CONTRACTS CAN CARRY A NON-None HORIZON.
+//    Structurally: the Active return path assigns a horizon variable rather than
+//    forcing 'None', and the non-Active paths funnel through the none() helper.
+check(/horizon\s*:\s*horizon/.test(ux3bTimelineBody.replace(/\s+/g,' ')) || /horizon:horizon/.test(ux3bTimelineBody.replace(/\s/g,'')),
+  'UX-003B: the Active path returns a computed horizon (Active + horizon is representable)');
+check(/none\s*=\s*\(state\)\s*=>/.test(ux3bTimelineBody) && /horizon:'None'/.test(ux3bTimelineBody.replace(/\s/g,'')),
+  'UX-003B: non-Active states funnel through a single horizon-None constructor');
+check(/return none\('Cancelled'\)|none\('Cancelled'\)/.test(ux3bTimelineBody.replace(/\s+/g,' ')),
+  'UX-003B: stored terminal states are returned with horizon None');
+
+// 4. CALENDAR HORIZONS ARE NOT GATED BY THE WARNING SETTING.
+//    The four calendar branches must be decided before, and independently of,
+//    any comparison against the configured window.
+const ux3bFlat = ux3bTimelineBody.replace(/\s+/g,' ');
+const ux3bIdxToday   = ux3bFlat.indexOf("'EndingToday'");
+const ux3bIdxWeek    = ux3bFlat.indexOf("'EndingThisWeek'");
+const ux3bIdxMonth   = ux3bFlat.indexOf("'EndingThisMonth'");
+const ux3bIdxNext    = ux3bFlat.indexOf("'EndingNextMonth'");
+const ux3bIdxWithin  = ux3bFlat.indexOf("'WithinWarningWindow'");
+check(ux3bIdxToday > -1 && ux3bIdxWeek > -1 && ux3bIdxMonth > -1 && ux3bIdxNext > -1 && ux3bIdxWithin > -1,
+  'UX-003B: all four calendar horizons and the residual band are present in the classifier');
+check(ux3bIdxToday < ux3bIdxWeek && ux3bIdxWeek < ux3bIdxMonth && ux3bIdxMonth < ux3bIdxNext,
+  'UX-003B: calendar horizons are evaluated in the approved order (today -> week -> month -> next month)');
+check(ux3bIdxNext < ux3bIdxWithin,
+  'UX-003B: the four calendar horizons are decided BEFORE the warning-window band (never suppressed by it)');
+// The 'within' flag must not appear in any calendar branch condition.
+const ux3bCalendarSegment = ux3bFlat.slice(ux3bIdxToday, ux3bIdxWithin);
+check(!/contractExpiryWarningDays/.test(ux3bCalendarSegment),
+  'UX-003B: no calendar-horizon branch consults contractExpiryWarningDays');
+
+// 5. WithinWarningWindow ALONE depends on the threshold.
+check(/contractExpiryWarningDays/.test(ux3bTimelineBody),
+  'UX-003B: the classifier is the single site that reads the configured warning window');
+check(/else if\(within\)\s*horizon = 'WithinWarningWindow'/.test(ux3bTimelineBody.replace(/\s+/g,' ')) ||
+      /within\)\s*horizon='WithinWarningWindow'/.test(ux3bTimelineBody.replace(/\s/g,'')),
+  'UX-003B: WithinWarningWindow is the only horizon guarded by the threshold');
+// The warning setting may be READ in exactly these places, and nowhere else. Any
+// new reader is a candidate second rulebook and must fail here deliberately.
+//   people/people-core.js        — the classifier: the ONE decision site
+//   ui/settings-about.js         — the settings form that edits the value
+//   people/contracts.js          — pre-existing DEAD `const warn` (declared, never used)
+//   people/hr-dashboard-reports.js — pre-existing DEAD `const warn` (declared, never used)
+// The two dead reads predate UX-003B; removing them would touch the contracts UI
+// and the dashboard, both outside this sprint's file scope.
+const UX3B_WARN_READERS = ['people/people-core.js','ui/settings-about.js',
+  'people/contracts.js','people/hr-dashboard-reports.js'];
+const ux3bWarnReaders = [];
+jsFiles.forEach((rel)=>{
+  const src = stripComments(read(path.join(root,'js',rel)));
+  if(/State\.settings\.contractExpiryWarningDays/.test(src)) ux3bWarnReaders.push(rel);
+});
+const ux3bUnexpectedReaders = ux3bWarnReaders.filter(r=>UX3B_WARN_READERS.indexOf(r) === -1);
+check(ux3bUnexpectedReaders.length === 0,
+  'UX-003B: the warning setting is read only in the classifier, the settings form, and two pre-existing dead reads'
+  + (ux3bUnexpectedReaders.length ? ' >> VIOLATION: new reader(s) ' + ux3bUnexpectedReaders.join(', ') : ''));
+// The two dead reads must STAY dead — a declared-but-unused `warn` cannot become
+// a second expiry rulebook without failing this check.
+[['people/contracts.js','allContractAlerts'],['people/hr-dashboard-reports.js','hrDashboardAlerts']].forEach(([rel,fn])=>{
+  let body = (stripComments(read(path.join(root,'js',rel)))
+    .match(new RegExp('^function '+fn+'\\([^)]*\\)\\{[\\s\\S]*?\\n\\}','m'))||[''])[0];
+  // Alert records carry a literal type:'warn'; those string occurrences are not
+  // reads of the variable, so remove them before counting.
+  body = body.replace(/'warn'/g,'').replace(/"warn"/g,'');
+  const uses = (body.match(/\bwarn\b/g)||[]).length;   // the declaration itself is the one occurrence
+  check(uses === 1,
+    'UX-003B: the pre-existing `warn` read in '+rel+' remains unused (it is not a second expiry rulebook)');
+});
+
+// 6. LEGACY contractEffectiveStatus() REMAINS A COMPATIBILITY FACADE.
+check(/contractTimeline\(/.test(ux3bFacadeBody),
+  'UX-003B: contractEffectiveStatus() resolves through the canonical model');
+check(/CONTRACT_LEGACY_STATE_DISPLAY/.test(ux3bFacadeBody) && /CONTRACT_LEGACY_EXPIRING_ALIAS/.test(ux3bFacadeBody),
+  'UX-003B: the facade maps through the separate legacy display vocabulary and alias');
+check(!/contractExpiryWarningDays/.test(ux3bFacadeBody),
+  'UX-003B: the facade never re-reads the warning setting (the alias is computed once, in the model)');
+check(/withinWarningWindow/.test(ux3bFacadeBody) && /withinWarningWindow/.test(ux3bTimelineBody),
+  'UX-003B: the \'Expiring Soon\' alias is carried by the model, not recomputed by the facade');
+const ux3bLegacyLit = (ux3bConstCode.match(/const CONTRACT_LEGACY_STATE_DISPLAY\s*=\s*\{[\s\S]*?\};/)||[''])[0];
+check(ux3bLegacyLit !== '' && /'Scheduled':'Active'/.test(ux3bLegacyLit.replace(/\s/g,'')),
+  'UX-003B: the legacy map is declared separately and maps Scheduled to Active for the facade only');
+check(/const CONTRACT_LEGACY_EXPIRING_ALIAS = 'Expiring Soon';/.test(ux3bConstCode),
+  'UX-003B: \'Expiring Soon\' is defined as a compatibility alias, not a canonical vocabulary member');
+check(!/'Expiring Soon'/.test(ux3bStatesLit) && !/'Expiring Soon'/.test(ux3bHorizonLit),
+  'UX-003B: \'Expiring Soon\' is neither an effective state nor a horizon');
+
+// 7. CANONICAL HELPERS EXIST EXACTLY ONCE.
+let ux3bTimelineDefs = 0, ux3bBandDefs = 0, ux3bWeekDefs = 0, ux3bStateDefs = 0, ux3bHorizonDefs = 0;
+jsFiles.forEach((rel)=>{
+  const src = stripComments(read(path.join(root,'js',rel)));
+  ux3bTimelineDefs += (src.match(/function contractTimeline\s*\(/g)||[]).length;
+  ux3bBandDefs     += (src.match(/function contractExpiryBand\s*\(/g)||[]).length;
+  ux3bWeekDefs     += (src.match(/function isoWeekKey\s*\(/g)||[]).length;
+  ux3bStateDefs    += (src.match(/function contractEffectiveState\s*\(/g)||[]).length;
+  ux3bHorizonDefs  += (src.match(/function contractExpiryHorizon\s*\(/g)||[]).length;
+});
+check(ux3bTimelineDefs === 1, 'UX-003B: contractTimeline() is defined exactly once repository-wide (one rulebook)');
+check(ux3bBandDefs === 1,     'UX-003B: contractExpiryBand() is defined exactly once repository-wide');
+check(ux3bWeekDefs === 1,     'UX-003B: isoWeekKey() is defined exactly once repository-wide');
+check(ux3bStateDefs === 1,    'UX-003B: contractEffectiveState() is defined exactly once repository-wide');
+check(ux3bHorizonDefs === 1,  'UX-003B: contractExpiryHorizon() is defined exactly once repository-wide');
+check((ux3bConstCode.match(/const CONTRACT_EFFECTIVE_STATES\s*=/g)||[]).length === 1 &&
+      (ux3bConstCode.match(/const CONTRACT_EXPIRY_HORIZONS\s*=/g)||[]).length === 1,
+  'UX-003B: each canonical vocabulary is declared exactly once');
+// The thin readers must delegate, never recompute.
+check(/function contractEffectiveState\([^)]*\)\{[^}]*contractTimeline\(/.test(ux3bCoreSrc.replace(/\s+/g,' ')),
+  'UX-003B: contractEffectiveState() delegates to contractTimeline() (no duplicated calculation)');
+check(/function contractExpiryHorizon\([^)]*\)\{[^}]*contractTimeline\(/.test(ux3bCoreSrc.replace(/\s+/g,' ')),
+  'UX-003B: contractExpiryHorizon() delegates to contractTimeline() (no duplicated calculation)');
+
+// 8. INLINE 30/60/90 LADDERS REMAIN ELIMINATED.
+const ux3bBandLadders = [];
+jsFiles.forEach((rel)=>{
+  let src = stripComments(read(path.join(root,'js',rel)));
+  if(rel === 'people/people-core.js') src = src.replace(ux3bBandBody, '');
+  if(/<=\s*30\s*\?[^;]*<=\s*60\s*\?/.test(src)) ux3bBandLadders.push(rel);
+});
+check(ux3bBandLadders.length === 0,
+  'UX-003B: no inline 30/60/90 expiry-band ladder outside contractExpiryBand()'
+  + (ux3bBandLadders.length ? ' >> VIOLATION: ' + ux3bBandLadders.join(', ') : ''));
+check(/30/.test(ux3bBandBody) && /60/.test(ux3bBandBody) && /90/.test(ux3bBandBody),
+  'UX-003B: the 30/60/90 literals live inside contractExpiryBand()');
+check(!/daysUntilEnd\s*<=\s*30/.test(stripComments(read(path.join(root,'js','people','payroll-ops-engine.js')))),
+  'UX-003B: payrollHealth() no longer inlines its own 30-day threshold');
+check(!/d<=30\?30:d<=60\?60:90/.test(stripComments(read(path.join(root,'js','people','contracts.js'))).replace(/\s+/g,'')),
+  'UX-003B: contracts.js no longer inlines the 30/60/90 band ladder');
+
+// 9. ONE TIME BASIS, AND NO SCHEMA/STORAGE IMPLICATION.
+check(!/isoToday\s*\(/.test(ux3bTimelineBody),
+  'UX-003B: the classifier never calls isoToday() independently (refKey is the only time basis)');
+check(!/isoToday\s*\(/.test(ux3bWeekBody),
+  'UX-003B: isoWeekKey() never calls isoToday() (it classifies the date it is given)');
+check(/contractRefDate\s*\(/.test(ux3bTimelineBody),
+  'UX-003B: the classifier resolves its reference date through contractRefDate()');
+check(/const SCHEMA_VERSION = 6;/.test(ux3bConstSrc), 'UX-003B: SCHEMA_VERSION remains 6 (not a migration)');
+
+// 10. The runtime harness covers the corrected model and stays honest.
+const ux3bHarness = read(path.join(root,'tools','verify-contract-timeline-runtime.js'));
+check(/UX-003B/.test(ux3bHarness) && /TWO-DIMENSIONAL/.test(ux3bHarness),
+  'UX-003B harness identifies the two-dimensional model correctly');
+check(/contractTimeline\(/.test(ux3bHarness) && /contractExpiryHorizon\(/.test(ux3bHarness) && /isoWeekKey\(/.test(ux3bHarness),
+  'UX-003B harness exercises the canonical classifier, horizon reader and week key');
+check(/K_STATES\s*=\s*\[/.test(ux3bHarness) && /K_HORIZONS\s*=\s*\[/.test(ux3bHarness),
+  'UX-003B harness asserts BOTH vocabularies against its OWN copies (not production\'s)');
+check(/\[1, 7, 30, 90, 3650\]/.test(ux3bHarness),
+  'UX-003B harness sweeps the warning threshold (1/7/30/90/3650) to prove calendar independence');
+check(/ONLY effectively Active contracts ever carry a non-None horizon/.test(ux3bHarness),
+  'UX-003B harness proves horizons attach only to effectively Active contracts');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

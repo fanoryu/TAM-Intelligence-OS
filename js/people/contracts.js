@@ -10,7 +10,9 @@ function allContractAlerts(){
     if(es==='Expired' && c.status==='Active') alerts.push({type:'warn', sev:0, text:`Contract ${escapeHtml(c.contractNumber||'')} (${escapeHtml(c.employeeName||'')}) has expired — renew or close it.`});
     else if(es==='Expiring Soon'){
       const d = cc.daysUntilEnd;
-      const band = d<=30?30:d<=60?60:90;
+      // UX-003B — the 30/60/90 ladder that used to be inlined here now lives once,
+      // in contractExpiryBand() (people-core.js). Same bands, same text.
+      const band = contractExpiryBand(d);
       alerts.push({type:'warn', sev:band, text:`Contract ${escapeHtml(c.contractNumber||'')} (${escapeHtml(c.employeeName||'')}) expires within ${band} days — ${d} day${d===1?'':'s'} left (${fmtDateID(cc.endDate)}).`});
     }
   });
