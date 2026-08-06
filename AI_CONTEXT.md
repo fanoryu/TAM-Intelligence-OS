@@ -14,15 +14,16 @@ remains published and unchanged; it is no longer marked Latest. Publication crea
 Release only — it changed no source commit, runtime behavior, schema, or storage key.
 
 **Repository `main` now contains production changes beyond the published v2.8.4 Release artifact.**
-SPR-093, SPR-095 and then the UX sprints **UX-002A** and **UX-002B** changed production source, so the
+SPR-093, SPR-095 and then the UX sprints **UX-002A**, **UX-002B**, **UX-003A**, **UX-003B** and
+**UX-003C** changed production source, so the
 portable build was regenerated from source as `CLAUDE.md` §10 and §19 require. `APP_VERSION`,
 `APP_RELEASE_NAME` and `SCHEMA_VERSION` are unchanged, so the filename is unchanged — but the
 repository artifact and the published asset are **no longer byte-identical**:
 
 | | Repository `main` | Published v2.8.4 Release asset |
 |---|---|---|
-| `dist/tam-intelligence-os-v2.8.4.html` | **948,782 bytes** | 914,409 bytes |
-| SHA-256 | `7217b44b99…f78911ceb` | `09c622b3a6…3aea02c6` |
+| `dist/tam-intelligence-os-v2.8.4.html` | **963,453 bytes** | 914,409 bytes |
+| SHA-256 | `0a8b745627…6e886927` | `09c622b3a6…3aea02c6` |
 
 The tag, Release, and published asset are unchanged and were **not** republished. No version has been
 assigned to this divergence and no release is implied or recommended here.
@@ -65,8 +66,8 @@ business shape, the predecessor's canonical `Renewed` status, and both history n
 mutating, generating ids/timestamps, or persisting. The `renewContract` handler owns ids, timestamps, the
 history append, one `ContractRepository.save()`, strict result inspection, in-memory rollback on a failed
 write, and the typed result. Renewability is evaluated against **stored** statuses (`Draft`, `Active`),
-never derived display states — so a contract displayed as *Expired* or *Expiring Soon* remains renewable
-while its stored status is still `Active`. Terminal statuses (`Renewed`, `Cancelled`) are never renewable.
+never derived display states — so a contract displayed as *Expired*, *Final Month* or *Ending Soon*
+remains renewable while its stored status is still `Active`. Terminal statuses (`Renewed`, `Cancelled`) are never renewable.
 
 **Contract Core authority — prepared, not routed (ADR-014 step 1 / SPR-095).** `ContractCoreAggregate`
 **is prepared** (a pure boundary owning exactly ten fields) and `contract.core.update` **is registered**
@@ -242,11 +243,59 @@ fractional `font-size`; `var(--serif)` exactly once on `.brand .mark`; every `:r
 for `:root[data-theme="light"]`; spacing and radius resolve from tokens; and no theme-sensitive hex
 literal in a production-JS colour position.
 
+**Contract timeline model (UX-003A / UX-003B / UX-003C).** `contractCalc(c, refKey)` measures every
+field it derives — progress, `coversMonth`, `expiredForRef`, `beforeStart` **and** `daysUntilEnd` —
+against ONE normalized reference date (UX-003A). `contractRefDate()` resolves the current month (or an
+omitted key) to today and any other month to that month's first day; unusable keys fall back to today.
+
+`contractTimeline(c, refKey)` is the single classifier (UX-003B) and returns two **independent** derived
+dimensions in one computation — `{state, horizon, daysUntilEnd, withinWarningWindow}`:
+
+| Dimension | Values |
+|---|---|
+| **Effective state** | `Draft` · `Cancelled` · `Renewed` · `Scheduled` · `Active` · `Expired` |
+| **Expiry horizon** | `EndingToday` · `EndingThisWeek` · `EndingThisMonth` · `EndingNextMonth` · `WithinWarningWindow` · `None` |
+
+A contract ending this month is state `Active` **with** horizon `EndingThisMonth` — a horizon never
+replaces the effective state. Only effectively-Active contracts carry a non-`None` horizon; Scheduled,
+Expired, Draft, Cancelled and Renewed are always `None`. The four **calendar** horizons are calendar
+facts and are NOT gated by `settings.contractExpiryWarningDays`; only `WithinWarningWindow` depends on
+that threshold. `Scheduled` is **derived only** — `CONTRACT_STORED_STATUSES` remains exactly
+`Draft/Active/Renewed/Cancelled`, no module writes it, and `SCHEMA_VERSION` is unchanged.
+`Expiring Soon` survives as a **legacy compatibility alias** meaning "effectively Active and inside the
+configured warning window"; it is neither a canonical state nor a canonical horizon and is never stored.
+
+**Contract progress semantics (UX-003C).** `current / total` is the contract month **currently being
+served**, so for a three-month contract:
+
+| Reference month | Progress | Remaining | State |
+|---|---|---|---|
+| month 1 | `1/3` | 2 | Active |
+| month 2 | `2/3` | 1 | Active |
+| month 3 | `3/3` | **0** — final month | Active |
+| month 4 | `3/3` | 0 | **Expired** |
+
+`3/3` therefore means the **final contract month with zero months remaining** — it must never be worded
+as "one month remaining". `current` never exceeds `total` and `remaining` is always
+`max(0, total - current)`.
+
+**Counters, filters and wording (UX-003C).** Every displayed contract count resolves through one
+canonical helper, `contractTimelineCounts()`. The six effective states **partition** the collection; the
+horizon counts are a **breakdown of `active`**, not a sibling of it — so `Active` includes
+horizon-carrying active contracts, `Scheduled` and `Expired` are excluded from it, and ending-soon is a
+true subset of `Active`. The Contracts status filter follows the canonical effective state
+(All / Active / Scheduled / Expired / Draft / Cancelled / Renewed): filtering `Active` can never return
+a `Scheduled` contract, `Scheduled` has its own option, and every contract is reachable through exactly
+one option. Presentation wording puts **urgency before lifecycle**: `Ends Today` → `Ends This Week` →
+`Final Month` → `Ends Next Month` → `Ending Soon`. `Final Month` is used only for `EndingThisMonth`, no
+internal horizon identifier reaches the UI, and the CSV export Status column uses the same presentation
+labels so exported terminology matches the screen.
+
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1569** on current `main`),
-  joined by ten runtime harnesses (**984** checks). PowerShell fallbacks exist for machines without Node.
+  the portable single file, and a verifier runs a suite of invariant checks (**1700** on current `main`),
+  joined by **eleven** runtime harnesses (**1333** checks). PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
 - **Version is derived** from a single source constant; the portable filename follows it
@@ -392,10 +441,11 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1569** checks) plus ten
-  Node runtime harnesses (**984** checks total: integrity warning rules 146, integrity payroll rules 144,
-  Contract Core 129, monthly plan 118, payroll posting 106, contract persistence 74, payroll committed
-  state 72, contract renewal 67, integrity rules 67, `saveAllData` 61) plus manual browser validation. The runtime harnesses drive real
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1700** checks) plus **eleven**
+  Node runtime harnesses (**1333** checks total: contract timeline 349, integrity warning rules 146,
+  integrity payroll rules 144, Contract Core 129, monthly plan 118, payroll posting 106,
+  contract persistence 74, payroll committed state 72, contract renewal 67, integrity rules 67,
+  `saveAllData` 61) plus manual browser validation. The runtime harnesses drive real
   behaviour against the live engine and UI seams, but they are not a general test suite.
 - **One theme-blind colour path remains.** UX-002B tokenized every chart series colour, but the shared
   `STATUS_META` / `CATEGORY_COLOR` palette in `js/core/constants.js` is still hardcoded hex. It is
@@ -466,12 +516,23 @@ Directions (no committed release numbers unless already approved):
   480px grid-containment regression that Phase 1 had introduced and mis-reported as resolved; the
   correction and the mandated fixture/measurement method are recorded in
   [`audit/ux-002b-2026-08-05/`](audit/ux-002b-2026-08-05/CSS-GOLDEN-MASTER-REVISION.md).
-  **Still open and not started:** **UX-003** Contract Timeline Integrity (expiry horizon model,
-  `Scheduled` state, the `daysUntilEnd(refKey)` reference-date defect, canonical horizon counters);
-  **UX-004** Adaptive Sidebar (collapsed rail, hover expansion, pinning, mobile drawer — needs an
-  icon-technology decision first); **UX-005** Navigation and Responsive Simplification (command palette,
-  narrow-width layout pass, merging the Finance Overview exception tables). None is scheduled or
-  authorized.
+  **UX-003 is complete and merged** in three sprints. **UX-003A — Reference-Date Correctness** made
+  `daysUntilEnd` share the normalized reference date used by the rest of `contractCalc`; today-facing
+  behaviour stayed equivalent, historical advisory output became reference-correct, and no payroll,
+  committed payroll, monthly-plan, storage, schema or contract value changed. **UX-003B — Canonical
+  Contract Timeline Model** replaced the scattered expiry logic with one classifier returning two
+  independent derived dimensions (effective state + expiry horizon), with `Scheduled` derived-only and
+  `Expiring Soon` retained as a legacy alias. **UX-003C — Contract Progress, Counters, Filters and
+  Presentation** made every counter resolve through one canonical helper, moved the status filter onto
+  the canonical effective state, and fixed the progress wording so `3/3` reads as the final month.
+  See §5 for the model and §19 for the decisions.
+  **Next, in order:** UX-001–UX-003 documentation reconciliation; the **v2.8.5** release; then
+  **UX-004 — Sidebar & Navigation** (sidebar grouped by business domain — Dashboard, People, Finance,
+  Analytics, System — with Executive and HR dashboards under Dashboard, Employees and Contracts under
+  People, Payroll under Finance; plus context-aware navigation, breadcrumbs, quick actions, a collapsed
+  rail, pinned mode and hover-expand); then **UX-005 — Responsive/Mobile Refinement** (including the
+  mobile drawer where appropriate). **Neither UX-004 nor UX-005 is implemented**, and v2.8.5 is not
+  released.
 - **Planned:** Payroll Reporting suite expansion; supplemental sources beyond overtime; ongoing
   repository maintenance.
 - **Under consideration:** authentication and role-based access control; attachment/evidence
@@ -502,6 +563,18 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
   which is stricter and makes every future revision one reviewable line plus a diff. The current pin is
   `b1cec5dd8b789f49d3967c5e49786961418f87b6f21975965315981c6f6e507c`; every superseded anchor is
   preserved in [`audit/ux-002b-2026-08-05/`](audit/ux-002b-2026-08-05/CSS-GOLDEN-MASTER-REVISION.md).
+- **Contract timeline is TWO derived dimensions, not one list** (UX-003B). "Where is this contract in
+  its lifecycle?" and "how close is it to ending?" are independent questions, so `contractTimeline()`
+  answers both in one computation and a horizon never replaces the effective state. Calendar horizons
+  are calendar facts and are not gated by the warning setting; only `WithinWarningWindow` depends on it.
+  Nothing is stored: `Scheduled` is derived, `Expiring Soon` is a compatibility alias, and
+  `SCHEMA_VERSION` is unchanged.
+- **One reference date per calculation** (UX-003A). Every field `contractCalc()` derives is measured
+  against the same normalized reference date, so a single return object cannot answer two different
+  time questions at once.
+- **Presentation reads the model; it does not re-derive it** (UX-003C). One canonical counter, one label
+  resolver and one wording helper serve every surface, so no two screens can drift. The status filter
+  follows the canonical effective state so a badge and a filter can never disagree.
 - **The application shell is mounted once** (UX-002A). `renderShell()` builds the sidebar, nav tree and
   the `#main` container; ordinary navigation replaces only the view content inside the persistent
   `#main` and syncs the nav's derived state in place via `syncShellState()`. `render()` survives as a

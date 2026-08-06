@@ -4,8 +4,8 @@
 from annotated tag `v2.8.4`, which peels to the published baseline commit
 `bd8819af0287af02711898cf43d22fb70cc3bcd5` on `main`
 **Previous release:** v2.8.3 — Payroll Posting Integrity (still published and unchanged; no longer Latest)
-**Current distributable:** `dist/tam-intelligence-os-v2.8.4.html` — 948,782 bytes, SHA-256
-`7217b44b99e67afe08cc96e08ea16b0ff1b98542a030d793c104a2bf78911ceb`, rebuilt from source by UX-002B.
+**Current distributable:** `dist/tam-intelligence-os-v2.8.4.html` — 963,453 bytes, SHA-256
+`0a8b745627b4f47c2375e51cc9be0aa6afd286353dfdcae53971ee0a6e886927`, rebuilt from source by UX-003C.
 The **published** v2.8.4 asset remains the 914,409-byte artifact published at the tag
 (`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`) and was not republished, so the
 repository artifact and the published asset are **no longer byte-identical** — `main` carries
@@ -21,10 +21,10 @@ portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **65 of the 66 are bro
 load-order manifest and `index.html` agree on all 65 — and `js/cli/cli.js` is the CLI-only ingress,
 deliberately outside the browser load order. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
-**Verification:** `tools/verify-build.js` — **1569** checks; ten Node runtime harnesses — **984**
-checks (integrity warning rules 146, integrity payroll rules 144, Contract Core 129, monthly plan 118,
-payroll posting 106, contract persistence 74, payroll committed state 72, contract renewal 67,
-integrity rules 67, `saveAllData` 61).
+**Verification:** `tools/verify-build.js` — **1700** checks; **eleven** Node runtime harnesses — **1333**
+checks (contract timeline 349, integrity warning rules 146, integrity payroll rules 144, Contract Core 129,
+monthly plan 118, payroll posting 106, contract persistence 74, payroll committed state 72,
+contract renewal 67, integrity rules 67, `saveAllData` 61).
 **Presentation architecture (UX-002A / UX-002B):** the application shell is mounted once by
 `renderShell()` and persists; ordinary navigation replaces only the content inside `#main`
 (`renderView()`) and reapplies the nav's derived state in place (`syncShellState()`), with `render()`
@@ -32,6 +32,15 @@ kept as a compatibility facade. CSS resolves from token scales in `css/tokens.cs
 spacing steps, 4 radii, `--brand` / `--interactive` / `--warn` / six `--chart-*` series tokens); chart
 colours resolve via `themeVar('--token', fallback)` at render time. Eight invariants guard this — three
 shell-persistence, four token/typography, one production-JS colour-literal ban.
+**Contract timeline architecture (UX-003A / UX-003B / UX-003C):** `contractCalc(c, refKey)` measures
+every field — including `daysUntilEnd` — against one normalized reference date (UX-003A).
+`contractTimeline(c, refKey)` is the single classifier and returns TWO independent derived dimensions
+(UX-003B): an **effective state** (Draft / Cancelled / Renewed / Scheduled / Active / Expired) and an
+**expiry horizon** (EndingToday / EndingThisWeek / EndingThisMonth / EndingNextMonth /
+WithinWarningWindow / None). Presentation consumes that model through one counter
+(`contractTimelineCounts()`), one label resolver (`contractPresentation()`) and one wording helper
+(`contractProgressNote()`) (UX-003C). 131 invariants guard this — 20 reference-date, 63 model, 48
+presentation/counter — plus a dedicated 349-check runtime harness.
 
 > **How to read this document.** The header block above and **§18** (Repository layer) describe the
 > architecture **as it stands today**; start there. Everything below §18 is a dated release record,
@@ -90,7 +99,7 @@ flowchart TD
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>1569 invariant checks"]
+  VERIFY["tools/verify-build.js<br/>1700 invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX
@@ -271,8 +280,8 @@ rollback when that write fails, and the typed result. Renewal is therefore **sin
 compound** — predecessor and successor both live in `contracts`, so one write covers both.
 
 Renewability is evaluated against **stored** statuses (`Draft`, `Active`), never derived display states.
-A contract displayed as *Expired* or *Expiring Soon* remains renewable while its stored status is still
-`Active`; terminal statuses (`Renewed`, `Cancelled`) are never renewable. The UI eligibility mirror
+A contract displayed as *Expired*, *Final Month* or *Ending Soon* remains renewable while its stored
+status is still `Active`; terminal statuses (`Renewed`, `Cancelled`) are never renewable. The UI eligibility mirror
 (`contractIsRenewable`) is verifier-checked against the same rule.
 
 ### Contract Core authority — prepared, not routed (ADR-014 step 1 / SPR-095)

@@ -38,7 +38,7 @@ Design principles:
   app. The only external network references are the XLSX parser and web fonts (CDN).
 - **Two shippable forms.** A modular development source and a single portable HTML file that behaves
   identically.
-- **Data-safety first.** A 1569-check verifier guards the persisted-data schema, storage keys,
+- **Data-safety first.** A 1700-check verifier guards the persisted-data schema, storage keys,
   migration flags, and build fidelity on every change.
 
 ---
@@ -189,7 +189,7 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(1569 checks)"]
+    VERIFY["tools/verify-build.js<br/>(1700 checks)"]
   end
   DIST["dist/tam-intelligence-os-v2.8.4.html<br/>(portable single file)"]
 
@@ -307,7 +307,7 @@ Build the portable single file from the modular source:
 node tools/build-single-file.js
 ```
 
-Verify (1569 checks):
+Verify (1700 checks):
 
 ```bash
 node tools/verify-build.js
@@ -350,7 +350,7 @@ Releases are tag-driven and guarded end-to-end (see [`docs/RELEASE-PROCESS.md`](
 
 ```mermaid
 flowchart LR
-  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1569)"]
+  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1700)"]
   V --> C["commit source + dist"] --> T["push tag vX.Y.Z"]
   T --> GA["GitHub Actions: Release"]
   GA --> GATE{"tag matches<br/>v-APP_VERSION?"}
@@ -419,6 +419,39 @@ changes. Browsing `docs/`? Start at the [`docs/` index](docs/README.md).
 ## Roadmap
 
 Directions only — no release numbers are assigned unless already approved.
+
+**Workspace refresh (UX workstream)**
+
+Complete and merged to `main` (no version assigned; see [`AI_CONTEXT.md`](AI_CONTEXT.md) for detail):
+
+- **UX-001** — Minimal Workspace Discovery. Discovery and product direction only: a minimal
+  enterprise workspace, less "AI dashboard" presentation, typography and density over decorative
+  redesign, sidebar/navigation deferred. It authorized no implementation by itself.
+- **UX-002A** — Persistent Shell/View Foundation. The shell mounts once; navigation replaces view
+  content without rebuilding it.
+- **UX-002B** — Visual Foundation and Dashboard Density. Sans UI chrome, spacing/radius/type tokens,
+  digest-pinned CSS golden master, theme-token chart colours, Executive Dashboard density pass.
+- **UX-003A** — Reference-Date Correctness. `daysUntilEnd` shares one reference basis with the rest
+  of `contractCalc`.
+- **UX-003B** — Canonical Contract Timeline Model. Effective state and expiry horizon become two
+  independent derived dimensions.
+- **UX-003C** — Contract Progress, Counters, Filters and Presentation. One canonical counter,
+  canonical-state filters, lifecycle progress wording.
+
+> **Why a documentation milestone?** Documentation Reconciliation updates project documentation
+> only and introduces no production-code changes. It exists so the living documents match what
+> the repository actually contains after a run of implementation sprints.
+
+Next, in order:
+
+1. UX-001–UX-003 documentation reconciliation
+2. v2.8.5 release
+3. **UX-004** — Sidebar & Navigation: sidebar grouped by business domain (Dashboard, People,
+   Finance, Analytics, System), with Executive and HR dashboards under Dashboard, Employees and
+   Contracts under People, Payroll under Finance; context-aware navigation, breadcrumbs, quick
+   actions, collapsed rail, pinned mode and hover-expand. **Not implemented.**
+4. **UX-005** — Responsive/Mobile Refinement, including the mobile drawer where appropriate.
+   **Not implemented.**
 
 **Released**
 - Monthly Plan Result Integrity — the commit inspects both save results, no false success, preview
