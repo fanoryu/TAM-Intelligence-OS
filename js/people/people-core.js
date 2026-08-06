@@ -201,6 +201,66 @@ function contractEffectiveStatus(c, refKey){
   if(t.state==='Active' && t.withinWarningWindow) return CONTRACT_LEGACY_EXPIRING_ALIAS;
   return CONTRACT_LEGACY_STATE_DISPLAY[t.state];
 }
+/* ---------- UX-003C canonical presentation + counting ---------- */
+/* THE presentation label for a contract, derived from the canonical two-dimensional
+   model. Returns {key, label, pill}. Deliberately NOT wired into
+   CONTRACT_STATUS_META, which drives the status filter — filter behaviour is
+   unchanged; only the rendered label distinguishes Scheduled and the horizons. */
+function contractPresentation(c, refKey){
+  const t = contractTimeline(c, refKey);
+  if(!t) return {key:'—', label:'—', pill:'pill-other'};
+  const key = (t.state === 'Active' && t.horizon !== 'None') ? ('Active+' + t.horizon) : t.state;
+  const meta = CONTRACT_PRESENTATION_META[key] || CONTRACT_PRESENTATION_META[t.state] || {label:t.state, pill:'pill-other'};
+  return {key:key, label:meta.label, pill:meta.pill, state:t.state, horizon:t.horizon};
+}
+function contractPresentationBadge(c, refKey){
+  const p = contractPresentation(c, refKey);
+  return `<span class="pill ${p.pill}">${escapeHtml(p.label)}</span>`;
+}
+/* LIFECYCLE PROGRESS WORDING (UX-003C business rule).
+   current/total is the contract month BEING SERVED, so 3/3 is the FINAL month,
+   never "one month remaining". remaining is always max(0, total-current) and
+   current never exceeds total — both guaranteed by contractCalc(); this helper
+   only words them. */
+function contractProgressNote(c, refKey){
+  const cc = contractCalc(c, refKey);
+  if(!cc.valid) return 'No start date or duration yet';
+  const t = contractTimeline(c, refKey);
+  if(t.state === 'Scheduled') return `Not started · begins ${fmtDateID(cc.startDate)}`;
+  if(t.state === 'Expired')   return `Ended ${fmtDateID(cc.endDate)}`;
+  // URGENCY BEFORE LIFECYCLE — the nearest horizon wins the wording, so a contract
+  // ending today reads "Ends Today", never "Final Month".
+  if(t.horizon === 'EndingToday')     return `Ends Today · ${fmtDateID(cc.endDate)}`;
+  if(t.horizon === 'EndingThisWeek')  return `Ends This Week · ${fmtDateID(cc.endDate)}`;
+  if(t.horizon === 'EndingThisMonth') return `Final Month · ends ${fmtDateID(cc.endDate)}`;
+  return `Month ${cc.current} of ${cc.total} · ${cc.remaining} month${cc.remaining===1?'':'s'} remaining`;
+}
+/* THE canonical contract counter. Every displayed contract count resolves here —
+   Contracts page, HR strip and Reports all call this one helper, so no two
+   surfaces can drift or re-implement a predicate.
+
+   The six effective states PARTITION the collection (they sum to total). The
+   horizon counts are a BREAKDOWN OF `active`, never a sibling of it: this is what
+   removes the old "Active: 12 / Expiring: 3" ambiguity, because the 3 are now
+   genuinely among the 12 and can be worded as a subset. */
+function contractTimelineCounts(refKey){
+  const out = {total:0, draft:0, cancelled:0, renewed:0, scheduled:0, active:0, expired:0,
+    endingToday:0, endingThisWeek:0, endingThisMonth:0, endingNextMonth:0, withinWarningWindow:0,
+    endingSoon:0};
+  const bucket = {Draft:'draft', Cancelled:'cancelled', Renewed:'renewed',
+    Scheduled:'scheduled', Active:'active', Expired:'expired'};
+  const hBucket = {EndingToday:'endingToday', EndingThisWeek:'endingThisWeek',
+    EndingThisMonth:'endingThisMonth', EndingNextMonth:'endingNextMonth',
+    WithinWarningWindow:'withinWarningWindow'};
+  State.contracts.forEach(c=>{
+    const t = contractTimeline(c, refKey);
+    if(!t) return;
+    out.total++;
+    out[bucket[t.state]]++;
+    if(t.state === 'Active' && t.horizon !== 'None'){ out[hBucket[t.horizon]]++; out.endingSoon++; }
+  });
+  return out;
+}
 function contractsForEmployee(empId){ return State.contracts.filter(c=>c.employeeId===empId); }
 // The contract that funds payroll for a given month: covers it, and is not
 // Draft/Cancelled. Prefer a live Active contract over a Renewed historical one.

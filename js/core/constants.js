@@ -143,6 +143,34 @@ const CONTRACT_LEGACY_STATE_DISPLAY = {
    nor a canonical horizon: it is the de-facto legacy label for "effectively
    Active and inside the configured warning window". Never stored. */
 const CONTRACT_LEGACY_EXPIRING_ALIAS = 'Expiring Soon';
+/* UX-003C — PRESENTATION LABELS for the canonical timeline model.
+   Deliberately SEPARATE from CONTRACT_STATUS_META: that map drives the Contracts
+   status FILTER dropdown (its keys become the options, matched against the legacy
+   contractEffectiveStatus()). Adding canonical labels there would create filter
+   options that can never match. Filter behaviour therefore stays exactly as it
+   was; only the rendered label is richer.
+   Keys are "<state>" or "<state>+<horizon>". Nothing here is ever stored. */
+const CONTRACT_PRESENTATION_META = {
+  'Draft':                     {label:'Draft',           pill:'pill-status-planned'},
+  'Cancelled':                 {label:'Cancelled',       pill:'pill-status-cancelled'},
+  'Renewed':                   {label:'Renewed',         pill:'pill-status-scheduled'},
+  'Scheduled':                 {label:'Scheduled',       pill:'pill-status-scheduled'},
+  'Expired':                   {label:'Expired',         pill:'pill-status-archived'},
+  'Active':                    {label:'Active',          pill:'pill-status-completed'},
+  // URGENCY BEFORE LIFECYCLE: a contract ending today reads "Ends Today", not
+  // "Final Month". The order below is the wording precedence.
+  'Active+EndingToday':        {label:'Ends Today',      pill:'pill-status-partial'},
+  'Active+EndingThisWeek':     {label:'Ends This Week',  pill:'pill-status-partial'},
+  'Active+EndingThisMonth':    {label:'Final Month',     pill:'pill-status-partial'},
+  'Active+EndingNextMonth':    {label:'Ends Next Month', pill:'pill-status-partial'},
+  'Active+WithinWarningWindow':{label:'Ending Soon',     pill:'pill-status-partial'},
+};
+/* UX-003C — the Contracts status FILTER vocabulary. It is the CANONICAL effective
+   state, in display order: a user filtering "Active" must never see a Scheduled
+   badge. CONTRACT_STATUS_META no longer drives this list; the legacy
+   'Expiring Soon' alias survives inside contractEffectiveStatus() for
+   compatibility, but it no longer forces Scheduled contracts into Active. */
+const CONTRACT_FILTER_STATES = ['Active','Scheduled','Expired','Draft','Cancelled','Renewed'];
 const RECUR_FREQUENCIES = {'Monthly':1, 'Quarterly':3, 'Semiannual':6, 'Annual':12};
 // Monthly planning workflow. Approved & Closed are future-ready (no multi-user
 // approval yet) — Draft, Reviewed, Committed are functional this release.

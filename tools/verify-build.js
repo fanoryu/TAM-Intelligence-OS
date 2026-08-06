@@ -2607,6 +2607,149 @@ check(/\[1, 7, 30, 90, 3650\]/.test(ux3bHarness),
 check(/ONLY effectively Active contracts ever carry a non-None horizon/.test(ux3bHarness),
   'UX-003B harness proves horizons attach only to effectively Active contracts');
 
+// UX-003C — PRESENTATION & COUNTER INTEGRITY.
+// UX-003C adds no model; it consumes the UX-003B model. These checks prove that
+// every displayed contract count resolves through ONE canonical helper, that no
+// surface re-implements a counting predicate, that the lifecycle wording cannot
+// regress to "3/3 = 1 month remaining", and that the presentation vocabulary
+// stays out of the status-filter vocabulary (so filter behaviour is unchanged).
+console.log('== UX-003C PRESENTATION & COUNTER INTEGRITY ==');
+const ux3cCore = stripComments(read(path.join(root,'js','people','people-core.js')));
+const ux3cConst = stripComments(read(path.join(root,'js','core','constants.js')));
+const ux3cContracts = stripComments(read(path.join(root,'js','people','contracts.js')));
+const ux3cEmployees = stripComments(read(path.join(root,'js','people','employees.js')));
+const ux3cHrDash = stripComments(read(path.join(root,'js','people','hr-dashboard-reports.js')));
+const ux3cReports = stripComments(read(path.join(root,'js','analytics','reports.js')));
+const ux3cBodyOf = (name)=>{
+  const m = ux3cCore.match(new RegExp('^function '+name+'\\([^)]*\\)\\{[\\s\\S]*?\\n\\}','m'));
+  return m ? m[0] : '';
+};
+const ux3cCountsBody = ux3cBodyOf('contractTimelineCounts');
+const ux3cNoteBody   = ux3cBodyOf('contractProgressNote');
+const ux3cPresBody   = ux3cBodyOf('contractPresentation');
+check(ux3cCountsBody !== '' && ux3cNoteBody !== '' && ux3cPresBody !== '',
+  'UX-003C: contractTimelineCounts(), contractProgressNote() and contractPresentation() are resolvable top-level functions');
+
+// 1. ONE canonical counting helper, defined exactly once repository-wide.
+let ux3cCountDefs = 0, ux3cPresDefs = 0, ux3cNoteDefs = 0;
+jsFiles.forEach((rel)=>{
+  const src = stripComments(read(path.join(root,'js',rel)));
+  ux3cCountDefs += (src.match(/function contractTimelineCounts\s*\(/g)||[]).length;
+  ux3cPresDefs  += (src.match(/function contractPresentation\s*\(/g)||[]).length;
+  ux3cNoteDefs  += (src.match(/function contractProgressNote\s*\(/g)||[]).length;
+});
+check(ux3cCountDefs === 1, 'UX-003C: contractTimelineCounts() is defined exactly once repository-wide (one counter)');
+check(ux3cPresDefs === 1,  'UX-003C: contractPresentation() is defined exactly once repository-wide');
+check(ux3cNoteDefs === 1,  'UX-003C: contractProgressNote() is defined exactly once repository-wide');
+check(/contractTimeline\(/.test(ux3cCountsBody),
+  'UX-003C: the counter derives every bucket from the canonical timeline model');
+
+// 2. NO DUPLICATED COUNTING PREDICATE. Counting a contract collection by comparing
+//    the legacy status string is exactly the pattern UX-003C removes. It may
+//    survive ONLY in the status filter (compatibility) — nowhere else.
+const ux3cLegacyCounters = [];
+jsFiles.forEach((rel)=>{
+  let src = stripComments(read(path.join(root,'js',rel)));
+  if(/\.filter\(\s*c\s*=>\s*contractEffectiveStatus\(c\)\s*===\s*'/.test(src)) ux3cLegacyCounters.push(rel);
+});
+check(ux3cLegacyCounters.length === 0,
+  'UX-003C: no module counts or selects contracts by comparing the legacy status string (the filter facade is the only exception)'
+  + (ux3cLegacyCounters.length ? ' >> VIOLATION: ' + [...new Set(ux3cLegacyCounters)].join(', ') : ''));
+check(/rows\.filter\(c=>contractEffectiveState\(c\)===f\.status\)/.test(ux3cContracts),
+  'UX-003C: the status FILTER resolves through the CANONICAL effective state (filtering Active can never return a Scheduled badge)');
+check(!/contractEffectiveStatus\(c\)===f\.status/.test(ux3cContracts),
+  'UX-003C: the filter no longer resolves through the legacy status string');
+check(/CONTRACT_FILTER_STATES\.map\(/.test(ux3cContracts),
+  'UX-003C: the filter dropdown is built from the canonical filter vocabulary');
+check(/const CONTRACT_FILTER_STATES = \['Active','Scheduled','Expired','Draft','Cancelled','Renewed'\];/.test(ux3cConst),
+  'UX-003C: the filter vocabulary is the six canonical effective states, in display order');
+check(!/Object\.keys\(CONTRACT_STATUS_META\)\.map\(/.test(ux3cContracts),
+  'UX-003C: CONTRACT_STATUS_META no longer builds the filter options');
+
+// 3. EVERY displayed counter comes from the canonical helper.
+check(/const counts = contractTimelineCounts\(\)/.test(ux3cContracts),
+  'UX-003C: the Contracts page header counts come from contractTimelineCounts()');
+check(/const ctCounts = contractTimelineCounts\(\)/.test(ux3cHrDash),
+  'UX-003C: hrDashboardStats() counts come from contractTimelineCounts()');
+check(/activeContracts = ctCounts\.active/.test(ux3cHrDash) && /expiringSoon = ctCounts\.endingSoon/.test(ux3cHrDash),
+  'UX-003C: the dashboard headline and sub-count are both read off the canonical helper');
+
+// 4. THE SUB-COUNT IS PRESENTED AS A SUBSET (the old ambiguity).
+check(/of these ending soon/.test(ux3cHrDash),
+  'UX-003C: the dashboard sub-count is worded as a SUBSET of the active count');
+check(/of them ending soon/.test(ux3cContracts),
+  'UX-003C: the Contracts header words the ending-soon figure as a subset');
+check(/of which/.test(ux3cReports),
+  'UX-003C: the Reports summary words the ending-soon figure as a subset');
+check(!/\(\$\{st\.expiringSoon\} expiring soon\)/.test(ux3cReports),
+  'UX-003C: the Reports summary no longer renders the ambiguous "(N expiring soon)" parenthetical');
+
+// 5. LIFECYCLE WORDING cannot regress to "3/3 = 1 month remaining".
+check(/Final Month/.test(ux3cNoteBody),
+  'UX-003C: the progress wording has a dedicated FINAL-MONTH phrasing');
+check(/EndingThisMonth/.test(ux3cNoteBody) && /EndingToday/.test(ux3cNoteBody),
+  'UX-003C: the final-month phrasing is selected from the canonical horizon, not from a day count');
+check(/return `Final Month/.test(ux3cNoteBody),
+  'UX-003C: the final-month branch returns before any remaining-duration wording');
+// URGENCY BEFORE LIFECYCLE: the nearer horizons must be decided BEFORE the
+// final-month wording, so a contract ending today never reads 'Final Month'.
+const ux3cFlatNote = ux3cNoteBody.replace(/\s+/g,' ');
+const ux3cIdxToday = ux3cFlatNote.indexOf("'EndingToday'");
+const ux3cIdxWeek  = ux3cFlatNote.indexOf("'EndingThisWeek'");
+const ux3cIdxMonth = ux3cFlatNote.indexOf("'EndingThisMonth'");
+check(ux3cIdxToday > -1 && ux3cIdxToday < ux3cIdxWeek && ux3cIdxWeek < ux3cIdxMonth,
+  'UX-003C: wording precedence is today -> this week -> final month (urgency before lifecycle)');
+check(/return `Ends Today/.test(ux3cNoteBody) && /return `Ends This Week/.test(ux3cNoteBody),
+  'UX-003C: EndingToday and EndingThisWeek have their OWN wording, not the final-month phrasing');
+check(!/Final Month[^`]*ends today|Final Month[^`]*ends this week/.test(ux3cNoteBody),
+  'UX-003C: the final-month phrasing never absorbs the today/this-week cases');
+check(/Math\.max\(0, dur - out\.current\)/.test(ux3cCore),
+  'UX-003C: remaining is still derived as max(0, total - current) in contractCalc()');
+check(/out\.current=dur;/.test(ux3cCore),
+  'UX-003C: current is still clamped to total on the expired branch (never exceeds total)');
+check(!/\$\{cc\.remaining\} remaining/.test(ux3cContracts),
+  'UX-003C: the contract detail no longer renders a bare "N remaining" figure');
+check(!/\$\{calc\.remaining\} month/.test(ux3cEmployees),
+  'UX-003C: the employee detail no longer renders a bare "N months remaining" figure');
+check(/contractProgressNote\(/.test(ux3cContracts) && /contractProgressNote\(/.test(ux3cEmployees),
+  'UX-003C: both detail surfaces word progress through the canonical helper');
+
+// 6. PRESENTATION VOCABULARY IS SEPARATE FROM THE FILTER VOCABULARY.
+check(/const CONTRACT_PRESENTATION_META = \{/.test(ux3cConst),
+  'UX-003C: presentation labels live in their own map');
+check((ux3cConst.match(/const CONTRACT_PRESENTATION_META\s*=/g)||[]).length === 1,
+  'UX-003C: CONTRACT_PRESENTATION_META is declared exactly once');
+const ux3cStatusMetaLit = (ux3cConst.match(/const CONTRACT_STATUS_META = \{[\s\S]*?\n\};/)||[''])[0];
+check(ux3cStatusMetaLit !== '' && ux3cStatusMetaLit.indexOf('+') === -1,
+  'UX-003C: CONTRACT_STATUS_META (which builds the filter options) gains no composite keys');
+check(!/'Scheduled'\s*:/.test(ux3cStatusMetaLit),
+  'UX-003C: CONTRACT_STATUS_META still has no Scheduled option (the filter vocabulary is unchanged)');
+const ux3cPresLit = (ux3cConst.match(/const CONTRACT_PRESENTATION_META = \{[\s\S]*?\n\};/)||[''])[0];
+['Ends Today','Ends This Week','Final Month','Ends Next Month','Ending Soon','Scheduled','Expired'].forEach((l)=>{
+  check(ux3cPresLit.indexOf("'"+l+"'") !== -1, 'UX-003C: presentation vocabulary contains the label "'+l+'"');
+});
+
+// 7. NO storage, schema, payroll or model change.
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))),
+  'UX-003C: SCHEMA_VERSION remains 6 (presentation only)');
+check(/const CONTRACT_STORED_STATUSES = \['Draft','Active','Renewed','Cancelled'\];/.test(read(path.join(root,'js','core','constants.js'))),
+  'UX-003C: CONTRACT_STORED_STATUSES is unchanged');
+check(!/persistContracts|StorageAdapter/.test(ux3cCountsBody + ux3cNoteBody + ux3cPresBody),
+  'UX-003C: the presentation helpers never touch persistence');
+check(!/\.status\s*=\s*/.test(ux3cCountsBody),
+  'UX-003C: the counter never mutates contract data');
+
+// 8. The runtime harness covers it and stays honest.
+const ux3cHarness = read(path.join(root,'tools','verify-contract-timeline-runtime.js'));
+check(/UX-003C/.test(ux3cHarness) && /PRESENTATION & COUNTER INTEGRITY/.test(ux3cHarness),
+  'UX-003C harness identifies its sprint and subject correctly');
+check(/contractTimelineCounts\(/.test(ux3cHarness) && /contractProgressNote\(/.test(ux3cHarness),
+  'UX-003C harness exercises the canonical counter and the wording helper');
+check(/PARTITION the collection/.test(ux3cHarness) && /a true subset/.test(ux3cHarness),
+  'UX-003C harness proves the partition and the subset relationship');
+check(/never implies/.test(ux3cHarness),
+  'UX-003C harness proves the final month never implies one month remaining');
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');

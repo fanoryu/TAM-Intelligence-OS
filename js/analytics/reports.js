@@ -54,7 +54,7 @@ function buildPlanSummaryHTML(key){
       <div class="chart-mini-stat"><div class="lbl">Recurring Planned</div><div class="val">${fmtIDRShort(recurringSum)}</div></div>
       <div class="chart-mini-stat"><div class="lbl">Total Planned</div><div class="val">${fmtIDRShort(monthTotals(key).planned)}</div></div>
     </div>
-    <p class="dim" style="font-size:13px;">Payroll transactions: <b>${payroll.length}</b> · Recurring: <b>${recurring.length}</b> · Other operational (planned): <b class="mono">${fmtIDR(opsSum)}</b>. Active employees: <b>${st.activeEmployees}</b>; active contracts: <b>${st.activeContracts}</b> (${st.expiringSoon} expiring soon).</p>`;
+    <p class="dim" style="font-size:13px;">Payroll transactions: <b>${payroll.length}</b> · Recurring: <b>${recurring.length}</b> · Other operational (planned): <b class="mono">${fmtIDR(opsSum)}</b>. Active employees: <b>${st.activeEmployees}</b>; active contracts: <b>${st.activeContracts}</b>, of which <b>${st.expiringSoon}</b> ending soon.</p>`;
 }
 function buildReportHTML(key){
   const tot = monthTotals(key); const cats = categoryBreakdown(key); const insights = computeInsights(key);

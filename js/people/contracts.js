@@ -5,10 +5,12 @@ function allContractAlerts(){
   const alerts = [];
   const warn = Number(State.settings.contractExpiryWarningDays)||90;
   State.contracts.forEach(c=>{
-    const es = contractEffectiveStatus(c);
+    // UX-003C — alert branching resolves through the canonical model. withinWarningWindow
+    // IS the legacy 'Expiring Soon' alias, so the alert sets are unchanged.
+    const t = contractTimeline(c);
     const cc = contractCalc(c);
-    if(es==='Expired' && c.status==='Active') alerts.push({type:'warn', sev:0, text:`Contract ${escapeHtml(c.contractNumber||'')} (${escapeHtml(c.employeeName||'')}) has expired — renew or close it.`});
-    else if(es==='Expiring Soon'){
+    if(t.state==='Expired' && c.status==='Active') alerts.push({type:'warn', sev:0, text:`Contract ${escapeHtml(c.contractNumber||'')} (${escapeHtml(c.employeeName||'')}) has expired — renew or close it.`});
+    else if(t.withinWarningWindow){
       const d = cc.daysUntilEnd;
       // UX-003B — the 30/60/90 ladder that used to be inlined here now lives once,
       // in contractExpiryBand() (people-core.js). Same bands, same text.
@@ -27,20 +29,23 @@ function allContractAlerts(){
 function contractsFiltered(){
   const f = State.contractFilter;
   let rows = State.contracts.slice();
-  if(f.status!=='all') rows = rows.filter(c=>contractEffectiveStatus(c)===f.status);
+  // UX-003C — the status filter resolves through the CANONICAL effective state, so
+  // filtering "Active" can never return a contract whose badge reads "Scheduled".
+  // One predicate, one source: contractEffectiveState() delegates to contractTimeline().
+  if(f.status!=='all') rows = rows.filter(c=>contractEffectiveState(c)===f.status);
   if(f.search.trim()){ const s=normStr(f.search); rows = rows.filter(c=>[c.contractNumber,c.employeeName].some(x=>normStr(x||'').includes(s))); }
   rows.sort((a,b)=>String(b.startDate||'').localeCompare(String(a.startDate||'')));
   return rows;
 }
 function contractRowsHTML(){
-  return contractsFiltered().map(c=>{ const cc=contractCalc(c); const es=contractEffectiveStatus(c); return `<tr>
+  return contractsFiltered().map(c=>{ const cc=contractCalc(c); return `<tr>
     <td><button class="linklike" data-ct-detail="${c.id}"><b>${escapeHtml(c.contractNumber||'—')}</b></button></td>
     <td><button class="linklike" data-emp-open="${c.employeeId}">${escapeHtml(c.employeeName||'—')}</button></td>
     <td class="dim">${fmtDateID(cc.startDate)}</td>
     <td class="dim">${fmtDateID(cc.endDate)}</td>
     <td style="min-width:120px;"><div style="display:flex;align-items:center;gap:8px;"><span class="mono">${cc.progress}</span><div style="flex:1;">${progressBar(cc.pct)}</div></div></td>
     <td class="num">${fmtIDR(c.monthlySalary)}</td>
-    <td>${hrStatusBadge(es, CONTRACT_STATUS_META)}</td>
+    <td>${contractPresentationBadge(c)}</td>
     <td>${hrActionsMenu('ct', c.id, [
       ['ct-detail','View Detail'],
       ['ct-edit','Edit'],
@@ -64,12 +69,12 @@ function applyContractFilter(main){
 function renderContracts(main){
   const f = State.contractFilter;
   const alerts = allContractAlerts();
-  const activeN = State.contracts.filter(c=>contractEffectiveStatus(c)==='Active').length;
-  const soonN = State.contracts.filter(c=>contractEffectiveStatus(c)==='Expiring Soon').length;
+  // UX-003C — every count on this page comes from the ONE canonical helper.
+  const counts = contractTimelineCounts();
 
   main.innerHTML = `
     <div class="page-head">
-      <div><h1>Contracts</h1><p class="desc">${State.contracts.length} contract${State.contracts.length===1?'':'s'} · ${activeN} active · ${soonN} expiring soon. Progress is calculated automatically from start date + duration.</p></div>
+      <div><h1>Contracts</h1><p class="desc">${counts.total} contract${counts.total===1?'':'s'} · ${counts.active} active${counts.endingSoon?` (${counts.endingSoon} of them ending soon)`:''}${counts.scheduled?` · ${counts.scheduled} scheduled`:''}${counts.expired?` · ${counts.expired} expired`:''}. Progress is calculated automatically from start date + duration.</p></div>
       <div class="head-controls">
         <button class="btn btn-accent" id="addCt">+ New Contract</button>
         <button class="btn" id="expCt">Export CSV</button>
@@ -79,7 +84,7 @@ function renderContracts(main){
     <div class="card">
       <div class="form-grid" style="grid-template-columns:1.6fr 1fr;margin-bottom:14px;">
         <div class="field"><label>Search (contract #, employee)</label><input class="input" id="cSearch" placeholder="Search…" value="${escapeHtml(f.search)}"></div>
-        <div class="field"><label>Status</label><select class="input" id="cStatus"><option value="all">All statuses</option>${Object.keys(CONTRACT_STATUS_META).map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+        <div class="field"><label>Status</label><select class="input" id="cStatus"><option value="all">All statuses</option>${CONTRACT_FILTER_STATES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
       </div>
       <div class="table-wrap" style="max-height:620px;overflow-y:auto;">
         <table>
@@ -128,7 +133,7 @@ function openContractModal(id, presetEmpId){
         if(sd && dur>0){
           const cc = contractCalc({startDate:sd, durationMonths:dur, status:'Active'});
           root.querySelector('#ctEndPreview').value = fmtDateID(cc.endDate);
-          root.querySelector('#ctProgPreview').textContent = `This month this contract would read ${cc.progress} (${cc.remaining} months remaining). Progress updates automatically each month — you never edit it manually.`;
+          root.querySelector('#ctProgPreview').textContent = `This month this contract would read ${cc.progress} — month ${cc.current} of ${cc.total}, ${cc.remaining} month${cc.remaining===1?'':'s'} remaining after it. Progress updates automatically each month — you never edit it manually.`;
         } else { root.querySelector('#ctEndPreview').value='—'; root.querySelector('#ctProgPreview').textContent=''; }
       };
       form.startDate.addEventListener('input', upd); form.durationMonths.addEventListener('input', upd); upd();
@@ -589,19 +594,19 @@ function renderContractDetail(main){
   const c = contractById(State.detailContractId);
   if(!c){ main.innerHTML = emptyState('Contract not found','It may have been deleted.'); return; }
   const cc = contractCalc(c);
-  const es = contractEffectiveStatus(c);
+  const t = contractTimeline(c);
   const emp = empById(c.employeeId);
   const plans = payrollPlansForContract(c.id).slice().sort((a,b)=>String(b.monthKey).localeCompare(String(a.monthKey)));
   const txns = txnsForContract(c.id).slice().sort((a,b)=>String(b.monthKey).localeCompare(String(a.monthKey)));
   const alerts = [];
-  if(es==='Expired') alerts.push({type:'warn', text:'This contract has expired.'});
-  else if(es==='Expiring Soon') alerts.push({type:'warn', text:`Expiring soon — ${cc.daysUntilEnd} days remaining (ends ${fmtDateID(cc.endDate)}).`});
+  if(t.state==='Expired') alerts.push({type:'warn', text:'This contract has expired.'});
+  else if(t.withinWarningWindow) alerts.push({type:'warn', text:`Expiring soon — ${cc.daysUntilEnd} days remaining (ends ${fmtDateID(cc.endDate)}).`});
   if(c.renewedFromId){ const from=contractById(c.renewedFromId); if(from) alerts.push({type:'info', text:`Renewed from contract ${escapeHtml(from.contractNumber||'')}.`}); }
   if(c.renewedToId){ const to=contractById(c.renewedToId); if(to) alerts.push({type:'info', text:`Renewed into contract ${escapeHtml(to.contractNumber||'')}.`}); }
 
   main.innerHTML = `
     <div class="page-head">
-      <div><h1>${escapeHtml(c.contractNumber||'Contract')}</h1><p class="desc">${escapeHtml(c.employeeName||'—')} · ${hrStatusBadge(es, CONTRACT_STATUS_META)}</p></div>
+      <div><h1>${escapeHtml(c.contractNumber||'Contract')}</h1><p class="desc">${escapeHtml(c.employeeName||'—')} · ${contractPresentationBadge(c)}</p></div>
       <div class="head-controls">
         <button class="btn" id="backCt">← Contracts</button>
         <button class="btn" id="editCtD">Edit</button>
@@ -626,7 +631,7 @@ function renderContractDetail(main){
       <div class="card">
         <h3>Progress</h3>
         <div style="font-size:26px;font-family:var(--mono);font-weight:600;margin-bottom:6px;">${cc.progress}</div>
-        <div class="dim" style="font-size:13px;margin-bottom:10px;">Month ${cc.current} of ${cc.total} · ${cc.remaining} remaining · ${cc.pct}% complete</div>
+        <div class="dim" style="font-size:13px;margin-bottom:10px;">${escapeHtml(contractProgressNote(c))} · ${cc.pct}% complete</div>
         ${progressBar(cc.pct)}
         <div class="hint" style="margin-top:10px;">Calculated automatically from the start date and duration using calendar months. Before the start it reads 0/${cc.total}; after the end, ${cc.total}/${cc.total} and Expired.</div>
       </div>
@@ -661,7 +666,7 @@ function exportContractsCsv(){
   const headers = ['Contract Number','Employee','Start Date','End Date','Duration Months','Current Month','Progress','Remaining Months','Percent Complete','Monthly Salary','Effective Status','Stored Status','Notes'];
   const lines = [`# ${APP_NAME} v${APP_VERSION} — Contracts`, headers.join(',')];
   State.contracts.forEach(c=>{ const cc=contractCalc(c);
-    lines.push([c.contractNumber,c.employeeName,cc.startDate||'',cc.endDate||'',cc.total,cc.current,cc.progress,cc.remaining,cc.pct+'%',c.monthlySalary??'',contractEffectiveStatus(c),c.status,c.notes].map(csvSafe).join(','));
+    lines.push([c.contractNumber,c.employeeName,cc.startDate||'',cc.endDate||'',cc.total,cc.current,cc.progress,cc.remaining,cc.pct+'%',c.monthlySalary??'',contractPresentation(c).label,c.status,c.notes].map(csvSafe).join(','));
   });
   downloadBlob(lines.join('\n'), `${FILE_BASE}-contracts.csv`, 'text/csv');
   toast('Contracts exported.');

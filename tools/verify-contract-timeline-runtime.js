@@ -78,7 +78,13 @@ function loadRuntime(){
     + ' CONTRACT_EXPIRY_HORIZONS: CONTRACT_EXPIRY_HORIZONS,'
     + ' CONTRACT_LEGACY_STATE_DISPLAY: CONTRACT_LEGACY_STATE_DISPLAY,'
     + ' CONTRACT_LEGACY_EXPIRING_ALIAS: CONTRACT_LEGACY_EXPIRING_ALIAS,'
-    + ' CONTRACT_STORED_STATUSES: CONTRACT_STORED_STATUSES };';
+    + ' CONTRACT_STORED_STATUSES: CONTRACT_STORED_STATUSES,'
+    // UX-003C - presentation + canonical counting
+    + ' contractTimelineCounts: contractTimelineCounts, contractPresentation: contractPresentation,'
+    + ' contractProgressNote: contractProgressNote, contractPresentationBadge: contractPresentationBadge,'
+    + ' hrDashboardStats: hrDashboardStats, CONTRACT_PRESENTATION_META: CONTRACT_PRESENTATION_META,'
+    + ' CONTRACT_STATUS_META: CONTRACT_STATUS_META, contractsFiltered: contractsFiltered,'
+    + ' CONTRACT_FILTER_STATES: CONTRACT_FILTER_STATES };';
   const noop = function(){};
   const memStore = {};
   const memStorage = {
@@ -802,6 +808,266 @@ check(JSON.stringify(State.contracts[0]) === pCtBefore,
   'P33. contractTimeline() never mutates contract data');
 check(/const SCHEMA_VERSION = 6;/.test(fs.readFileSync(path.resolve(__dirname,'..','js','core','constants.js'),'utf8')),
   'P34. SCHEMA_VERSION remains 6 (UX-003B is not a migration)');
+/* ============================================================
+   UX-003C — PRESENTATION & COUNTER INTEGRITY
+   ------------------------------------------------------------
+   UX-003C adds NO model. It consumes the UX-003B model to fix two things:
+
+   1. LIFECYCLE PROGRESS WORDING. current/total is the contract month BEING
+      SERVED. A 3-month contract reads 1/3, 2/3, 3/3 and then Expired. 3/3 is
+      therefore the FINAL month and must never be worded as "1 month remaining".
+      remaining is always max(0, total-current); current never exceeds total.
+      (Both already held in contractCalc() — family R LOCKS them.)
+
+   2. COUNTER INTEGRITY. Every displayed contract count resolves through one
+      canonical helper, contractTimelineCounts(). The six effective states
+      PARTITION the collection; the horizon counts are a BREAKDOWN OF `active`,
+      not a sibling of it. That is what removes the old "Active: 12 /
+      Expiring: 3" ambiguity — the 3 are now genuinely among the 12.
+
+   Families:
+     Q  canonical counting: partition, subset, single source, filter compatibility
+     R  lifecycle progress wording and the remaining/current invariants
+   ============================================================ */
+const { contractTimelineCounts, contractPresentation, contractProgressNote,
+        contractPresentationBadge, hrDashboardStats, CONTRACT_PRESENTATION_META,
+        CONTRACT_STATUS_META, contractsFiltered, CONTRACT_FILTER_STATES } = RT;
+
+console.log('== UX-003C PRESENTATION & COUNTER INTEGRITY ==');
+
+/* ---------- Q. canonical counting ---------- */
+console.log('-- Q. counter integrity (one canonical helper) --');
+State.contracts = [
+  ct(addMonths(TODAY_KEY,-6)+'-01', 24),                 // Active, far from ending
+  ct(addMonths(TODAY_KEY,-6)+'-01', 24),                 // Active, far from ending
+  ct(TODAY_KEY+'-01', 1),                                // Active, ending this month
+  ct(addMonths(TODAY_KEY,-1)+'-01', 3),                  // Active, ending next month
+  ct(addMonths(TODAY_KEY,6)+'-01', 12),                  // Scheduled
+  ct(addMonths(TODAY_KEY,9)+'-01', 12),                  // Scheduled
+  ct(addMonths(TODAY_KEY,-36)+'-01', 12),                // Expired
+  ct(addMonths(TODAY_KEY,-6)+'-01', 12, {status:'Draft'}),
+  ct(addMonths(TODAY_KEY,-6)+'-01', 12, {status:'Cancelled'}),
+  ct(addMonths(TODAY_KEY,-6)+'-01', 12, {status:'Renewed'})
+];
+const qC = contractTimelineCounts();
+check(qC.total === State.contracts.length, 'Q1. the canonical helper counts every contract exactly once');
+check(qC.draft + qC.cancelled + qC.renewed + qC.scheduled + qC.active + qC.expired === qC.total,
+  'Q2. the six effective states PARTITION the collection (they sum to the total)');
+check(qC.scheduled === 2, 'Q3. Scheduled contracts are counted as Scheduled');
+check(qC.expired === 1, 'Q4. Expired contracts are counted as Expired');
+check(qC.draft === 1 && qC.cancelled === 1 && qC.renewed === 1, 'Q5. stored lifecycle states are counted separately');
+const qActiveByModel = State.contracts.filter(c=>contractTimeline(c).state === 'Active').length;
+check(qC.active === qActiveByModel, 'Q6. `active` equals the model\'s own Active population');
+check(qC.active + qC.scheduled + qC.expired + qC.draft + qC.cancelled + qC.renewed === qC.total,
+  'Q7. Scheduled is never counted as Active, and Expired is never counted as Active');
+check(qC.endingSoon === qC.endingToday + qC.endingThisWeek + qC.endingThisMonth
+      + qC.endingNextMonth + qC.withinWarningWindow,
+  'Q8. endingSoon is exactly the sum of the five horizon buckets');
+check(qC.endingSoon <= qC.active, 'Q9. every ending-soon contract is ALSO counted in active (a true subset)');
+check(qC.endingThisMonth >= 1 && qC.endingNextMonth >= 1, 'Q10. the fixture exercises real horizon buckets');
+let qOutside = 0;
+State.contracts.forEach(c=>{ const t = contractTimeline(c);
+  if(t.horizon !== 'None' && t.state !== 'Active') qOutside++; });
+check(qOutside === 0, 'Q11. no non-Active contract carries a horizon, so the subset cannot leak');
+State.employees = []; State.payrollPlans = []; State.txns = []; State.monthlyPlans = []; State.overtimeRecords = [];
+const qStats = hrDashboardStats(TODAY_KEY);
+check(qStats.activeContracts === qC.active,
+  'Q12. hrDashboardStats().activeContracts comes from the canonical helper (no second count)');
+check(qStats.expiringSoon === qC.endingSoon,
+  'Q13. hrDashboardStats().expiringSoon comes from the canonical helper (no second count)');
+check(qStats.expiringSoon <= qStats.activeContracts,
+  'Q14. the dashboard sub-count is a subset of its headline count (the old ambiguity is gone)');
+const qSnapshot = JSON.stringify(State.contracts);
+const qC2 = contractTimelineCounts();
+check(JSON.stringify(qC) === JSON.stringify(qC2), 'Q15. the counter is deterministic');
+check(JSON.stringify(State.contracts) === qSnapshot, 'Q16. counting never mutates contract data');
+// UX-003C revision — the filter now follows the CANONICAL effective state, so a
+// user filtering Active can never be shown a Scheduled badge. Family S proves it.
+State.contractFilter = {status:'Active', search:''};
+const qActiveRows = contractsFiltered();
+check(qActiveRows.every(c=>contractEffectiveState(c) === 'Active'),
+  'Q17. the Active filter returns ONLY effectively-Active contracts');
+State.contractFilter = {status:'all', search:''};
+check(Object.keys(CONTRACT_STATUS_META).every(k=>k.indexOf('+') === -1),
+  'Q18. CONTRACT_STATUS_META (which builds the filter options) gains no canonical keys');
+check(Object.keys(CONTRACT_PRESENTATION_META).some(k=>k.indexOf('+') !== -1),
+  'Q19. presentation labels live in their OWN map, separate from the filter vocabulary');
+
+/* ---------- R. lifecycle progress wording ---------- */
+console.log('-- R. lifecycle progress wording (the 3/3 rule) --');
+const rC = ct('2026-01-01', 3);
+const rMonths = [
+  ['2026-01', 1, 2, '1/3'],
+  ['2026-02', 2, 1, '2/3'],
+  ['2026-03', 3, 0, '3/3']
+];
+rMonths.forEach(function(row, i){
+  const key = row[0], cur = row[1], rem = row[2], prog = row[3];
+  const cc = contractCalc(rC, key);
+  check(cc.current === cur,   'R' + (i+1) + 'a. month ' + (i+1) + ': current === ' + cur);
+  check(cc.remaining === rem, 'R' + (i+1) + 'b. month ' + (i+1) + ': remaining === ' + rem);
+  check(cc.progress === prog, 'R' + (i+1) + 'c. month ' + (i+1) + ': progress reads ' + prog);
+  check(contractTimeline(rC, key).state === 'Active', 'R' + (i+1) + 'd. month ' + (i+1) + ': still effectively Active');
+});
+const r4 = contractCalc(rC, '2026-04');
+check(contractTimeline(rC,'2026-04').state === 'Expired', 'R4a. month 4: Expired');
+check(r4.remaining === 0, 'R4b. month 4: remaining === 0');
+check(r4.current === r4.total, 'R4c. month 4: current is clamped to total (never beyond)');
+check(contractTimeline(rC,'2026-04').horizon === 'None', 'R4d. month 4: horizon None');
+const rFinalNote = contractProgressNote(rC, '2026-03');
+check(/Final Month/.test(rFinalNote), 'R5. 3/3 is worded as the FINAL month');
+check(!/1 month remaining/.test(rFinalNote), 'R6. 3/3 never implies "1 month remaining"');
+check(!/remaining/.test(rFinalNote), 'R7. the final-month wording drops remaining-duration language entirely');
+check(/2 months remaining/.test(contractProgressNote(rC,'2026-01')), 'R8. month 1 states 2 months remaining');
+check(/1 month remaining/.test(contractProgressNote(rC,'2026-02')), 'R9. month 2 states 1 month remaining');
+check(/Month 2 of 3/.test(contractProgressNote(rC,'2026-02')), 'R10. month 2 states its position in the term');
+check(/Ended/.test(contractProgressNote(rC,'2026-04')), 'R11. after the term the wording says Ended');
+check(/Not started/.test(contractProgressNote(ct('2027-06-01',12), TODAY_KEY)), 'R12. a Scheduled contract reads Not started');
+let rCurGt = 0, rNeg = 0, rMismatch = 0, rN = 0;
+[0,1,2,3,6,12,24].forEach(function(dur){
+  const c = ct('2026-01-01', dur);
+  for(let y=2023; y<=2030; y++) for(let m=1; m<=12; m++){
+    const cc = contractCalc(c, y + '-' + String(m).padStart(2,'0'));
+    rN++;
+    if(cc.current > cc.total) rCurGt++;
+    if(cc.remaining < 0) rNeg++;
+    if(cc.remaining !== Math.max(0, cc.total - cc.current)) rMismatch++;
+  }
+});
+check(rN === 7*96, 'R13. invariant sweep ran ' + rN + ' month/duration combinations');
+check(rCurGt === 0, 'R14. current NEVER exceeds total');
+check(rNeg === 0, 'R15. remaining is NEVER negative');
+check(rMismatch === 0, 'R16. remaining is ALWAYS max(0, total - current)');
+check(contractPresentation(rC,'2026-03').label === 'Final Month', 'R17. the 3/3 badge reads Final Month');
+check(contractPresentation(rC,'2026-02').label === 'Ends Next Month', 'R18. month 2 badge reads Ends Next Month');
+check(contractPresentation(ct('2027-06-01',12), TODAY_KEY).label === 'Scheduled', 'R19. a future contract is labelled Scheduled');
+check(contractPresentation(ct(addMonths(TODAY_KEY,-36)+'-01',12), TODAY_KEY).label === 'Expired', 'R20. a finished contract is labelled Expired');
+const rLabels = Object.keys(CONTRACT_PRESENTATION_META).map(function(k){ return CONTRACT_PRESENTATION_META[k].label; });
+check(rLabels.every(function(l){ return !/Ending(Today|ThisWeek|ThisMonth|NextMonth)|WithinWarningWindow/.test(l); }),
+  'R21. no presentation label leaks an internal horizon identifier');
+check(/<span class="pill /.test(contractPresentationBadge(rC,'2026-03')), 'R22. the badge renders as a pill');
+check(!/</.test(contractPresentation(rC,'2026-03').label), 'R23. labels are plain text (escaped at render time)');
+
+/* ---------- S. filter consistency + wording precedence (UX-003C revision) ---------- */
+/* The badge and the filter must speak ONE vocabulary. Before this revision the
+   badge could read "Scheduled" while the legacy Active filter still returned that
+   contract — internally inconsistent. The filter now follows the canonical
+   effective state. The legacy 'Expiring Soon' alias still resolves inside
+   contractEffectiveStatus(), but it no longer forces Scheduled into Active. */
+console.log('-- S. filter consistency & wording precedence --');
+State.contracts = [
+  ct(addMonths(TODAY_KEY,-6)+'-01', 24),                 // Active
+  ct(TODAY_KEY+'-01', 1),                                // Active + ending this month
+  ct(addMonths(TODAY_KEY,-1)+'-01', 3),                  // Active + ending next month
+  ct(addMonths(TODAY_KEY,6)+'-01', 12),                  // Scheduled
+  ct(addMonths(TODAY_KEY,9)+'-01', 12),                  // Scheduled
+  ct(addMonths(TODAY_KEY,-36)+'-01', 12),                // Expired
+  ct(addMonths(TODAY_KEY,-6)+'-01', 12, {status:'Draft'}),
+  ct(addMonths(TODAY_KEY,-6)+'-01', 12, {status:'Cancelled'}),
+  ct(addMonths(TODAY_KEY,-6)+'-01', 12, {status:'Renewed'})
+];
+// The filter vocabulary IS the canonical effective-state vocabulary.
+check(JSON.stringify(CONTRACT_FILTER_STATES.slice().sort()) === JSON.stringify(CONTRACT_EFFECTIVE_STATES.slice().sort()),
+  'S1. the filter vocabulary is exactly the canonical effective states (a permutation)');
+check(CONTRACT_FILTER_STATES.indexOf('Expiring Soon') === -1,
+  'S2. the legacy alias is NOT a filter option (it is not an effective state)');
+// 1 — the Active filter never returns a Scheduled contract.
+State.contractFilter = {status:'Active', search:''};
+const sActive = contractsFiltered();
+check(sActive.length > 0, 'S3. the Active filter returns rows');
+check(sActive.every(c=>contractEffectiveState(c) === 'Active'),
+  'S4. the Active filter returns ONLY effectively-Active contracts');
+check(sActive.every(c=>contractPresentation(c).state === 'Active'),
+  'S5. every badge shown under the Active filter belongs to an Active contract');
+check(!sActive.some(c=>contractPresentation(c).label === 'Scheduled'),
+  'S6. a user filtering Active NEVER sees a Scheduled badge (the inconsistency is gone)');
+check(!sActive.some(c=>contractEffectiveState(c) === 'Expired'),
+  'S7. the Active filter never returns an Expired contract');
+// 2 — the Scheduled filter returns EVERY Scheduled contract, and only those.
+State.contractFilter = {status:'Scheduled', search:''};
+const sSched = contractsFiltered();
+const sSchedAll = State.contracts.filter(c=>contractEffectiveState(c) === 'Scheduled');
+check(sSched.length === sSchedAll.length && sSched.length === 2,
+  'S8. the Scheduled filter returns EVERY Scheduled contract');
+check(sSched.every(c=>contractEffectiveState(c) === 'Scheduled'),
+  'S9. the Scheduled filter returns ONLY Scheduled contracts');
+check(sSched.every(c=>contractPresentation(c).label === 'Scheduled'),
+  'S10. every row under the Scheduled filter carries the Scheduled badge');
+// Every canonical state round-trips through the filter.
+CONTRACT_FILTER_STATES.forEach((st, i)=>{
+  State.contractFilter = {status:st, search:''};
+  const rows = contractsFiltered();
+  const expected = State.contracts.filter(c=>contractEffectiveState(c) === st);
+  check(rows.length === expected.length && rows.every(c=>contractEffectiveState(c) === st),
+    `S11.${i+1} the ${st} filter returns exactly the ${st} population`);
+});
+// The partition holds through the filter: every contract is reachable from exactly one option.
+let sSeen = 0, sDupe = 0;
+const sIds = {};
+CONTRACT_FILTER_STATES.forEach((st)=>{
+  State.contractFilter = {status:st, search:''};
+  contractsFiltered().forEach(c=>{ sSeen++; if(sIds[c.id]) sDupe++; sIds[c.id] = 1; });
+});
+check(sSeen === State.contracts.length, 'S12. the filter options together reach every contract exactly once');
+check(sDupe === 0, 'S13. no contract appears under two filter options (the options partition the list)');
+State.contractFilter = {status:'all', search:''};
+check(contractsFiltered().length === State.contracts.length, 'S14. the All option returns everything');
+// 3 — legacy 'Expiring Soon' compatibility still functions where required.
+const sAliasPop = State.contracts.filter(c=>contractTimeline(c).withinWarningWindow);
+check(sAliasPop.every(c=>contractEffectiveStatus(c) === CONTRACT_LEGACY_EXPIRING_ALIAS),
+  'S15. the legacy Expiring Soon alias still resolves for in-window contracts');
+check(State.contracts.filter(c=>contractEffectiveStatus(c) === 'Expiring Soon').length === sAliasPop.length,
+  'S16. the legacy alias population is unchanged (compatibility preserved)');
+check(sAliasPop.every(c=>contractEffectiveState(c) === 'Active'),
+  'S17. every legacy Expiring Soon contract is canonically Active (so the Active filter includes it)');
+State.contractFilter = {status:'Active', search:''};
+check(sAliasPop.every(c=>contractsFiltered().some(r=>r.id === c.id)),
+  'S18. in-window contracts are reachable through the Active filter, not stranded');
+State.contractFilter = {status:'all', search:''};
+
+/* --- wording precedence: urgency before lifecycle --- */
+// The horizon is a calendar fact, so the three near bands are exercised by
+// driving the reference month rather than by faking a horizon.
+const sToday = ct(TODAY_KEY+'-01', 1);                   // ends on the last day of this month
+const sTodayT = contractTimeline(sToday, TODAY_KEY);
+const sEndOfMonth = (function(){
+  const p = keyParts(TODAY_KEY); const d = new Date(p.y, p.m, 0);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+})();
+const sExpectedHorizon = (TODAY === sEndOfMonth) ? 'EndingToday'
+  : (isoWeekKey(sEndOfMonth) === isoWeekKey(TODAY)) ? 'EndingThisWeek' : 'EndingThisMonth';
+check(sTodayT.horizon === sExpectedHorizon,
+  `S19. the current-month fixture resolves to ${sExpectedHorizon} (independently computed)`);
+// Whatever the real horizon is today, the label and note must match it — and the
+// nearer bands must never be worded as "Final Month".
+const sExpectedLabel = {EndingToday:'Ends Today', EndingThisWeek:'Ends This Week', EndingThisMonth:'Final Month'}[sExpectedHorizon];
+check(contractPresentation(sToday, TODAY_KEY).label === sExpectedLabel,
+  `S20. the badge reads "${sExpectedLabel}" for horizon ${sExpectedHorizon}`);
+check(contractProgressNote(sToday, TODAY_KEY).indexOf(sExpectedLabel) === 0,
+  'S21. the progress note leads with the same wording as the badge');
+// Precedence is a property of the MAP and the NOTE, so assert it directly for
+// every band, independent of what today happens to be.
+check(CONTRACT_PRESENTATION_META['Active+EndingToday'].label === 'Ends Today',
+  'S22. EndingToday is labelled "Ends Today", NOT "Final Month"');
+check(CONTRACT_PRESENTATION_META['Active+EndingThisWeek'].label === 'Ends This Week',
+  'S23. EndingThisWeek is labelled "Ends This Week", NOT "Final Month"');
+check(CONTRACT_PRESENTATION_META['Active+EndingThisMonth'].label === 'Final Month',
+  'S24. EndingThisMonth keeps the "Final Month" lifecycle wording');
+check(CONTRACT_PRESENTATION_META['Active+EndingToday'].label !== CONTRACT_PRESENTATION_META['Active+EndingThisMonth'].label,
+  'S25. Ends Today wording OVERRIDES the Final Month wording (they are distinct)');
+check(CONTRACT_PRESENTATION_META['Active+EndingThisWeek'].label !== CONTRACT_PRESENTATION_META['Active+EndingThisMonth'].label,
+  'S26. EndingThisWeek wording takes precedence over Final Month');
+// A 3-month contract still reads Final Month in its last month (lifecycle case).
+const sThree = ct('2026-01-01', 3);
+check(contractPresentation(sThree,'2026-03').label === 'Final Month',
+  'S27. Final Month wording appears when the horizon is EndingThisMonth');
+check(contractPresentation(sThree,'2026-02').label === 'Ends Next Month',
+  'S28. the month before reads Ends Next Month, not Final Month');
+check(!/Final Month/.test(contractProgressNote(sThree,'2026-02')),
+  'S29. Final Month wording never appears outside the final month');
+check(!/Ends Today|Ends This Week/.test(contractProgressNote(sThree,'2026-03')),
+  'S30. the final-month note does not claim today/this-week urgency it does not have');
+
 console.log('');
 if(failures.length === 0){
   console.log('RUNTIME VERIFICATION PASSED -- ' + passed + ' checks OK.');
