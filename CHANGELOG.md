@@ -1,5 +1,83 @@
 # Changelog
 
+## 2.8.5 — Workspace & Contract Timeline Integrity
+
+**Type:** Presentation, shell-architecture and derived-calculation release packaging the merged
+UX-002A, UX-002B, UX-003A, UX-003B and UX-003C sprints plus the UX-001–UX-003 documentation
+reconciliation. **No** schema, storage-key, persisted-data, or persistence-mechanics change (still 15
+keys, `SCHEMA_VERSION` 6); no migration added or re-run; no historical record is rewritten.
+
+> **UX-001 was discovery only.** The minimal enterprise-workspace direction, the reduced "AI dashboard"
+> presentation, and the typography/density emphasis are recorded as *product direction*. The sidebar and
+> navigation work it identified was deferred to UX-004 and is **not** in this release.
+
+### Added
+- **Persistent application shell (UX-002A).** The shell mounts once; view navigation updates the view
+  content only and no longer rebuilds the shell. Sidebar and navigation DOM node identity now persists
+  across navigation. Structural regression checks were added to hold this.
+- **Shared token scales (UX-002B).** Spacing, corner-radius and type token scales, applied across the UI
+  chrome, with the CSS golden master pinned by digest rather than reconstruction.
+- **Canonical contract timeline model (UX-003B).** One classifier returns two *independent* derived
+  dimensions:
+  - **Effective state** — `Draft`, `Cancelled`, `Renewed`, `Scheduled`, `Active`, `Expired`.
+  - **Expiry horizon** — `EndingToday`, `EndingThisWeek`, `EndingThisMonth`, `EndingNextMonth`,
+    `WithinWarningWindow`, `None`.
+
+  An `Active` contract stays `Active` while carrying a horizon; the two dimensions never collapse into
+  one another. `Scheduled` is derived-only and is never stored. The calendar horizons are calendar
+  facts and do not depend on the configured warning-days setting. `Expiring Soon` is retained as a
+  compatibility alias.
+- **One canonical contract-counter helper (UX-003C).** Every contract counter resolves through it.
+
+### Changed
+- **UI chrome typography and density (UX-002B).** A sans-serif UI typeface and the token scales above.
+- **Chart colours are theme tokens (UX-002B).** Chart colours are drawn from the theme tokens, and the
+  light-theme chart colours were corrected.
+- **Executive Dashboard reduced from 20 to 13 metric containers (UX-002B).** The alert list is capped
+  while every alert remains reachable.
+- **Contract counter membership (UX-003C).** `Active` includes active contracts that carry an expiry
+  horizon; `Scheduled` and `Expired` are excluded from `Active`. The ending-soon set is a strict
+  **subset** of `Active`. The `Active` and `Scheduled` filters are consistent with the badges.
+- **Contract wording priority (UX-003C)** is fixed and ordered: **Ends Today** → **Ends This Week** →
+  **Final Month** → **Ends Next Month** → **Ending Soon**.
+- **CSV Status uses the presentation vocabulary (UX-003C)**, so the export reads as the screen does.
+
+### Fixed
+- **Contract timeline reference-date correctness (UX-003A).** `daysUntilEnd` now shares the one
+  normalized reference date used by the rest of `contractCalc`. Today-facing behaviour is preserved;
+  advisory output computed for a historical date is now correct. No payroll, committed payroll,
+  monthly-plan, storage, schema or contract value changed.
+- **Contract progress wording (UX-003C).** On a three-month contract: month 1 = `1/3`, 2 months
+  remaining; month 2 = `2/3`, 1 month remaining; month 3 = `3/3`, final month, 0 months remaining; the
+  following month = `Expired`. **`3/3` never means one month remaining.** The bare "N remaining" figures
+  on the contract detail and employee detail surfaces were replaced by the canonical wording helper.
+
+### Verification
+- Static verifier: **1713 checks** (up from 1700 — the v2.8.4 version pin was retargeted to v2.8.5, and
+  **13** checks were added: 12 release-identity guardrails plus one whole-artifact fidelity check. No
+  existing check was weakened or removed.)
+- Runtime harnesses: **eleven**, **1333 checks**, unchanged — contract timeline **349**. No runtime
+  assertion was added, because no business, payroll, contract, storage or UI behaviour changed in the
+  release sprint itself.
+- The portable build is deterministic: two clean builds are byte-identical.
+
+### Known limitations
+- **UX-004 — Sidebar & Navigation is not in this release.** No context-aware sidebar, no breadcrumb or
+  quick-action system, no collapsed/pinned/hover-expand rail.
+- **UX-005 — Responsive/Mobile Refinement is not in this release.** No mobile drawer.
+- **OQ-2 and OQ-3 remain OPEN.** Contract editor routing (ADR-014 step 2) stays blocked on OQ-2. No
+  contract-editor authority migration and no deletion-command migration occurred.
+- UX-001 remains discovery only; nothing from it shipped as implementation beyond what UX-002/UX-003
+  delivered.
+
+### Upgrade / storage
+- **No data migration is required.** `SCHEMA_VERSION` remains **6** and no migration runs on upgrade.
+- No storage key is added, removed, or renamed (still 15 keys).
+- **Existing backups remain compatible.** A Complete Backup exported from v2.8.4 restores in v2.8.5, and
+  a v2.8.5 export retains the same schema contract.
+- **Payroll and committed-payroll semantics are unchanged.** Committed payroll remains immutable and
+  byte-identical across the upgrade.
+
 ## 2.8.4 — Monthly Plan Result Integrity
 
 **Type:** Correctness patch (SPR-082). **No** schema, storage-key, persisted-data, or

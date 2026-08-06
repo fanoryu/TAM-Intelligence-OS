@@ -1,15 +1,18 @@
 # TAM Intelligence OS — Architecture
 
-**Current release:** v2.8.4 — Monthly Plan Result Integrity (**published, marked Latest**), released
-from annotated tag `v2.8.4`, which peels to the published baseline commit
+**Source version:** v2.8.5 — Workspace & Contract Timeline Integrity (**prepared, not yet tagged or
+published**). Tagging and publication are a separately-authorized event; see
+[`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) §11–§14.
+**Latest published release:** v2.8.4 — Monthly Plan Result Integrity (**published, marked Latest**),
+released from annotated tag `v2.8.4`, which peels to the published baseline commit
 `bd8819af0287af02711898cf43d22fb70cc3bcd5` on `main`
 **Previous release:** v2.8.3 — Payroll Posting Integrity (still published and unchanged; no longer Latest)
-**Current distributable:** `dist/tam-intelligence-os-v2.8.4.html` — 963,453 bytes, SHA-256
-`0a8b745627b4f47c2375e51cc9be0aa6afd286353dfdcae53971ee0a6e886927`, rebuilt from source by UX-003C.
-The **published** v2.8.4 asset remains the 914,409-byte artifact published at the tag
-(`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`) and was not republished, so the
-repository artifact and the published asset are **no longer byte-identical** — `main` carries
-production changes beyond the published Release. Version, release name and schema are unchanged.
+**Current distributable:** `dist/tam-intelligence-os-v2.8.5.html` — 965,767 bytes, SHA-256
+`32e624a262ef1da47bd4ec849471ff98e428402c33722db1715cf1c23a7db8cb`, built from source during v2.8.5
+release preparation. The **published** v2.8.4 asset remains the 914,409-byte artifact published at the
+tag (`09c622b3a692dab426e8ef517592aa55f898d75560972c6d661e7bda3eaa02c6`) and was not republished, so
+`main` carries production changes beyond the latest published Release. `SCHEMA_VERSION` is unchanged
+at 6; the version and release name advanced with this release preparation.
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for **JS provenance**
 and the data-safety invariants). Since UX-002B it is **no longer the CSS comparator**: CSS is asserted
 against a pinned SHA-256 of `concat(css/*.css)` — currently
@@ -21,7 +24,7 @@ portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **65 of the 66 are bro
 load-order manifest and `index.html` agree on all 65 — and `js/cli/cli.js` is the CLI-only ingress,
 deliberately outside the browser load order. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
-**Verification:** `tools/verify-build.js` — **1700** checks; **eleven** Node runtime harnesses — **1333**
+**Verification:** `tools/verify-build.js` — **1713** checks; **eleven** Node runtime harnesses — **1333**
 checks (contract timeline 349, integrity warning rules 146, integrity payroll rules 144, Contract Core 129,
 monthly plan 118, payroll posting 106, contract persistence 74, payroll committed state 72,
 contract renewal 67, integrity rules 67, `saveAllData` 61).
@@ -99,7 +102,7 @@ flowchart TD
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>1700 invariant checks"]
+  VERIFY["tools/verify-build.js<br/>1713 invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX

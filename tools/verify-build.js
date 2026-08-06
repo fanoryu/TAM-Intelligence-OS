@@ -72,6 +72,25 @@ console.log('== BUILD FIDELITY (source -> dist) ==');
 check(trimLF(srcCss) === distCss, 'concat(css/*.css) == dist CSS payload');
 check(trimLF(srcJs) === distJs, 'concat(js/*.js) == dist JS payload');
 
+// WHOLE-ARTIFACT FIDELITY (v2.8.5). The two payload comparisons above only inspect the
+// inlined <style> and the main <script>. Anything OUTSIDE those two regions — appended
+// bytes after </html>, an edited <title>, injected markup between the tags — was invisible
+// to them, so a tampered or nondeterministic release asset could still verify clean. This
+// re-assembles the artifact using exactly the builder's algorithm and compares byte-for-byte,
+// which is what a release asset actually has to guarantee.
+{
+  const idxHtml = read(path.join(root, 'index.html'));
+  const cssLinkBlock = cssFiles.map((f) => '<link rel="stylesheet" href="css/' + f + '">').join(LF);
+  const jsTagBlock = jsFiles.map((f) => '<script src="js/' + f + '"></script>').join(LF);
+  const cssInline = '<style>' + LF + cssFiles.map((f)=>read(path.join(root,'css',f))).join(LF) + LF + '</style>';
+  const jsInline = '<script>' + LF + jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF) + LF + '</script>';
+  const expected = idxHtml.includes(cssLinkBlock) && idxHtml.includes(jsTagBlock)
+    ? idxHtml.replace(cssLinkBlock, cssInline).replace(jsTagBlock, jsInline)
+    : null;
+  check(expected !== null && expected === dist,
+    'the dist artifact is byte-identical to a fresh assembly of index.html + css/ + js/ (whole-file, not just the inlined payloads)');
+}
+
 console.log('== VERSION IDENTITY (derived from constants.js — no hardcoded version) ==');
 check(dist.includes("const APP_VERSION = '" + meta.version + "';"), 'APP_VERSION == ' + meta.version + ' (matches constants.js)');
 check(dist.includes("const APP_RELEASE_NAME = '" + meta.releaseName + "';"), 'APP_RELEASE_NAME == "' + meta.releaseName + '" (matches constants.js)');
@@ -256,7 +275,26 @@ if (fs.existsSync(prevDist)) {
 // dist/ holds exactly one release artifact — the current version (release dist-swap invariant).
 const distArtifacts = fs.readdirSync(path.join(root, 'dist')).filter((f)=>/^tam-intelligence-os-v[\d.]+\.html$/.test(f));
 check(distArtifacts.length === 1 && distArtifacts[0] === 'tam-intelligence-os-v' + meta.version + '.html', 'dist/ holds exactly one release artifact — the current v' + meta.version);
-check(meta.version === '2.8.4', 'APP_VERSION is 2.8.4 (this development release)');
+check(meta.version === '2.8.5', 'APP_VERSION is 2.8.5 (this development release)');
+
+// == RELEASE IDENTITY GUARDRAILS (v2.8.5) ==
+// The version and release name live ONCE in js/core/constants.js; these checks prove every
+// authoritative surface agrees with that single source and that the release paperwork exists.
+// They are derived from meta wherever possible so they do not need editing next release.
+check(meta.releaseName === 'Workspace & Contract Timeline Integrity', 'APP_RELEASE_NAME is the approved v2.8.5 release name');
+check(!/tam-intelligence-os-v2\.8\.4\.html/.test(distArtifacts.join('|')), 'no tracked current artifact remains under the superseded v2.8.4 filename');
+check(read(path.join(root, 'index.html')).includes('<title>TAM Intelligence OS v' + meta.version + '</title>'), 'index.html <title> agrees with APP_VERSION');
+const relNotes = read(path.join(root, 'RELEASE_NOTES.md'));
+const changelog = read(path.join(root, 'CHANGELOG.md'));
+check(relNotes.includes(meta.version), 'RELEASE_NOTES.md documents v' + meta.version);
+check(relNotes.includes(meta.releaseName), 'RELEASE_NOTES.md names the release "' + meta.releaseName + '"');
+check(changelog.includes('## ' + meta.version + ' — ' + meta.releaseName), 'CHANGELOG.md has the v' + meta.version + ' entry with the release name');
+check(changelog.includes('## 2.8.4 — Monthly Plan Result Integrity'), 'CHANGELOG.md retains the historical v2.8.4 entry (history is never rewritten)');
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root, 'js', 'core', 'constants.js'))), 'SCHEMA_VERSION remains 6 — v2.8.5 carries no data migration');
+check(dist.includes('const SCHEMA_VERSION = 6;'), 'the portable artifact carries SCHEMA_VERSION 6');
+check(relNotes.includes('SCHEMA_VERSION') && /remains \*{0,2}6\*{0,2}|unchanged \(6\)/.test(relNotes), 'RELEASE_NOTES.md states SCHEMA_VERSION remains 6');
+check(/OQ-2[\s\S]{0,120}OPEN|OQ-2 and OQ-3 remain \*\*OPEN\*\*|OQ-2 and OQ-3 remain OPEN/.test(relNotes), 'RELEASE_NOTES.md records that OQ-2 and OQ-3 remain OPEN');
+check(/UX-004/.test(relNotes) && /UX-005/.test(relNotes), 'RELEASE_NOTES.md names UX-004 and UX-005 as future work (not shipped)');
 // v2.7.1 polishing pass — snapshot metadata, single historical API, compact integrity badge.
 check(dist.includes('function overtimeSnapshotMeta('), 'overtime snapshot audit metadata helper present');
 check((dist.match(/overtimeSnapshotMeta:\s*overtimeSnapshotMeta\(/g)||[]).length === 1, 'the ONE remaining commit pipeline stores overtimeSnapshotMeta {recordCount,totalHours}');
