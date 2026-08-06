@@ -7,29 +7,25 @@ authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file
 there rather than duplicating it.
 
 **As of the current source state:** v2.8.5 — "Workspace & Contract Timeline Integrity";
-`SCHEMA_VERSION` 6. **v2.8.5 is prepared but not yet tagged or published.** The version constants,
-portable artifact, release notes, changelog and forward-looking pointers have been advanced as release
-preparation; the annotated tag `v2.8.5` does not exist and no GitHub Release for it exists. Tagging and
-publication are a separately authorized event (`docs/RELEASE-PROCESS.md` §11–§14).
+`SCHEMA_VERSION` 6. **v2.8.5 is tagged and published, and is the latest published release** — annotated
+tag `v2.8.5` peels to the published baseline commit `96a8d178987142fedd43372646abf9d597b8bac2` on
+`main`, and the GitHub Release *TAM Intelligence OS v2.8.5* is published (not draft, not prerelease) and
+marked Latest. v2.8.4 remains published and unchanged; it is no longer marked Latest. Publication
+created a tag and a GitHub Release only — it changed no source commit, runtime behavior, schema, or
+storage key.
 
-**v2.8.4 remains the latest published release** — annotated tag `v2.8.4` peels to the published baseline
-commit `bd8819af0287af02711898cf43d22fb70cc3bcd5` on `main`, and the GitHub Release *TAM Intelligence OS
-v2.8.4* is published (not draft, not prerelease) and marked Latest. v2.8.3 remains published and
-unchanged; it is no longer marked Latest.
+**The repository artifact and the published Release asset are byte-identical.** The tag-triggered
+workflow rebuilt and verified the artifact from the tagged commit before publishing it, so `main`
+carries **no** production change beyond the published Release:
 
-**Repository `main` therefore contains production changes beyond the published v2.8.4 Release artifact.**
-SPR-093, SPR-095 and then the UX sprints **UX-002A**, **UX-002B**, **UX-003A**, **UX-003B** and
-**UX-003C** changed production source, and v2.8.5 release preparation advanced `APP_VERSION` and
-`APP_RELEASE_NAME`. The repository artifact is now a different file from the published asset:
-
-| | Repository `main` (v2.8.5, prepared) | Published v2.8.4 Release asset |
+| | Repository `main` | Published v2.8.5 Release asset |
 |---|---|---|
-| Artifact | `dist/tam-intelligence-os-v2.8.5.html` — **965,767 bytes** | `tam-intelligence-os-v2.8.4.html` — 914,409 bytes |
-| SHA-256 | `32e624a262…1c23a7db8cb` | `09c622b3a6…3aea02c6` |
+| Artifact | `dist/tam-intelligence-os-v2.8.5.html` — **965,767 bytes** | `tam-intelligence-os-v2.8.5.html` — **965,767 bytes** |
+| SHA-256 | `32e624a262…1c23a7db8cb` | `32e624a262…1c23a7db8cb` |
 
-The v2.8.4 tag, Release, and published asset are unchanged and were **not** republished. The superseded
-`dist/tam-intelligence-os-v2.8.4.html` was removed from `dist/` by the release dist-swap, as
-`docs/RELEASE-PROCESS.md` §2 requires; the historical published asset is untouched.
+The superseded `dist/tam-intelligence-os-v2.8.4.html` was removed from `dist/` by the release dist-swap,
+as `docs/RELEASE-PROCESS.md` §2 requires; the historical v2.8.4 tag, Release, and published asset
+(914,409 bytes, `09c622b3a6…3aea02c6`) are untouched.
 
 When these change, update this document (not `CLAUDE.md`).
 
@@ -375,10 +371,9 @@ CSS is pinned by digest instead (see §19). The authoritative, detailed layout i
 
 Bump the version constants, add release notes, build + verify, present a Release Candidate, and — on
 approval — commit, tag, push, and let the tag-triggered workflow publish the GitHub Release and
-portable asset (guarded so it publishes only when the tag matches the source version). **v2.8.5 is
-prepared but not tagged or published. v2.8.4 remains the latest published release, published from
-annotated tag `v2.8.4` (commit `bd8819a`) and marked Latest; v2.8.3 remains published and unchanged but
-is no longer Latest.** Detailed steps:
+portable asset (guarded so it publishes only when the tag matches the source version). **v2.8.5 is the latest
+published release, published from annotated tag `v2.8.5` (commit `96a8d17`) and marked Latest; v2.8.4
+remains published and unchanged but is no longer Latest.** Detailed steps:
 [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md). History: [`CHANGELOG.md`](CHANGELOG.md); latest
 summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
@@ -483,9 +478,8 @@ Directions (no committed release numbers unless already approved):
 - **Released:** Supplemental Payroll Engine (v2.7.0); Payroll Integrity & Reporting Foundation (v2.7.1);
   Persistence & Transactional Integrity (v2.7.2); Supplemental-Aware Payroll History (v2.7.3);
   Aggregate-Owned Contract Renewal + Single Payroll Posting Authority (v2.8.1); Honest Persistence
-  Results (v2.8.2); Payroll Posting Integrity (v2.8.3); **Monthly Plan Result Integrity (v2.8.4 — the
-  latest published release)**. **Prepared, not yet published:** Workspace & Contract Timeline Integrity
-  (v2.8.5).
+  Results (v2.8.2); Payroll Posting Integrity (v2.8.3); Monthly Plan Result Integrity (v2.8.4);
+  **Workspace & Contract Timeline Integrity (v2.8.5 — current, and the latest published release)**.
 - **Immediate residuals** (evidence-backed, not yet scheduled): Monthly Plan retry linkage reconciliation
   (Scenarios A2 and B); the Smart Import undo in-memory/storage divergence — both described under
   *Known Limitations*, and both answered today by **manual review** only.
@@ -532,13 +526,13 @@ Directions (no committed release numbers unless already approved):
   Presentation** made every counter resolve through one canonical helper, moved the status filter onto
   the canonical effective state, and fixed the progress wording so `3/3` reads as the final month.
   See §5 for the model and §19 for the decisions.
-  **Next, in order:** the **v2.8.5** release (prepared; awaiting tag and publication); then
+  The **v2.8.5** release is **published**. **Next:**
   **UX-004 — Sidebar & Navigation** (sidebar grouped by business domain — Dashboard, People, Finance,
   Analytics, System — with Executive and HR dashboards under Dashboard, Employees and Contracts under
   People, Payroll under Finance; plus context-aware navigation, breadcrumbs, quick actions, a collapsed
   rail, pinned mode and hover-expand); then **UX-005 — Responsive/Mobile Refinement** (including the
-  mobile drawer where appropriate). **Neither UX-004 nor UX-005 is implemented.** The **v2.8.5 release is
-  prepared but not yet tagged or published** — see the header of this document for its exact state.
+  mobile drawer where appropriate). **UX-004 has not begun, and UX-005 has not begun** — neither is
+  implemented, designed, or scheduled here.
 - **Planned:** Payroll Reporting suite expansion; supplemental sources beyond overtime; ongoing
   repository maintenance.
 - **Under consideration:** authentication and role-based access control; attachment/evidence

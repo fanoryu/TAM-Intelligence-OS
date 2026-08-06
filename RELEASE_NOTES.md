@@ -169,8 +169,9 @@ work that is merely *not yet built* is listed under **Known limitations** above,
   impossibility is documented rather than rediscovered. Pre-existing and unchanged by v2.8.5.
 
 ## Git Information
-- Release tag: `v2.8.5` *(not yet created)*
-- Release branch: `release/v2.8.5` → `main`
+- Release tag: `v2.8.5` — annotated, peels to `96a8d178987142fedd43372646abf9d597b8bac2` on `main`
+- Release commit: `96a8d17` (merge of PR #71); release-preparation commit `c150d35`
+- Release branch: `release/v2.8.5` → `main` (merged and deleted)
 - Publication channel: GitHub Releases
 - Contributing commits (since `v2.8.4`):
   - `2bc8cd6` — feat: separate application shell from view rendering (UX-002A)
@@ -191,6 +192,6 @@ work that is merely *not yet built* is listed under **Known limitations** above,
 The asset is built from `main` by `tools/build-single-file.js` and is byte-reproducible: rebuilding from
 the same source produces an identical file, so the checksum above verifies any downloaded copy.
 
-> The size and SHA-256 above describe the artifact built during release preparation. The published asset
-> is the one rebuilt and verified from the **tagged** `main` commit; it must be re-measured at
-> publication time and is not assumed to equal any earlier artifact.
+> **Published and verified.** The tag-triggered workflow rebuilt and verified this artifact from the
+> tagged commit before publishing it. The published asset was downloaded and re-measured independently:
+> 965,767 bytes, SHA-256 `32e624a2…3a7db8cb` — byte-identical to the repository artifact.
