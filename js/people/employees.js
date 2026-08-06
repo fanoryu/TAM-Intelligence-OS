@@ -534,7 +534,7 @@ function renderEmployeeDetail(main){
   const alerts = [];
   if(!ct) alerts.push({type:'warn', text:'This employee has no active contract for the current month.'});
   if(overlaps.length) alerts.push({type:'warn', text:`${overlaps.length} overlapping active contract${overlaps.length>1?'s':''} detected — review contract dates.`});
-  cts.forEach(c=>{ const es=contractEffectiveStatus(c); const cc=contractCalc(c); if(es==='Expiring Soon') alerts.push({type:'warn', text:`Contract ${escapeHtml(c.contractNumber||'')} is expiring soon (${cc.daysUntilEnd} days left).`}); });
+  cts.forEach(c=>{ const cc=contractCalc(c); if(contractTimeline(c).withinWarningWindow) alerts.push({type:'warn', text:`Contract ${escapeHtml(c.contractNumber||'')} is expiring soon (${cc.daysUntilEnd} days left).`}); });
 
   main.innerHTML = `
     <div class="page-head">
@@ -568,9 +568,9 @@ function renderEmployeeDetail(main){
         <h3>Active Contract</h3>
         ${ct?`
           <div style="font-size:13px;line-height:1.7;">
-            <div><b>${escapeHtml(ct.contractNumber||'—')}</b> ${hrStatusBadge(contractEffectiveStatus(ct), CONTRACT_STATUS_META)}</div>
+            <div><b>${escapeHtml(ct.contractNumber||'—')}</b> ${contractPresentationBadge(ct)}</div>
             <div class="dim">${fmtDateID(calc.startDate)} → ${fmtDateID(calc.endDate)}</div>
-            <div style="margin:8px 0 4px;">Progress <b>${calc.progress}</b> · ${calc.remaining} month${calc.remaining===1?'':'s'} remaining</div>
+            <div style="margin:8px 0 4px;">Progress <b>${calc.progress}</b> · ${escapeHtml(contractProgressNote(ct))}</div>
             ${progressBar(calc.pct)}
             <div style="margin-top:8px;">Monthly Salary: <b class="mono">${fmtIDR(ct.monthlySalary)}</b></div>
             <div style="margin-top:10px;"><button class="btn btn-sm" data-ct-detail="${ct.id}">Open Contract</button></div>
@@ -585,7 +585,7 @@ function renderEmployeeDetail(main){
           <td><button class="linklike" data-ct-detail="${c.id}">${escapeHtml(c.contractNumber||'—')}</button></td>
           <td class="dim">${fmtDateID(cc.startDate)}</td><td class="dim">${fmtDateID(cc.endDate)}</td>
           <td>${cc.progress}</td><td class="num">${fmtIDR(c.monthlySalary)}</td>
-          <td>${hrStatusBadge(contractEffectiveStatus(c), CONTRACT_STATUS_META)}</td>
+          <td>${contractPresentationBadge(c)}</td>
           <td><button class="btn btn-sm" data-ct-renew="${c.id}">Renew</button></td>
         </tr>`; }).join('') || '<tr><td colspan="7" class="empty">No contracts yet.</td></tr>'}</tbody>
       </table></div>

@@ -587,6 +587,34 @@ const CONTRACT_LEGACY_STATE_DISPLAY = {
    nor a canonical horizon: it is the de-facto legacy label for "effectively
    Active and inside the configured warning window". Never stored. */
 const CONTRACT_LEGACY_EXPIRING_ALIAS = 'Expiring Soon';
+/* UX-003C — PRESENTATION LABELS for the canonical timeline model.
+   Deliberately SEPARATE from CONTRACT_STATUS_META: that map drives the Contracts
+   status FILTER dropdown (its keys become the options, matched against the legacy
+   contractEffectiveStatus()). Adding canonical labels there would create filter
+   options that can never match. Filter behaviour therefore stays exactly as it
+   was; only the rendered label is richer.
+   Keys are "<state>" or "<state>+<horizon>". Nothing here is ever stored. */
+const CONTRACT_PRESENTATION_META = {
+  'Draft':                     {label:'Draft',           pill:'pill-status-planned'},
+  'Cancelled':                 {label:'Cancelled',       pill:'pill-status-cancelled'},
+  'Renewed':                   {label:'Renewed',         pill:'pill-status-scheduled'},
+  'Scheduled':                 {label:'Scheduled',       pill:'pill-status-scheduled'},
+  'Expired':                   {label:'Expired',         pill:'pill-status-archived'},
+  'Active':                    {label:'Active',          pill:'pill-status-completed'},
+  // URGENCY BEFORE LIFECYCLE: a contract ending today reads "Ends Today", not
+  // "Final Month". The order below is the wording precedence.
+  'Active+EndingToday':        {label:'Ends Today',      pill:'pill-status-partial'},
+  'Active+EndingThisWeek':     {label:'Ends This Week',  pill:'pill-status-partial'},
+  'Active+EndingThisMonth':    {label:'Final Month',     pill:'pill-status-partial'},
+  'Active+EndingNextMonth':    {label:'Ends Next Month', pill:'pill-status-partial'},
+  'Active+WithinWarningWindow':{label:'Ending Soon',     pill:'pill-status-partial'},
+};
+/* UX-003C — the Contracts status FILTER vocabulary. It is the CANONICAL effective
+   state, in display order: a user filtering "Active" must never see a Scheduled
+   badge. CONTRACT_STATUS_META no longer drives this list; the legacy
+   'Expiring Soon' alias survives inside contractEffectiveStatus() for
+   compatibility, but it no longer forces Scheduled contracts into Active. */
+const CONTRACT_FILTER_STATES = ['Active','Scheduled','Expired','Draft','Cancelled','Renewed'];
 const RECUR_FREQUENCIES = {'Monthly':1, 'Quarterly':3, 'Semiannual':6, 'Annual':12};
 // Monthly planning workflow. Approved & Closed are future-ready (no multi-user
 // approval yet) — Draft, Reviewed, Committed are functional this release.
@@ -5824,7 +5852,7 @@ function buildPlanSummaryHTML(key){
       <div class="chart-mini-stat"><div class="lbl">Recurring Planned</div><div class="val">${fmtIDRShort(recurringSum)}</div></div>
       <div class="chart-mini-stat"><div class="lbl">Total Planned</div><div class="val">${fmtIDRShort(monthTotals(key).planned)}</div></div>
     </div>
-    <p class="dim" style="font-size:13px;">Payroll transactions: <b>${payroll.length}</b> · Recurring: <b>${recurring.length}</b> · Other operational (planned): <b class="mono">${fmtIDR(opsSum)}</b>. Active employees: <b>${st.activeEmployees}</b>; active contracts: <b>${st.activeContracts}</b> (${st.expiringSoon} expiring soon).</p>`;
+    <p class="dim" style="font-size:13px;">Payroll transactions: <b>${payroll.length}</b> · Recurring: <b>${recurring.length}</b> · Other operational (planned): <b class="mono">${fmtIDR(opsSum)}</b>. Active employees: <b>${st.activeEmployees}</b>; active contracts: <b>${st.activeContracts}</b>, of which <b>${st.expiringSoon}</b> ending soon.</p>`;
 }
 function buildReportHTML(key){
   const tot = monthTotals(key); const cats = categoryBreakdown(key); const insights = computeInsights(key);
@@ -6063,6 +6091,66 @@ function contractEffectiveStatus(c, refKey){
   const t = contractTimeline(c, refKey);
   if(t.state==='Active' && t.withinWarningWindow) return CONTRACT_LEGACY_EXPIRING_ALIAS;
   return CONTRACT_LEGACY_STATE_DISPLAY[t.state];
+}
+/* ---------- UX-003C canonical presentation + counting ---------- */
+/* THE presentation label for a contract, derived from the canonical two-dimensional
+   model. Returns {key, label, pill}. Deliberately NOT wired into
+   CONTRACT_STATUS_META, which drives the status filter — filter behaviour is
+   unchanged; only the rendered label distinguishes Scheduled and the horizons. */
+function contractPresentation(c, refKey){
+  const t = contractTimeline(c, refKey);
+  if(!t) return {key:'—', label:'—', pill:'pill-other'};
+  const key = (t.state === 'Active' && t.horizon !== 'None') ? ('Active+' + t.horizon) : t.state;
+  const meta = CONTRACT_PRESENTATION_META[key] || CONTRACT_PRESENTATION_META[t.state] || {label:t.state, pill:'pill-other'};
+  return {key:key, label:meta.label, pill:meta.pill, state:t.state, horizon:t.horizon};
+}
+function contractPresentationBadge(c, refKey){
+  const p = contractPresentation(c, refKey);
+  return `<span class="pill ${p.pill}">${escapeHtml(p.label)}</span>`;
+}
+/* LIFECYCLE PROGRESS WORDING (UX-003C business rule).
+   current/total is the contract month BEING SERVED, so 3/3 is the FINAL month,
+   never "one month remaining". remaining is always max(0, total-current) and
+   current never exceeds total — both guaranteed by contractCalc(); this helper
+   only words them. */
+function contractProgressNote(c, refKey){
+  const cc = contractCalc(c, refKey);
+  if(!cc.valid) return 'No start date or duration yet';
+  const t = contractTimeline(c, refKey);
+  if(t.state === 'Scheduled') return `Not started · begins ${fmtDateID(cc.startDate)}`;
+  if(t.state === 'Expired')   return `Ended ${fmtDateID(cc.endDate)}`;
+  // URGENCY BEFORE LIFECYCLE — the nearest horizon wins the wording, so a contract
+  // ending today reads "Ends Today", never "Final Month".
+  if(t.horizon === 'EndingToday')     return `Ends Today · ${fmtDateID(cc.endDate)}`;
+  if(t.horizon === 'EndingThisWeek')  return `Ends This Week · ${fmtDateID(cc.endDate)}`;
+  if(t.horizon === 'EndingThisMonth') return `Final Month · ends ${fmtDateID(cc.endDate)}`;
+  return `Month ${cc.current} of ${cc.total} · ${cc.remaining} month${cc.remaining===1?'':'s'} remaining`;
+}
+/* THE canonical contract counter. Every displayed contract count resolves here —
+   Contracts page, HR strip and Reports all call this one helper, so no two
+   surfaces can drift or re-implement a predicate.
+
+   The six effective states PARTITION the collection (they sum to total). The
+   horizon counts are a BREAKDOWN OF `active`, never a sibling of it: this is what
+   removes the old "Active: 12 / Expiring: 3" ambiguity, because the 3 are now
+   genuinely among the 12 and can be worded as a subset. */
+function contractTimelineCounts(refKey){
+  const out = {total:0, draft:0, cancelled:0, renewed:0, scheduled:0, active:0, expired:0,
+    endingToday:0, endingThisWeek:0, endingThisMonth:0, endingNextMonth:0, withinWarningWindow:0,
+    endingSoon:0};
+  const bucket = {Draft:'draft', Cancelled:'cancelled', Renewed:'renewed',
+    Scheduled:'scheduled', Active:'active', Expired:'expired'};
+  const hBucket = {EndingToday:'endingToday', EndingThisWeek:'endingThisWeek',
+    EndingThisMonth:'endingThisMonth', EndingNextMonth:'endingNextMonth',
+    WithinWarningWindow:'withinWarningWindow'};
+  State.contracts.forEach(c=>{
+    const t = contractTimeline(c, refKey);
+    if(!t) return;
+    out.total++;
+    out[bucket[t.state]]++;
+    if(t.state === 'Active' && t.horizon !== 'None'){ out[hBucket[t.horizon]]++; out.endingSoon++; }
+  });
+  return out;
 }
 function contractsForEmployee(empId){ return State.contracts.filter(c=>c.employeeId===empId); }
 // The contract that funds payroll for a given month: covers it, and is not
@@ -6657,7 +6745,7 @@ function renderEmployeeDetail(main){
   const alerts = [];
   if(!ct) alerts.push({type:'warn', text:'This employee has no active contract for the current month.'});
   if(overlaps.length) alerts.push({type:'warn', text:`${overlaps.length} overlapping active contract${overlaps.length>1?'s':''} detected — review contract dates.`});
-  cts.forEach(c=>{ const es=contractEffectiveStatus(c); const cc=contractCalc(c); if(es==='Expiring Soon') alerts.push({type:'warn', text:`Contract ${escapeHtml(c.contractNumber||'')} is expiring soon (${cc.daysUntilEnd} days left).`}); });
+  cts.forEach(c=>{ const cc=contractCalc(c); if(contractTimeline(c).withinWarningWindow) alerts.push({type:'warn', text:`Contract ${escapeHtml(c.contractNumber||'')} is expiring soon (${cc.daysUntilEnd} days left).`}); });
 
   main.innerHTML = `
     <div class="page-head">
@@ -6691,9 +6779,9 @@ function renderEmployeeDetail(main){
         <h3>Active Contract</h3>
         ${ct?`
           <div style="font-size:13px;line-height:1.7;">
-            <div><b>${escapeHtml(ct.contractNumber||'—')}</b> ${hrStatusBadge(contractEffectiveStatus(ct), CONTRACT_STATUS_META)}</div>
+            <div><b>${escapeHtml(ct.contractNumber||'—')}</b> ${contractPresentationBadge(ct)}</div>
             <div class="dim">${fmtDateID(calc.startDate)} → ${fmtDateID(calc.endDate)}</div>
-            <div style="margin:8px 0 4px;">Progress <b>${calc.progress}</b> · ${calc.remaining} month${calc.remaining===1?'':'s'} remaining</div>
+            <div style="margin:8px 0 4px;">Progress <b>${calc.progress}</b> · ${escapeHtml(contractProgressNote(ct))}</div>
             ${progressBar(calc.pct)}
             <div style="margin-top:8px;">Monthly Salary: <b class="mono">${fmtIDR(ct.monthlySalary)}</b></div>
             <div style="margin-top:10px;"><button class="btn btn-sm" data-ct-detail="${ct.id}">Open Contract</button></div>
@@ -6708,7 +6796,7 @@ function renderEmployeeDetail(main){
           <td><button class="linklike" data-ct-detail="${c.id}">${escapeHtml(c.contractNumber||'—')}</button></td>
           <td class="dim">${fmtDateID(cc.startDate)}</td><td class="dim">${fmtDateID(cc.endDate)}</td>
           <td>${cc.progress}</td><td class="num">${fmtIDR(c.monthlySalary)}</td>
-          <td>${hrStatusBadge(contractEffectiveStatus(c), CONTRACT_STATUS_META)}</td>
+          <td>${contractPresentationBadge(c)}</td>
           <td><button class="btn btn-sm" data-ct-renew="${c.id}">Renew</button></td>
         </tr>`; }).join('') || '<tr><td colspan="7" class="empty">No contracts yet.</td></tr>'}</tbody>
       </table></div>
@@ -6861,10 +6949,12 @@ function allContractAlerts(){
   const alerts = [];
   const warn = Number(State.settings.contractExpiryWarningDays)||90;
   State.contracts.forEach(c=>{
-    const es = contractEffectiveStatus(c);
+    // UX-003C — alert branching resolves through the canonical model. withinWarningWindow
+    // IS the legacy 'Expiring Soon' alias, so the alert sets are unchanged.
+    const t = contractTimeline(c);
     const cc = contractCalc(c);
-    if(es==='Expired' && c.status==='Active') alerts.push({type:'warn', sev:0, text:`Contract ${escapeHtml(c.contractNumber||'')} (${escapeHtml(c.employeeName||'')}) has expired — renew or close it.`});
-    else if(es==='Expiring Soon'){
+    if(t.state==='Expired' && c.status==='Active') alerts.push({type:'warn', sev:0, text:`Contract ${escapeHtml(c.contractNumber||'')} (${escapeHtml(c.employeeName||'')}) has expired — renew or close it.`});
+    else if(t.withinWarningWindow){
       const d = cc.daysUntilEnd;
       // UX-003B — the 30/60/90 ladder that used to be inlined here now lives once,
       // in contractExpiryBand() (people-core.js). Same bands, same text.
@@ -6883,20 +6973,23 @@ function allContractAlerts(){
 function contractsFiltered(){
   const f = State.contractFilter;
   let rows = State.contracts.slice();
-  if(f.status!=='all') rows = rows.filter(c=>contractEffectiveStatus(c)===f.status);
+  // UX-003C — the status filter resolves through the CANONICAL effective state, so
+  // filtering "Active" can never return a contract whose badge reads "Scheduled".
+  // One predicate, one source: contractEffectiveState() delegates to contractTimeline().
+  if(f.status!=='all') rows = rows.filter(c=>contractEffectiveState(c)===f.status);
   if(f.search.trim()){ const s=normStr(f.search); rows = rows.filter(c=>[c.contractNumber,c.employeeName].some(x=>normStr(x||'').includes(s))); }
   rows.sort((a,b)=>String(b.startDate||'').localeCompare(String(a.startDate||'')));
   return rows;
 }
 function contractRowsHTML(){
-  return contractsFiltered().map(c=>{ const cc=contractCalc(c); const es=contractEffectiveStatus(c); return `<tr>
+  return contractsFiltered().map(c=>{ const cc=contractCalc(c); return `<tr>
     <td><button class="linklike" data-ct-detail="${c.id}"><b>${escapeHtml(c.contractNumber||'—')}</b></button></td>
     <td><button class="linklike" data-emp-open="${c.employeeId}">${escapeHtml(c.employeeName||'—')}</button></td>
     <td class="dim">${fmtDateID(cc.startDate)}</td>
     <td class="dim">${fmtDateID(cc.endDate)}</td>
     <td style="min-width:120px;"><div style="display:flex;align-items:center;gap:8px;"><span class="mono">${cc.progress}</span><div style="flex:1;">${progressBar(cc.pct)}</div></div></td>
     <td class="num">${fmtIDR(c.monthlySalary)}</td>
-    <td>${hrStatusBadge(es, CONTRACT_STATUS_META)}</td>
+    <td>${contractPresentationBadge(c)}</td>
     <td>${hrActionsMenu('ct', c.id, [
       ['ct-detail','View Detail'],
       ['ct-edit','Edit'],
@@ -6920,12 +7013,12 @@ function applyContractFilter(main){
 function renderContracts(main){
   const f = State.contractFilter;
   const alerts = allContractAlerts();
-  const activeN = State.contracts.filter(c=>contractEffectiveStatus(c)==='Active').length;
-  const soonN = State.contracts.filter(c=>contractEffectiveStatus(c)==='Expiring Soon').length;
+  // UX-003C — every count on this page comes from the ONE canonical helper.
+  const counts = contractTimelineCounts();
 
   main.innerHTML = `
     <div class="page-head">
-      <div><h1>Contracts</h1><p class="desc">${State.contracts.length} contract${State.contracts.length===1?'':'s'} · ${activeN} active · ${soonN} expiring soon. Progress is calculated automatically from start date + duration.</p></div>
+      <div><h1>Contracts</h1><p class="desc">${counts.total} contract${counts.total===1?'':'s'} · ${counts.active} active${counts.endingSoon?` (${counts.endingSoon} of them ending soon)`:''}${counts.scheduled?` · ${counts.scheduled} scheduled`:''}${counts.expired?` · ${counts.expired} expired`:''}. Progress is calculated automatically from start date + duration.</p></div>
       <div class="head-controls">
         <button class="btn btn-accent" id="addCt">+ New Contract</button>
         <button class="btn" id="expCt">Export CSV</button>
@@ -6935,7 +7028,7 @@ function renderContracts(main){
     <div class="card">
       <div class="form-grid" style="grid-template-columns:1.6fr 1fr;margin-bottom:14px;">
         <div class="field"><label>Search (contract #, employee)</label><input class="input" id="cSearch" placeholder="Search…" value="${escapeHtml(f.search)}"></div>
-        <div class="field"><label>Status</label><select class="input" id="cStatus"><option value="all">All statuses</option>${Object.keys(CONTRACT_STATUS_META).map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+        <div class="field"><label>Status</label><select class="input" id="cStatus"><option value="all">All statuses</option>${CONTRACT_FILTER_STATES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
       </div>
       <div class="table-wrap" style="max-height:620px;overflow-y:auto;">
         <table>
@@ -6984,7 +7077,7 @@ function openContractModal(id, presetEmpId){
         if(sd && dur>0){
           const cc = contractCalc({startDate:sd, durationMonths:dur, status:'Active'});
           root.querySelector('#ctEndPreview').value = fmtDateID(cc.endDate);
-          root.querySelector('#ctProgPreview').textContent = `This month this contract would read ${cc.progress} (${cc.remaining} months remaining). Progress updates automatically each month — you never edit it manually.`;
+          root.querySelector('#ctProgPreview').textContent = `This month this contract would read ${cc.progress} — month ${cc.current} of ${cc.total}, ${cc.remaining} month${cc.remaining===1?'':'s'} remaining after it. Progress updates automatically each month — you never edit it manually.`;
         } else { root.querySelector('#ctEndPreview').value='—'; root.querySelector('#ctProgPreview').textContent=''; }
       };
       form.startDate.addEventListener('input', upd); form.durationMonths.addEventListener('input', upd); upd();
@@ -7445,19 +7538,19 @@ function renderContractDetail(main){
   const c = contractById(State.detailContractId);
   if(!c){ main.innerHTML = emptyState('Contract not found','It may have been deleted.'); return; }
   const cc = contractCalc(c);
-  const es = contractEffectiveStatus(c);
+  const t = contractTimeline(c);
   const emp = empById(c.employeeId);
   const plans = payrollPlansForContract(c.id).slice().sort((a,b)=>String(b.monthKey).localeCompare(String(a.monthKey)));
   const txns = txnsForContract(c.id).slice().sort((a,b)=>String(b.monthKey).localeCompare(String(a.monthKey)));
   const alerts = [];
-  if(es==='Expired') alerts.push({type:'warn', text:'This contract has expired.'});
-  else if(es==='Expiring Soon') alerts.push({type:'warn', text:`Expiring soon — ${cc.daysUntilEnd} days remaining (ends ${fmtDateID(cc.endDate)}).`});
+  if(t.state==='Expired') alerts.push({type:'warn', text:'This contract has expired.'});
+  else if(t.withinWarningWindow) alerts.push({type:'warn', text:`Expiring soon — ${cc.daysUntilEnd} days remaining (ends ${fmtDateID(cc.endDate)}).`});
   if(c.renewedFromId){ const from=contractById(c.renewedFromId); if(from) alerts.push({type:'info', text:`Renewed from contract ${escapeHtml(from.contractNumber||'')}.`}); }
   if(c.renewedToId){ const to=contractById(c.renewedToId); if(to) alerts.push({type:'info', text:`Renewed into contract ${escapeHtml(to.contractNumber||'')}.`}); }
 
   main.innerHTML = `
     <div class="page-head">
-      <div><h1>${escapeHtml(c.contractNumber||'Contract')}</h1><p class="desc">${escapeHtml(c.employeeName||'—')} · ${hrStatusBadge(es, CONTRACT_STATUS_META)}</p></div>
+      <div><h1>${escapeHtml(c.contractNumber||'Contract')}</h1><p class="desc">${escapeHtml(c.employeeName||'—')} · ${contractPresentationBadge(c)}</p></div>
       <div class="head-controls">
         <button class="btn" id="backCt">← Contracts</button>
         <button class="btn" id="editCtD">Edit</button>
@@ -7482,7 +7575,7 @@ function renderContractDetail(main){
       <div class="card">
         <h3>Progress</h3>
         <div style="font-size:26px;font-family:var(--mono);font-weight:600;margin-bottom:6px;">${cc.progress}</div>
-        <div class="dim" style="font-size:13px;margin-bottom:10px;">Month ${cc.current} of ${cc.total} · ${cc.remaining} remaining · ${cc.pct}% complete</div>
+        <div class="dim" style="font-size:13px;margin-bottom:10px;">${escapeHtml(contractProgressNote(c))} · ${cc.pct}% complete</div>
         ${progressBar(cc.pct)}
         <div class="hint" style="margin-top:10px;">Calculated automatically from the start date and duration using calendar months. Before the start it reads 0/${cc.total}; after the end, ${cc.total}/${cc.total} and Expired.</div>
       </div>
@@ -7517,7 +7610,7 @@ function exportContractsCsv(){
   const headers = ['Contract Number','Employee','Start Date','End Date','Duration Months','Current Month','Progress','Remaining Months','Percent Complete','Monthly Salary','Effective Status','Stored Status','Notes'];
   const lines = [`# ${APP_NAME} v${APP_VERSION} — Contracts`, headers.join(',')];
   State.contracts.forEach(c=>{ const cc=contractCalc(c);
-    lines.push([c.contractNumber,c.employeeName,cc.startDate||'',cc.endDate||'',cc.total,cc.current,cc.progress,cc.remaining,cc.pct+'%',c.monthlySalary??'',contractEffectiveStatus(c),c.status,c.notes].map(csvSafe).join(','));
+    lines.push([c.contractNumber,c.employeeName,cc.startDate||'',cc.endDate||'',cc.total,cc.current,cc.progress,cc.remaining,cc.pct+'%',c.monthlySalary??'',contractPresentation(c).label,c.status,c.notes].map(csvSafe).join(','));
   });
   downloadBlob(lines.join('\n'), `${FILE_BASE}-contracts.csv`, 'text/csv');
   toast('Contracts exported.');
@@ -7991,8 +8084,12 @@ function renderLegacyPayrollMapping(main){
    ============================================================ */
 function hrDashboardStats(monthKey){
   const activeEmployees = State.employees.filter(empEligible).length;
-  const activeContracts = State.contracts.filter(c=>contractEffectiveStatus(c)==='Active').length;
-  const expiringSoon = State.contracts.filter(c=>contractEffectiveStatus(c)==='Expiring Soon').length;
+  // UX-003C — contract counts come from the ONE canonical helper. activeContracts
+  // now means EVERY effectively-active contract, and expiringSoon is a SUBSET of
+  // it, so "N active, M of them ending soon" is literally true.
+  const ctCounts = contractTimelineCounts();
+  const activeContracts = ctCounts.active;
+  const expiringSoon = ctCounts.endingSoon;
   const plans = State.payrollPlans.filter(p=>p.monthKey===monthKey && isPayrollCommitted(p));
   const payrollPlanned = plans.reduce((s,p)=>s+(p.plannedAmount||0),0);
   const plan = monthlyPlanFor(monthKey);
@@ -8006,9 +8103,11 @@ function hrDashboardStats(monthKey){
 function hrDashboardAlerts(monthKey){
   const alerts = [];
   const warn = Number(State.settings.contractExpiryWarningDays)||90;
-  const soon = State.contracts.filter(c=>contractEffectiveStatus(c)==='Expiring Soon');
+  // UX-003C — resolve through the canonical model. withinWarningWindow IS the
+  // 'Expiring Soon' alias, so the alert set is unchanged; the predicate is not duplicated.
+  const soon = State.contracts.filter(c=>contractTimeline(c).withinWarningWindow);
   soon.slice(0,4).forEach(c=>{ const cc=contractCalc(c); alerts.push({type:'warn', text:`Contract ${escapeHtml(c.contractNumber||'')} (${escapeHtml(c.employeeName||'')}) is expiring soon — ${cc.daysUntilEnd} days left.`}); });
-  const expired = State.contracts.filter(c=>contractEffectiveStatus(c)==='Expired' && c.status==='Active');
+  const expired = State.contracts.filter(c=>contractTimeline(c).state==='Expired' && c.status==='Active');
   expired.slice(0,3).forEach(c=>alerts.push({type:'warn', text:`Contract ${escapeHtml(c.contractNumber||'')} (${escapeHtml(c.employeeName||'')}) has expired — renew or close it.`}));
   State.employees.filter(empEligible).forEach(e=>{ if(!activeContractToday(e.id)) alerts.push({type:'warn', text:`${escapeHtml(e.fullName)} is Active with no current contract.`}); });
   const st = hrDashboardStats(monthKey);
@@ -8035,7 +8134,7 @@ function hrDashboardAlerts(monthKey){
 function hrStatStripHTML(monthKey){
   const st = hrDashboardStats(monthKey);
   return `<div class="card stat-card"><div class="stat-label">Active Employees</div><div class="stat-value">${st.activeEmployees}</div><div class="stat-sub dim">eligible for payroll</div></div>
-    <div class="card stat-card"><div class="stat-label">Active Contracts</div><div class="stat-value">${st.activeContracts}</div><div class="stat-sub ${st.expiringSoon?'neg':'dim'}">${st.expiringSoon} expiring soon</div></div>
+    <div class="card stat-card"><div class="stat-label">Active Contracts</div><div class="stat-value">${st.activeContracts}</div><div class="stat-sub ${st.expiringSoon?'neg':'dim'}">${st.expiringSoon} of these ending soon</div></div>
     <div class="card stat-card"><div class="stat-label">Monthly Plan</div><div class="stat-value" style="font-size:15px;">${st.planStatus==='Not started'?'<span class="faint">Not started</span>':hrStatusBadge(st.planStatus,PLAN_STATUS_META)}</div><div class="stat-sub dim">Payroll: ${escapeHtml(st.payrollGen)}</div></div>`;
 }
 
@@ -8072,14 +8171,16 @@ function hrReportRows(id, monthKey){
       rows:emps.map(e=>{ const ct=activeContractToday(e.id); return [e.employeeId,e.fullName,e.jobTitle,e.department,e.employmentStatus,ct?ct.contractNumber:'—',fmtIDR(e.monthlyBaseSalary)]; })};
   }
   if(id==='active-contracts'){
-    const cs = State.contracts.filter(c=>['Active','Expiring Soon'].includes(contractEffectiveStatus(c)));
+    // UX-003C — effectively-Active is one canonical state; it already covers what
+    // the legacy pair ['Active','Expiring Soon'] used to enumerate.
+    const cs = State.contracts.filter(c=>contractTimeline(c).state==='Active');
     return {headers:['Contract #','Employee','Start','End','Progress','Monthly','Status'],
-      rows:cs.map(c=>{ const cc=contractCalc(c); return [c.contractNumber,c.employeeName,cc.startDate,cc.endDate,cc.progress,fmtIDR(c.monthlySalary),contractEffectiveStatus(c)]; })};
+      rows:cs.map(c=>{ const cc=contractCalc(c); return [c.contractNumber,c.employeeName,cc.startDate,cc.endDate,cc.progress,fmtIDR(c.monthlySalary),contractPresentation(c).label]; })};
   }
   if(id==='expiring'){
-    const cs = State.contracts.filter(c=>contractEffectiveStatus(c)==='Expiring Soon' || contractEffectiveStatus(c)==='Expired');
+    const cs = State.contracts.filter(c=>{ const t=contractTimeline(c); return t.withinWarningWindow || t.state==='Expired'; });
     return {headers:['Contract #','Employee','End Date','Days Left','Status'],
-      rows:cs.map(c=>{ const cc=contractCalc(c); return [c.contractNumber,c.employeeName,cc.endDate,cc.daysUntilEnd,contractEffectiveStatus(c)]; })};
+      rows:cs.map(c=>{ const cc=contractCalc(c); return [c.contractNumber,c.employeeName,cc.endDate,cc.daysUntilEnd,contractPresentation(c).label]; })};
   }
   if(id==='payroll-month'){
     const ps = State.payrollPlans.filter(p=>p.monthKey===monthKey);
@@ -8096,7 +8197,7 @@ function hrReportRows(id, monthKey){
   }
   if(id==='contract-cost'){
     return {headers:['Contract #','Employee','Monthly','Duration','Total Contract Value','Status'],
-      rows:State.contracts.map(c=>[c.contractNumber,c.employeeName,fmtIDR(c.monthlySalary),c.durationMonths,fmtIDR((c.monthlySalary||0)*(c.durationMonths||0)),contractEffectiveStatus(c)])};
+      rows:State.contracts.map(c=>[c.contractNumber,c.employeeName,fmtIDR(c.monthlySalary),c.durationMonths,fmtIDR((c.monthlySalary||0)*(c.durationMonths||0)),contractPresentation(c).label])};
   }
   const otAmt = o=>num(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount);
   if(id==='overtime-month'){
