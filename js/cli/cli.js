@@ -3,7 +3,7 @@
 /* ============================================================
    CLI TRANSPORT (PR-8B "The CLI")
    ------------------------------------------------------------
-   The FIRST non-browser ingress into TAM Intelligence OS. It proves the canonical
+   The FIRST non-browser ingress into TAM OS. It proves the canonical
    Platform contract is transport-agnostic: a CLI reaches the Domain through the
    SAME boundary the browser uses, with NO change to Domain, Aggregates, Handlers,
    Repository, Platform, or StorageAdapter.

@@ -25,7 +25,7 @@
    ============================================================ */
 
 /* ---------- app identity ---------- */
-const APP_NAME = 'TAM Intelligence OS';
+const APP_NAME = 'TAM OS';
 const APP_VERSION = '2.8.5';
 const APP_RELEASE_NAME = 'Workspace & Contract Timeline Integrity';
 const APP_TAGLINE = 'Finance Execution Engine';

@@ -1,4 +1,4 @@
-# TAM Intelligence OS — Architecture
+# TAM OS — Architecture
 
 **Current release:** v2.8.5 — Workspace & Contract Timeline Integrity (**published, marked Latest**),
 released from annotated tag `v2.8.5`, which peels to the published baseline commit
@@ -8,18 +8,18 @@ released from annotated tag `v2.8.5`, which peels to the published baseline comm
 the repository artifact and the published Release asset were byte-identical (965,767 bytes, SHA-256
 `32e624a262ef1da47bd4ec849471ff98e428402c33722db1715cf1c23a7db8cb`). **`main` has since taken
 post-release development (UX-004B — Sidebar & Navigation foundation, UX-004C — Domain Regrouping,
-UX-004D — Breadcrumbs, Context Quick Actions & Numeric Typography, then UX-004E — Sidebar Interaction:
-collapse/pin/hover-expand + responsive drawer)**,
-so the repository artifact is now **991,647 bytes**, SHA-256
-`c8efaa86318f3eebd02000dc0d62949ae5f8d829e52294561010f037ef27f335`, and no
+UX-004D — Breadcrumbs, Context Quick Actions & Numeric Typography, UX-004E — Sidebar Interaction:
+collapse/pin/hover-expand + responsive drawer, then UX-004F — Navigation Simplification & TAM OS rebrand)**,
+so the repository artifact is now **995,337 bytes**, SHA-256
+`ab1725314ef88de3862615a63c65b9257e77df49026ea6b0ad66e26911ea8604`, and no
 longer equals the published asset. This is expected post-release development divergence: the **published
 v2.8.5 tag, Release, and 965,767-byte asset are immutable and unchanged**; only `main` moved forward.
 `SCHEMA_VERSION` is 6, unchanged.
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for **JS provenance**
 and the data-safety invariants). Since UX-002B it is **no longer the CSS comparator**: CSS is asserted
 against a pinned SHA-256 of `concat(css/*.css)` — currently
-`90412710de6e9bbe3c24a0be7f2d57d69480861d965a6a3811e911c0132b3bce` (revised once for UX-004E: sidebar
-interaction styles — collapse rail, hamburger + backdrop, responsive drawer and desktop hover-expand) —
+`26bf828688dd2bbe280608e28c3abb583ab18032a3089f1cf5f991af5fe79fe6` (revised once for UX-004F: quieter
+placeholder badge, the "More" progressive-disclosure control, and the collapsed-rail wordmark fit) —
 with every superseded anchor kept
 in [`audit/ux-002b-2026-08-05/`](audit/ux-002b-2026-08-05/CSS-GOLDEN-MASTER-REVISION.md).
 **Shape today:** a modular source of **66 classic-script JS modules** (in `core/ ui/ finance/ people/
@@ -28,10 +28,10 @@ portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **65 of the 66 are bro
 load-order manifest and `index.html` agree on all 65 — and `js/cli/cli.js` is the CLI-only ingress,
 deliberately outside the browser load order. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
-**Verification:** `tools/verify-build.js` — **1815** checks; **thirteen** Node runtime harnesses — **1431**
+**Verification:** `tools/verify-build.js` — **1849** checks; **fourteen** Node runtime harnesses — **1456**
 checks (contract timeline 349, integrity warning rules 146, integrity payroll rules 144, Contract Core 129,
 monthly plan 118, payroll posting 106, contract persistence 74, payroll committed state 72,
-contract renewal 67, integrity rules 67, breadcrumb & quick actions 64, sidebar interaction 34,
+contract renewal 67, integrity rules 67, breadcrumb & quick actions 64, sidebar interaction 34, nav simplification 25,
 `saveAllData` 61).
 **Presentation architecture (UX-002A / UX-002B):** the application shell is mounted once by
 `renderShell()` and persists; ordinary navigation replaces only the content inside `#main`
@@ -107,7 +107,7 @@ flowchart TD
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>1815 invariant checks"]
+  VERIFY["tools/verify-build.js<br/>1849 invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX

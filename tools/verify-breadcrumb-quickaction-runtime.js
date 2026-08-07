@@ -124,14 +124,14 @@ function businessSnapshot(S){
       'Employees -> People / Employees');
     check(JSON.stringify(labels('contracts'))===JSON.stringify(['People','Contracts']),
       'Contracts -> People / Contracts');
-    check(JSON.stringify(labels('payroll'))===JSON.stringify(['Finance','Payroll Workspace']),
-      'Payroll -> Finance / Payroll Workspace');
+    check(JSON.stringify(labels('payroll'))===JSON.stringify(['Finance','Payroll']),
+      'Payroll -> Finance / Payroll');
     check(JSON.stringify(labels('overtime'))===JSON.stringify(['Finance','Overtime']),
       'Overtime -> Finance / Overtime');
-    check(JSON.stringify(labels('supplementals'))===JSON.stringify(['Finance','Supplemental Payments']),
-      'Supplemental Payments -> Finance / Supplemental Payments');
-    check(JSON.stringify(labels('add'))===JSON.stringify(['Finance','Add / Upload']),
-      'Add / Upload -> Finance / Add / Upload');
+    check(JSON.stringify(labels('supplementals'))===JSON.stringify(['Finance','Supplements']),
+      'Supplements -> Finance / Supplements');
+    check(JSON.stringify(labels('add'))===JSON.stringify(['Finance','Import']),
+      'Import -> Finance / Import');
     check(JSON.stringify(labels('reports'))===JSON.stringify(['Analytics','Reports']),
       'Reports -> Analytics / Reports');
     check(JSON.stringify(labels('settings'))===JSON.stringify(['System','Settings']),
@@ -157,20 +157,20 @@ function businessSnapshot(S){
     check(trail('contractDetail')[1].view==='contracts', 'Contract Detail resolves through Contracts');
 
     S.detailPayrollId='pp_1';
-    check(JSON.stringify(labels('payrollDetail'))===JSON.stringify(['Finance','Payroll Workspace','SAMPLE — Norman Fixture']),
-      'Payroll Detail -> Finance / Payroll Workspace / <name>');
+    check(JSON.stringify(labels('payrollDetail'))===JSON.stringify(['Finance','Payroll','SAMPLE — Norman Fixture']),
+      'Payroll Detail -> Finance / Payroll / <name>');
     check(trail('payrollDetail')[1].view==='payroll', 'Payroll Detail resolves through Payroll');
 
     check(JSON.stringify(labels('overtimeSheet'))===JSON.stringify(['Finance','Overtime','Overtime Sheet']),
       'Overtime Sheet -> Finance / Overtime / Overtime Sheet');
     check(trail('overtimeSheet')[1].view==='overtime', 'Overtime Sheet resolves through Overtime');
 
-    check(JSON.stringify(labels('payrollAdjustments'))===JSON.stringify(['Finance','Payroll Workspace','Payroll Adjustments']),
-      'Payroll Adjustments -> Finance / Payroll Workspace / Payroll Adjustments');
-    check(JSON.stringify(labels('supplementalDetail'))===JSON.stringify(['Finance','Supplemental Payments','Supplemental Detail']),
-      'Supplemental Detail -> Finance / Supplemental Payments / Supplemental Detail');
-    check(JSON.stringify(labels('smartImport'))===JSON.stringify(['Finance','Add / Upload','Smart Import']),
-      'Smart Import -> Finance / Add / Upload / Smart Import');
+    check(JSON.stringify(labels('payrollAdjustments'))===JSON.stringify(['Finance','Payroll','Payroll Adjustments']),
+      'Payroll Adjustments -> Finance / Payroll / Payroll Adjustments');
+    check(JSON.stringify(labels('supplementalDetail'))===JSON.stringify(['Finance','Supplements','Supplemental Detail']),
+      'Supplemental Detail -> Finance / Supplements / Supplemental Detail');
+    check(JSON.stringify(labels('smartImport'))===JSON.stringify(['Finance','Import','Smart Import']),
+      'Smart Import -> Finance / Import / Smart Import');
 
     // Entity-aware terminal falls back to a stable generic label (never a raw id) when
     // the selected entity is missing.

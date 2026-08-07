@@ -68,7 +68,7 @@ function openFloatingMenu(toggle, menu){
    previously hardcoded "Preview" badge string. Stable features render no badge.
    ============================================================ */
 const FEATURE_STATUS = { STABLE:'stable', BETA:'beta', PREVIEW:'preview', COMING_SOON:'comingSoon' };
-const FEATURE_BADGE_TEXT = { stable:'', beta:'BETA', preview:'PREVIEW', comingSoon:'SOON' };
+const FEATURE_BADGE_TEXT = { stable:'', beta:'BETA', preview:'PREVIEW', comingSoon:'Soon' }; // UX-004F: quieter "Soon" (was heavy "SOON")
 const FEATURE_REGISTRY = {
   recurring: { status:'stable',     label:'Recurring Expenses', tooltip:'' },
   projects:  { status:'comingSoon', label:'Projects',           tooltip:'Projects is planned and not yet available.' },
@@ -99,22 +99,29 @@ const NAV_GROUPS = [
     {id:'employees', label:'Employees', ic:'☺'},
     {id:'contracts', label:'Contracts', ic:'▦'},
   ]},
+  // UX-004F — NAVIGATION SIMPLIFICATION. Finance shows four PRIMARY items; every
+  // other Finance destination is disclosed under "More" (more:true). This is
+  // presentation only — ids, routes, views and behaviour are unchanged; only labels
+  // and the primary/secondary split changed. Labels are simplified (Finance Overview
+  // -> Overview, Monthly Plan Generator -> Planning, Supplemental Payments ->
+  // Supplements, Add / Upload -> Import, Execution Center -> Execution, Recurring
+  // Expenses -> Recurring, Payroll Workspace -> Payroll).
   {id:'finance', label:'Finance', items:[
-    {id:'financeOverview', label:'Finance Overview', ic:'▣'},
-    {id:'payroll', label:'Payroll Workspace', ic:'৳'},
-    {id:'overtime', label:'Overtime', ic:'⏱'},
-    {id:'supplementals', label:'Supplemental Payments', ic:'⊕'},
-    {id:'monthlyplan', label:'Monthly Plan Generator', ic:'⊞'},
+    {id:'financeOverview', label:'Overview', ic:'▣'},
+    {id:'payroll', label:'Payroll', ic:'৳'},
     {id:'transactions', label:'Transactions', ic:'≡'},
-    {id:'add', label:'Add / Upload', ic:'+'},
-    {id:'recurring', label:'Recurring Expenses', ic:'↻'},
-    {id:'cashflow', label:'Cash Flow', ic:'∼'},
-    {id:'budgetcenter', label:'Budget Center', ic:'▥'},
-    {id:'executioncenter', label:'Execution Center', ic:'⚡︎'}, // v2.6.3c — VS-15 forces monochrome text (was a colored emoji that stood out)
-    {id:'bankaccounts', label:'Bank Accounts', ic:'▦'},
-    {id:'projects', label:'Projects', ic:'▢', placeholder:true},
-    {id:'vendors', label:'Vendors', ic:'▢', placeholder:true},
-    {id:'calendar', label:'Financial Calendar', ic:'▢', placeholder:true},
+    {id:'monthlyplan', label:'Planning', ic:'⊞'},
+    {id:'overtime', label:'Overtime', ic:'⏱', more:true},
+    {id:'supplementals', label:'Supplements', ic:'⊕', more:true},
+    {id:'add', label:'Import', ic:'+', more:true},
+    {id:'recurring', label:'Recurring', ic:'↻', more:true},
+    {id:'cashflow', label:'Cash Flow', ic:'∼', more:true},
+    {id:'budgetcenter', label:'Budget Center', ic:'▥', more:true},
+    {id:'executioncenter', label:'Execution', ic:'⚡︎', more:true}, // v2.6.3c — VS-15 forces monochrome text (was a colored emoji that stood out)
+    {id:'bankaccounts', label:'Bank Accounts', ic:'▦', more:true},
+    {id:'projects', label:'Projects', ic:'▢', placeholder:true, more:true},
+    {id:'vendors', label:'Vendors', ic:'▢', placeholder:true, more:true},
+    {id:'calendar', label:'Financial Calendar', ic:'▢', placeholder:true, more:true},
   ]},
   {id:'analytics', label:'Analytics', items:[
     {id:'planvsactual', label:'Planned vs Actual', ic:'⇄'},
@@ -200,22 +207,44 @@ function shellIsMounted(){
   const app = document.getElementById('app');
   return !!(app && app.querySelector('.sidebar') && app.querySelector('#main'));
 }
-// One nav group's markup. Extracted verbatim from the previous render() so the
-// mounted shell is byte-identical to what the full rebuild used to produce.
+// One nav item button. Extracted so primary and "More" items share identical markup.
+function navItemHTML(n, activeItem){
+  const on = n.id===activeItem;
+  return `<button class="nav-item ${on?'active':''}" data-nav="${n.id}"${on?' aria-current="page"':''} title="${escapeHtml(n.label)}">
+                <span class="ic">${n.ic}</span><span class="nav-label">${escapeHtml(n.label)}</span>${featureBadgeHTML(n.id)}
+              </button>`;
+}
+// UX-004F — the "More" disclosure is open when the user opened it OR the active view
+// lives inside it (so the highlighted item is never hidden). Derived, not stored.
+function navMoreOpen(g, activeItem){
+  const moreItems = g.items.filter(i=>i.more);
+  if(!moreItems.length) return false;
+  if(moreItems.some(i=>i.id===activeItem)) return true;   // active item forces it open
+  return !!State.navMore[g.id];
+}
+// One nav group's markup. Finance splits into PRIMARY items plus a "More" disclosure
+// holding every more:true item; other groups render every item as before.
 function navGroupHTML(g){
   const active = navActive();
   // The active group is always shown expanded while one of its descendant views
   // is active, so the highlighted item is never hidden inside a collapsed group.
   const collapsed = !!State.navCollapsed[g.id] && g.id !== active.group;
+  const primary = g.items.filter(i=>!i.more);
+  const moreItems = g.items.filter(i=>i.more);
+  const moreOpen = navMoreOpen(g, active.item);
+  const moreHTML = moreItems.length ? `
+              <button class="nav-item nav-more-head" data-more="${g.id}" aria-expanded="${moreOpen}" title="More">
+                <span class="ic">⋯</span><span class="nav-label">More</span><span class="chev">${moreOpen?'▾':'▸'}</span>
+              </button>
+              <div class="nav-more-items" style="${moreOpen?'':'display:none;'}">
+                ${moreItems.map(n=>navItemHTML(n, active.item)).join('')}
+              </div>` : '';
   return `<div class="nav-group">
             <button class="nav-group-head" data-group="${g.id}" aria-expanded="${!collapsed}">
               <span>${escapeHtml(g.label)}</span><span class="chev">${collapsed?'▸':'▾'}</span>
             </button>
             <div class="nav-group-items" style="${collapsed?'display:none;':''}">
-              ${g.items.map(n=>{ const on = n.id===active.item;
-                return `<button class="nav-item ${on?'active':''}" data-nav="${n.id}"${on?' aria-current="page"':''} title="${escapeHtml(n.label)}">
-                <span class="ic">${n.ic}</span><span class="nav-label">${escapeHtml(n.label)}</span>${featureBadgeHTML(n.id)}
-              </button>`;}).join('')}
+              ${primary.map(n=>navItemHTML(n, active.item)).join('')}${moreHTML}
             </div>
           </div>`;
 }
@@ -228,7 +257,7 @@ function renderShell(){
     <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
     <div class="sidebar" id="sidebar">
       <div class="brand">
-        <div class="mark"><span class="mfull">TAM <span>Intelligence&nbsp;OS</span></span><span class="mshort">TAM <span>OS</span></span></div>
+        <div class="mark"><span class="mfull">TAM&nbsp;<span>OS</span></span><span class="mshort">TAM&nbsp;<span>OS</span></span></div>
         <div class="sub">${escapeHtml(State.settings.companyName||COMPANY_NAME_DEFAULT)}</div>
         <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar"><span class="cbar" aria-hidden="true">«</span></button>
       </div>
@@ -259,6 +288,16 @@ function bindShell(app){
       e.preventDefault();
       captureSidebarScroll();
       const g=btn.dataset.group; State.navCollapsed[g]=!State.navCollapsed[g];
+      render();
+      btn.blur();
+    });
+  });
+  // UX-004F — the "More" disclosure toggle (session-only, progressive disclosure).
+  app.querySelectorAll('[data-more]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      captureSidebarScroll();
+      const g=btn.dataset.more; State.navMore[g]=!State.navMore[g];
       render();
       btn.blur();
     });
@@ -322,6 +361,20 @@ function syncShellState(){
     const items = head.parentNode.querySelector('.nav-group-items');
     const disp = collapsed?'none':'';
     if(items && items.style.display !== disp) items.style.display = disp;
+  });
+  // UX-004F — sync each "More" disclosure in place (open when toggled OR the active
+  // view is inside it), mirroring the group-collapse sync above so no shell remount.
+  app.querySelectorAll('[data-more]').forEach(head=>{
+    const g = NAV_GROUPS.find(x=>x.id===head.dataset.more);
+    const open = g ? navMoreOpen(g, active.item) : false;
+    const expanded = String(open);
+    if(head.getAttribute('aria-expanded') !== expanded) head.setAttribute('aria-expanded', expanded);
+    const chev = head.querySelector('.chev');
+    const glyph = open?'▾':'▸';
+    if(chev && chev.textContent !== glyph) chev.textContent = glyph;
+    const box = head.parentNode.querySelector('.nav-more-items');
+    const disp = open?'':'none';
+    if(box && box.style.display !== disp) box.style.display = disp;
   });
   // UX-004E — re-assert sidebar collapse/drawer state after each in-place sync, so
   // the session interaction state survives navigation without a shell remount.

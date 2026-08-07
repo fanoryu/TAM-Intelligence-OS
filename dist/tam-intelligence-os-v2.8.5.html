@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TAM Intelligence OS v2.8.5</title>
+<title>TAM OS v2.8.5</title>
 <meta name="theme-color" content="#0E1420">
 <meta name="color-scheme" content="dark light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -259,10 +259,20 @@ input,select,textarea{font-family:var(--sans);}
 .nav-group-head:hover{color:var(--text-dim);}
 .nav-group-head .chev{font-size:var(--fs-1);}
 .nav-group-items{display:flex;flex-direction:column;gap:2px;}
+/* UX-004F — quieter placeholder badge: same meaning, much lower visual weight. The
+   heavy filled uppercase pill becomes a light, low-contrast tag (no fill, normal
+   weight, subtle case) so planned features read as background information. */
 .nav-preview-tag{
-  margin-left:auto;font-size:var(--fs-1);font-weight:700;text-transform:uppercase;letter-spacing:.3px;
-  background:var(--surface-3);color:var(--text-dim);padding:1px var(--space-1);border-radius:var(--radius-md);
+  margin-left:auto;font-size:var(--fs-1);font-weight:500;text-transform:none;letter-spacing:.2px;
+  background:transparent;color:var(--text-faint);padding:0;border-radius:0;opacity:.75;
 }
+/* UX-004F — "More" progressive-disclosure toggle inside a nav group. Styled like a
+   nav item but visually quieter (it is a control, not a destination). */
+.nav-more-head{color:var(--text-faint);}
+.nav-more-head .chev{margin-left:auto;font-size:var(--fs-1);}
+.nav-more-items{display:flex;flex-direction:column;gap:2px;}
+/* Collapsed rail: the short wordmark "TAM OS" must fit 64px without clipping "OS". */
+.sidebar.collapsed .brand .mark{font-size:var(--fs-3);}
 .nav-item{
   display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);color:var(--text-dim);
   font-size:var(--fs-3);font-weight:500;border:none;background:transparent;text-align:left;width:100%;
@@ -552,7 +562,7 @@ textarea.input{resize:vertical;min-height:70px;font-family:var(--mono);font-size
    ============================================================ */
 
 /* ---------- app identity ---------- */
-const APP_NAME = 'TAM Intelligence OS';
+const APP_NAME = 'TAM OS';
 const APP_VERSION = '2.8.5';
 const APP_RELEASE_NAME = 'Workspace & Contract Timeline Integrity';
 const APP_TAGLINE = 'Finance Execution Engine';
@@ -1359,6 +1369,7 @@ const State = {
   trendsFilter: {range:'all', start:null, end:null, category:'Gaji'},
   settings: {...DEFAULT_SETTINGS},
   navCollapsed: {}, // group id -> collapsed bool, session-only
+  navMore: {}, // UX-004F — group id -> "More" disclosure expanded bool, session-only (progressive disclosure)
   sidebarScrollTop: 0, // preserved across full re-renders so nav doesn't jump to top on navigation
   // UX-004E — sidebar interaction, SESSION-ONLY (never persisted, no storage key, no schema):
   sidebarCollapsed: false,   // desktop collapsed rail (labels hidden, icons only)
@@ -2190,7 +2201,7 @@ function openFloatingMenu(toggle, menu){
    previously hardcoded "Preview" badge string. Stable features render no badge.
    ============================================================ */
 const FEATURE_STATUS = { STABLE:'stable', BETA:'beta', PREVIEW:'preview', COMING_SOON:'comingSoon' };
-const FEATURE_BADGE_TEXT = { stable:'', beta:'BETA', preview:'PREVIEW', comingSoon:'SOON' };
+const FEATURE_BADGE_TEXT = { stable:'', beta:'BETA', preview:'PREVIEW', comingSoon:'Soon' }; // UX-004F: quieter "Soon" (was heavy "SOON")
 const FEATURE_REGISTRY = {
   recurring: { status:'stable',     label:'Recurring Expenses', tooltip:'' },
   projects:  { status:'comingSoon', label:'Projects',           tooltip:'Projects is planned and not yet available.' },
@@ -2221,22 +2232,29 @@ const NAV_GROUPS = [
     {id:'employees', label:'Employees', ic:'☺'},
     {id:'contracts', label:'Contracts', ic:'▦'},
   ]},
+  // UX-004F — NAVIGATION SIMPLIFICATION. Finance shows four PRIMARY items; every
+  // other Finance destination is disclosed under "More" (more:true). This is
+  // presentation only — ids, routes, views and behaviour are unchanged; only labels
+  // and the primary/secondary split changed. Labels are simplified (Finance Overview
+  // -> Overview, Monthly Plan Generator -> Planning, Supplemental Payments ->
+  // Supplements, Add / Upload -> Import, Execution Center -> Execution, Recurring
+  // Expenses -> Recurring, Payroll Workspace -> Payroll).
   {id:'finance', label:'Finance', items:[
-    {id:'financeOverview', label:'Finance Overview', ic:'▣'},
-    {id:'payroll', label:'Payroll Workspace', ic:'৳'},
-    {id:'overtime', label:'Overtime', ic:'⏱'},
-    {id:'supplementals', label:'Supplemental Payments', ic:'⊕'},
-    {id:'monthlyplan', label:'Monthly Plan Generator', ic:'⊞'},
+    {id:'financeOverview', label:'Overview', ic:'▣'},
+    {id:'payroll', label:'Payroll', ic:'৳'},
     {id:'transactions', label:'Transactions', ic:'≡'},
-    {id:'add', label:'Add / Upload', ic:'+'},
-    {id:'recurring', label:'Recurring Expenses', ic:'↻'},
-    {id:'cashflow', label:'Cash Flow', ic:'∼'},
-    {id:'budgetcenter', label:'Budget Center', ic:'▥'},
-    {id:'executioncenter', label:'Execution Center', ic:'⚡︎'}, // v2.6.3c — VS-15 forces monochrome text (was a colored emoji that stood out)
-    {id:'bankaccounts', label:'Bank Accounts', ic:'▦'},
-    {id:'projects', label:'Projects', ic:'▢', placeholder:true},
-    {id:'vendors', label:'Vendors', ic:'▢', placeholder:true},
-    {id:'calendar', label:'Financial Calendar', ic:'▢', placeholder:true},
+    {id:'monthlyplan', label:'Planning', ic:'⊞'},
+    {id:'overtime', label:'Overtime', ic:'⏱', more:true},
+    {id:'supplementals', label:'Supplements', ic:'⊕', more:true},
+    {id:'add', label:'Import', ic:'+', more:true},
+    {id:'recurring', label:'Recurring', ic:'↻', more:true},
+    {id:'cashflow', label:'Cash Flow', ic:'∼', more:true},
+    {id:'budgetcenter', label:'Budget Center', ic:'▥', more:true},
+    {id:'executioncenter', label:'Execution', ic:'⚡︎', more:true}, // v2.6.3c — VS-15 forces monochrome text (was a colored emoji that stood out)
+    {id:'bankaccounts', label:'Bank Accounts', ic:'▦', more:true},
+    {id:'projects', label:'Projects', ic:'▢', placeholder:true, more:true},
+    {id:'vendors', label:'Vendors', ic:'▢', placeholder:true, more:true},
+    {id:'calendar', label:'Financial Calendar', ic:'▢', placeholder:true, more:true},
   ]},
   {id:'analytics', label:'Analytics', items:[
     {id:'planvsactual', label:'Planned vs Actual', ic:'⇄'},
@@ -2322,22 +2340,44 @@ function shellIsMounted(){
   const app = document.getElementById('app');
   return !!(app && app.querySelector('.sidebar') && app.querySelector('#main'));
 }
-// One nav group's markup. Extracted verbatim from the previous render() so the
-// mounted shell is byte-identical to what the full rebuild used to produce.
+// One nav item button. Extracted so primary and "More" items share identical markup.
+function navItemHTML(n, activeItem){
+  const on = n.id===activeItem;
+  return `<button class="nav-item ${on?'active':''}" data-nav="${n.id}"${on?' aria-current="page"':''} title="${escapeHtml(n.label)}">
+                <span class="ic">${n.ic}</span><span class="nav-label">${escapeHtml(n.label)}</span>${featureBadgeHTML(n.id)}
+              </button>`;
+}
+// UX-004F — the "More" disclosure is open when the user opened it OR the active view
+// lives inside it (so the highlighted item is never hidden). Derived, not stored.
+function navMoreOpen(g, activeItem){
+  const moreItems = g.items.filter(i=>i.more);
+  if(!moreItems.length) return false;
+  if(moreItems.some(i=>i.id===activeItem)) return true;   // active item forces it open
+  return !!State.navMore[g.id];
+}
+// One nav group's markup. Finance splits into PRIMARY items plus a "More" disclosure
+// holding every more:true item; other groups render every item as before.
 function navGroupHTML(g){
   const active = navActive();
   // The active group is always shown expanded while one of its descendant views
   // is active, so the highlighted item is never hidden inside a collapsed group.
   const collapsed = !!State.navCollapsed[g.id] && g.id !== active.group;
+  const primary = g.items.filter(i=>!i.more);
+  const moreItems = g.items.filter(i=>i.more);
+  const moreOpen = navMoreOpen(g, active.item);
+  const moreHTML = moreItems.length ? `
+              <button class="nav-item nav-more-head" data-more="${g.id}" aria-expanded="${moreOpen}" title="More">
+                <span class="ic">⋯</span><span class="nav-label">More</span><span class="chev">${moreOpen?'▾':'▸'}</span>
+              </button>
+              <div class="nav-more-items" style="${moreOpen?'':'display:none;'}">
+                ${moreItems.map(n=>navItemHTML(n, active.item)).join('')}
+              </div>` : '';
   return `<div class="nav-group">
             <button class="nav-group-head" data-group="${g.id}" aria-expanded="${!collapsed}">
               <span>${escapeHtml(g.label)}</span><span class="chev">${collapsed?'▸':'▾'}</span>
             </button>
             <div class="nav-group-items" style="${collapsed?'display:none;':''}">
-              ${g.items.map(n=>{ const on = n.id===active.item;
-                return `<button class="nav-item ${on?'active':''}" data-nav="${n.id}"${on?' aria-current="page"':''} title="${escapeHtml(n.label)}">
-                <span class="ic">${n.ic}</span><span class="nav-label">${escapeHtml(n.label)}</span>${featureBadgeHTML(n.id)}
-              </button>`;}).join('')}
+              ${primary.map(n=>navItemHTML(n, active.item)).join('')}${moreHTML}
             </div>
           </div>`;
 }
@@ -2350,7 +2390,7 @@ function renderShell(){
     <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
     <div class="sidebar" id="sidebar">
       <div class="brand">
-        <div class="mark"><span class="mfull">TAM <span>Intelligence&nbsp;OS</span></span><span class="mshort">TAM <span>OS</span></span></div>
+        <div class="mark"><span class="mfull">TAM&nbsp;<span>OS</span></span><span class="mshort">TAM&nbsp;<span>OS</span></span></div>
         <div class="sub">${escapeHtml(State.settings.companyName||COMPANY_NAME_DEFAULT)}</div>
         <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar"><span class="cbar" aria-hidden="true">«</span></button>
       </div>
@@ -2381,6 +2421,16 @@ function bindShell(app){
       e.preventDefault();
       captureSidebarScroll();
       const g=btn.dataset.group; State.navCollapsed[g]=!State.navCollapsed[g];
+      render();
+      btn.blur();
+    });
+  });
+  // UX-004F — the "More" disclosure toggle (session-only, progressive disclosure).
+  app.querySelectorAll('[data-more]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      captureSidebarScroll();
+      const g=btn.dataset.more; State.navMore[g]=!State.navMore[g];
       render();
       btn.blur();
     });
@@ -2444,6 +2494,20 @@ function syncShellState(){
     const items = head.parentNode.querySelector('.nav-group-items');
     const disp = collapsed?'none':'';
     if(items && items.style.display !== disp) items.style.display = disp;
+  });
+  // UX-004F — sync each "More" disclosure in place (open when toggled OR the active
+  // view is inside it), mirroring the group-collapse sync above so no shell remount.
+  app.querySelectorAll('[data-more]').forEach(head=>{
+    const g = NAV_GROUPS.find(x=>x.id===head.dataset.more);
+    const open = g ? navMoreOpen(g, active.item) : false;
+    const expanded = String(open);
+    if(head.getAttribute('aria-expanded') !== expanded) head.setAttribute('aria-expanded', expanded);
+    const chev = head.querySelector('.chev');
+    const glyph = open?'▾':'▸';
+    if(chev && chev.textContent !== glyph) chev.textContent = glyph;
+    const box = head.parentNode.querySelector('.nav-more-items');
+    const disp = open?'':'none';
+    if(box && box.style.display !== disp) box.style.display = disp;
   });
   // UX-004E — re-assert sidebar collapse/drawer state after each in-place sync, so
   // the session interaction state survives navigation without a shell remount.
@@ -6144,7 +6208,7 @@ function renderActivityLog(main){
 
   // Fully empty store (nothing has been recorded yet) — dedicated empty state.
   if(!__activityCache.length){
-    main.innerHTML = pageHeader('Activity Log','A read-only audit trail of key actions across TAM Intelligence OS. Newest first.')
+    main.innerHTML = pageHeader('Activity Log','A read-only audit trail of key actions across TAM OS. Newest first.')
       + `<div class="card"><div class="empty">
         <div class="big">▤</div>
         <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No activity recorded yet</div>
@@ -6156,7 +6220,7 @@ function renderActivityLog(main){
   const modules = [...new Set(__activityCache.map(e=>e.module))].sort();
   const types = [...new Set(__activityCache.map(e=>e.type))].sort((a,b)=>auditTypeLabel(a).localeCompare(auditTypeLabel(b)));
 
-  main.innerHTML = pageHeader('Activity Log', 'A read-only audit trail of key actions across TAM Intelligence OS. Newest first — search, filter and export.')
+  main.innerHTML = pageHeader('Activity Log', 'A read-only audit trail of key actions across TAM OS. Newest first — search, filter and export.')
     + `<div class="card">
       <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1.2fr 1fr;margin-bottom:12px;">
         <div class="field"><label>Search</label><input class="input" id="actSearch" placeholder="entity, description, id" value="${escapeHtml(f.search)}"></div>
@@ -9475,7 +9539,7 @@ function renderOvertime(main){
       `${State.overtimeRecords.length} record(s) · ${pending} pending review. ${escapeHtml(State.settings.overtimeMethodLabel||'TAM Internal Overtime Calculation Method')}.`,
       `<button class="btn btn-accent" id="addOt">+ Add Overtime</button><button class="btn" id="otSheet">Monthly Worksheet</button><button class="btn" id="otCsv">Export CSV</button>`)
     + `
-    <div class="insight-item" style="margin-bottom:14px;display:block;">This calculation follows the internal method configured in TAM Intelligence OS. Verify separately when statutory payroll compliance calculations are required.</div>
+    <div class="insight-item" style="margin-bottom:14px;display:block;">This calculation follows the internal method configured in TAM OS. Verify separately when statutory payroll compliance calculations are required.</div>
     ${payrollDriftBannerHTML(State.payrollPlans)}
     <div class="grid grid-4" style="margin-bottom:14px;">
       <div class="card stat-card"><div class="stat-label">Records Shown</div><div class="stat-value" id="otStatShown">${rows.length}</div></div>
@@ -9744,7 +9808,7 @@ function onboardingChecklistHTML(){
   if(done===steps.length) return '';
   return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
     <h3>Getting Started <span class="tag">${done}/${steps.length} complete</span><button class="btn btn-sm" id="dismissOnb" style="float:right;">Dismiss</button></h3>
-    <p class="hint" style="margin:-6px 0 12px;">Set up TAM Intelligence OS with your real data. Click any step to jump there. This checklist never blocks navigation.</p>
+    <p class="hint" style="margin:-6px 0 12px;">Set up TAM OS with your real data. Click any step to jump there. This checklist never blocks navigation.</p>
     <div class="insight-list">${steps.map((s,i)=>`<div class="insight-item ${s.done?'good':''}" style="cursor:pointer;" data-onb="${s.view}"><b style="min-width:18px;display:inline-block;">${s.done?'✓':(i+1)+'.'}</b> ${escapeHtml(s.label)}</div>`).join('')}</div>
   </div>`;
 }
@@ -9788,7 +9852,7 @@ async function maybeShowFirstRunChoice(){
   const list = nonZero.map(k=>`<b>${counts[k]} ${escapeHtml(k.toLowerCase())}</b>`).join(', ');
   openModalHTML(`
     <h3>Existing data detected</h3>
-    <p class="dim" style="font-size:13px;line-height:1.7;">TAM Intelligence OS v${APP_VERSION} ships clean, but this browser already holds data from an earlier version — ${list}. Your data has <b>not</b> been changed. Choose how to proceed:</p>
+    <p class="dim" style="font-size:13px;line-height:1.7;">TAM OS v${APP_VERSION} ships clean, but this browser already holds data from an earlier version — ${list}. Your data has <b>not</b> been changed. Choose how to proceed:</p>
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
       <button class="btn btn-accent" id="frKeep">Keep Existing Data</button>
       <button class="btn" id="frFresh">Export Backup &amp; Start Fresh…</button>
@@ -9806,7 +9870,7 @@ async function startFresh(){
   // 1. Force a complete JSON backup download first (never destroy without a copy).
   downloadBlob(JSON.stringify(buildCompleteBackup(),null,2), `${FILE_BASE}-pre-reset-backup-${new Date().toISOString().slice(0,10)}.json`, 'application/json');
   // 2. Typed confirmation.
-  const typed = window.prompt('A complete backup has just been downloaded.\n\nThis permanently clears ALL TAM Intelligence OS data in this browser and reloads into an empty state.\n\nType exactly:  DELETE ALL TAM DATA');
+  const typed = window.prompt('A complete backup has just been downloaded.\n\nThis permanently clears ALL TAM OS data in this browser and reloads into an empty state.\n\nType exactly:  DELETE ALL TAM DATA');
   if(typed !== 'DELETE ALL TAM DATA'){ showWarning('Reset cancelled — confirmation text did not match.'); return; }
   // 3. Clear only TAM keys (settings return to defaults on reload).
   for(const k of TAM_DATA_KEYS){ await StorageAdapter.remove(k); }
@@ -11616,7 +11680,7 @@ function cycleStatusPill(cs){
 function renderPayrollWorkspace(main){
   // Empty-state onboarding
   if(!State.employees.length || !State.contracts.length){
-    main.innerHTML = pageHeader('Payroll Workspace','Operational payroll — run the full monthly cycle inside TAM Intelligence OS.')
+    main.innerHTML = pageHeader('Payroll Workspace','Operational payroll — run the full monthly cycle inside TAM OS.')
       + `<div class="card"><div class="empty">
         <div class="big">৳</div>
         <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No employees and contracts are available yet</div>

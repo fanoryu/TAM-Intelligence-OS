@@ -1,4 +1,4 @@
-# TAM Intelligence OS
+# TAM OS
 
 **Integrated Management Intelligence for PT Total Asset Manajemen** — a single-page finance,
 payroll, and operations workspace that runs entirely in the browser, with no backend and no runtime
@@ -24,7 +24,7 @@ dependencies.
 
 ## Overview
 
-TAM Intelligence OS is an internal operations tool for **PT Total Asset Manajemen**. It manages the
+TAM OS is an internal operations tool for **PT Total Asset Manajemen**. It manages the
 monthly cycle for finance and people operations — employees and contracts, overtime, payroll
 generation and posting, transaction execution, cash flow, budgeting, and reporting — as one
 self-contained HTML application.
@@ -358,7 +358,7 @@ uploads the portable HTML as a build artifact.
 
 ## Data safety
 
-TAM Intelligence OS stores finance, payroll, employee, and contract data **locally**; data never
+TAM OS stores finance, payroll, employee, and contract data **locally**; data never
 leaves the device on its own. The verifier enforces these invariants unless a change is an
 **intentional, documented migration**:
 

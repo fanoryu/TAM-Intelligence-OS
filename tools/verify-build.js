@@ -63,13 +63,16 @@ const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
 //   Phase 1 remediation  b1cec5dd8b789f49d3967c5e49786961418f87b6f21975965315981c6f6e507c
 //   UX-004D            49d87fbfe09436bc28e7f1e4ec0146cd9dd9169e4db90ef0089e1e95a65b7539
 //     Breadcrumb landmark styles + Numeric Typography Standard.
-//   UX-004E (current) — AUTHORIZED golden-master revision. Sidebar INTERACTION styles
-//     only (css/shell.css): collapse rail (.sidebar.collapsed), collapse toggle,
-//     desktop hover-expand, hamburger + backdrop, and the responsive drawer media
-//     query; the superseded max-width:640px shrink block was replaced by the drawer.
-//     Every value resolves from an existing token; no color/radius/type scale changed
-//     and no layout outside the sidebar interaction surface was touched.
-const CSS_GOLDEN_SHA256 = '90412710de6e9bbe3c24a0be7f2d57d69480861d965a6a3811e911c0132b3bce';
+//   UX-004E            90412710de6e9bbe3c24a0be7f2d57d69480861d965a6a3811e911c0132b3bce
+//     Sidebar interaction: collapse rail, hamburger + backdrop, responsive drawer,
+//     desktop hover-expand.
+//   UX-004F (current) — AUTHORIZED golden-master revision. Navigation-simplification
+//     + rebrand presentation only (css/shell.css): the quieter placeholder badge
+//     (.nav-preview-tag), the "More" progressive-disclosure control (.nav-more-head/
+//     .nav-more-items), and the collapsed-rail wordmark fit (.sidebar.collapsed .brand
+//     .mark). Every value resolves from an existing token; no color/radius/type scale
+//     changed and no layout outside these surfaces was touched.
+const CSS_GOLDEN_SHA256 = '26bf828688dd2bbe280608e28c3abb583ab18032a3089f1cf5f991af5fe79fe6';
 console.log('== CSS GOLDEN MASTER (pinned digest of concat(css/*.css)) ==');
 const cssDigest = crypto.createHash('sha256').update(trimLF(srcCss), 'utf8').digest('hex');
 check(cssDigest === CSS_GOLDEN_SHA256,
@@ -102,7 +105,7 @@ check(trimLF(srcJs) === distJs, 'concat(js/*.js) == dist JS payload');
 console.log('== VERSION IDENTITY (derived from constants.js — no hardcoded version) ==');
 check(dist.includes("const APP_VERSION = '" + meta.version + "';"), 'APP_VERSION == ' + meta.version + ' (matches constants.js)');
 check(dist.includes("const APP_RELEASE_NAME = '" + meta.releaseName + "';"), 'APP_RELEASE_NAME == "' + meta.releaseName + '" (matches constants.js)');
-check(dist.includes('<title>TAM Intelligence OS v' + meta.version + '</title>'), '<title> == v' + meta.version);
+check(dist.includes('<title>TAM OS v' + meta.version + '</title>'), '<title> == v' + meta.version);
 check(dist.includes("{v:'" + meta.version + " "), 'Release Notes has a ' + meta.version + ' entry');
 check(path.basename(meta.distPath) === 'tam-intelligence-os-v' + meta.version + '.html', 'generated dist filename derived from APP_VERSION (dist/' + meta.distName + ')');
 // History preserved: prior release entries are permanent and must never disappear.
@@ -192,7 +195,7 @@ check(dist.includes("window.addEventListener('resize', onReposition, true)"), 'm
 console.log('== PAYROLL INTELLIGENCE WORKSPACE (v2.6.3) ==');
 ['function payrollStage(','function payrollStagePill(','function payrollStageCounts(','function payrollSummary(','function payrollHealth(','function isPayrollLocked(','function setPayrollLock(','function renderPayrollWorkspace(']
   .forEach((fn)=>check(dist.includes(fn), 'defined: '+fn.replace('function ','').replace('(','')));
-check(dist.includes("label:'Payroll Workspace'"), 'nav label renamed to Payroll Workspace');
+check(dist.includes("label:'Payroll'"), 'Payroll workspace nav item present (UX-004F simplified label: "Payroll")');
 check(dist.includes('payrollLocks: {}') || dist.includes('payrollLocks:{}'), 'payrollLocks settings field present (lock persistence, same settings key)');
 check(dist.includes('Post to Finance') || dist.includes('Post Approved Payroll to Finance'), 'Post to Finance action present');
 check(dist.includes("<h3>Payroll History</h3>") && dist.includes("<h3>Overtime History</h3>"), 'Employee timeline (Payroll + Overtime History) present');
@@ -291,7 +294,7 @@ check(meta.version === '2.8.5', 'APP_VERSION is 2.8.5 (this development release)
 // They are derived from meta wherever possible so they do not need editing next release.
 check(meta.releaseName === 'Workspace & Contract Timeline Integrity', 'APP_RELEASE_NAME is the approved v2.8.5 release name');
 check(!/tam-intelligence-os-v2\.8\.4\.html/.test(distArtifacts.join('|')), 'no tracked current artifact remains under the superseded v2.8.4 filename');
-check(read(path.join(root, 'index.html')).includes('<title>TAM Intelligence OS v' + meta.version + '</title>'), 'index.html <title> agrees with APP_VERSION');
+check(read(path.join(root, 'index.html')).includes('<title>TAM OS v' + meta.version + '</title>'), 'index.html <title> agrees with APP_VERSION');
 const relNotes = read(path.join(root, 'RELEASE_NOTES.md'));
 const changelog = read(path.join(root, 'CHANGELOG.md'));
 check(relNotes.includes(meta.version), 'RELEASE_NOTES.md documents v' + meta.version);
@@ -2303,10 +2306,14 @@ const ux4bSyncBody = (ux4bShell.match(/function syncShellState\(\)\{[\s\S]*?\n\}
 check(/\bnavActive\s*\(/.test(ux4bSyncBody), 'syncShellState() resolves active state through navActive() (manifest, not ad-hoc)');
 // (8) Exact-match-only active logic is gone: navGroupHTML no longer keys active off State.view===id.
 const ux4bNavGroupBody = (ux4bShell.match(/function navGroupHTML\(g\)\{[\s\S]*?\n\}/)||[''])[0];
-check(!/State\.view===n\.id/.test(ux4bNavGroupBody) && /active\.item/.test(ux4bNavGroupBody),
-  'navGroupHTML() drives active state from the resolved active item, not exact State.view equality');
+// UX-004F refactor: the per-item button markup (incl. active class + aria-current)
+// moved into navItemHTML(); navGroupHTML() composes primary items + the "More"
+// disclosure from it. Active-state resolution is proven against navItemHTML.
+const ux4bNavItemBody = (ux4bShell.match(/function navItemHTML\(n, activeItem\)\{[\s\S]*?\n\}/)||[''])[0];
+check(!/State\.view===n\.id/.test(ux4bNavItemBody) && /activeItem/.test(ux4bNavItemBody) && /active\.item/.test(ux4bNavGroupBody),
+  'navGroupHTML()/navItemHTML() drive active state from the resolved active item, not exact State.view equality');
 // (9/10) aria-current is applied to the active item and cleared from non-active items.
-check(/aria-current/.test(ux4bNavGroupBody), 'navGroupHTML() marks the active item with aria-current="page"');
+check(/aria-current/.test(ux4bNavItemBody), 'navItemHTML() marks the active item with aria-current="page"');
 check(/setAttribute\('aria-current','page'\)/.test(ux4bSyncBody) && /removeAttribute\('aria-current'\)/.test(ux4bSyncBody),
   'syncShellState() sets aria-current on the active item and removes it from every non-active item');
 // (11) Exactly one navigation landmark with an accessible name.
@@ -2597,7 +2604,7 @@ check(/_sidebarFocusReturn/.test(ux4eBody('closeSidebarDrawer')) && /\.focus\(\)
 // (9) Active-state / breadcrumb / Quick Action logic untouched: navGroupHTML still marks
 //     aria-current, and the label is now wrapped (labels hide when collapsed) without
 //     changing the active resolution.
-check(/aria-current="page"/.test(ux4bNavGroupBody) && /class="nav-label"/.test(ux4eShell),
+check(/aria-current="page"/.test(ux4bNavItemBody) && /class="nav-label"/.test(ux4eShell),
   'UX-004E: nav labels are wrapped for collapse while aria-current active-state is unchanged');
 check(/const QUICK_ACTIONS_BY_VIEW/.test(ux4eShell) && (ux4eShell.match(/aria-label="Breadcrumb"/g)||[]).length===1,
   'UX-004E: breadcrumb + Quick Action logic remain present and unchanged (one Breadcrumb landmark)');
@@ -2609,12 +2616,96 @@ check(/\.nav-hamburger\{/.test(ux4eCss) && /\.sidebar-backdrop\{/.test(ux4eCss),
 check(/@media \(max-width:768px\)\{/.test(ux4eCss) && /transform:translateX\(-100%\)/.test(ux4eCss), 'UX-004E CSS: responsive drawer (off-canvas transform) present');
 check(/@media \(min-width:769px\) and \(hover:hover\)\{/.test(ux4eCss) && /\.sidebar\.collapsed:hover\{width:258px/.test(ux4eCss), 'UX-004E CSS: desktop hover-expand present');
 check(/transition:width \.2s/.test(ux4eCss), 'UX-004E CSS: sidebar width transition (animation) present');
-// (12) CSS golden-master pin advanced exactly once for UX-004E.
-check(CSS_GOLDEN_SHA256 === '90412710de6e9bbe3c24a0be7f2d57d69480861d965a6a3811e911c0132b3bce',
-  'UX-004E: CSS golden-master pin advanced once to the UX-004E digest');
+// (12) UX-004E sidebar-interaction CSS is present in the pinned golden master.
+check(/\.sidebar\.collapsed\{width:/.test(ux4eCss) && /\.nav-hamburger\{/.test(ux4eCss),
+  'UX-004E: sidebar-interaction CSS is present in the pinned golden master');
 // (13) Runtime harness present.
 check(fs.existsSync(path.join(root,'tools','verify-sidebar-interaction-runtime.js')),
   'UX-004E runtime harness present: tools/verify-sidebar-interaction-runtime.js');
+
+/* ============================================================
+   UX-004F — NAVIGATION SIMPLIFICATION & TAM OS REBRAND
+   Static guards. Behaviour is proven by tools/verify-nav-simplification-runtime.js.
+   Presentation only: ids/routes/views/business logic unchanged; historical evidence
+   preserved. ux4eShell (js/ui/shell-render.js) is already read above.
+   ============================================================ */
+console.log('== UX-004F NAVIGATION SIMPLIFICATION + TAM OS REBRAND INVARIANTS ==');
+const ux4fShell = ux4eShell;
+const ux4fConstants = read(path.join(root,'js','core','constants.js'));
+const ux4fCss = ux4eCss;
+
+// ---- rebrand: official product name is "TAM OS" ----
+check(/const APP_NAME = 'TAM OS';/.test(ux4fConstants), 'UX-004F: APP_NAME is "TAM OS"');
+check(!/const APP_NAME = 'TAM Intelligence OS';/.test(ux4fConstants), 'UX-004F: the old product name is no longer the APP_NAME');
+check(dist.includes('<title>TAM OS v' + meta.version + '</title>'), 'UX-004F: browser <title> rebranded to TAM OS');
+// Sidebar wordmark is "TAM OS" (both mfull and mshort), no "Intelligence" in the shell markup.
+const ux4fMark = (ux4fShell.match(/<div class="mark">[\s\S]*?<\/div>/)||[''])[0];
+check(/mfull">TAM(&nbsp;| )<span>OS<\/span>/.test(ux4fMark) && !/Intelligence/.test(ux4fMark),
+  'UX-004F: sidebar wordmark is "TAM OS" (no "Intelligence")');
+// No current-state in-app literal "TAM Intelligence OS" remains in the runtime JS,
+// EXCEPT the historical Release Notes array in settings-about.js (immutable history).
+const ux4fRuntimeJs = jsFiles.filter(f=>f!=='ui/settings-about.js').map(f=>read(path.join(root,'js',f))).join('\n');
+check(!/TAM Intelligence OS/.test(ux4fRuntimeJs),
+  'UX-004F: no current-state in-app "TAM Intelligence OS" literal remains (historical Release Notes excepted)');
+// Historical evidence preserved: the Release Notes array still records the old name.
+check(/TAM Intelligence OS/.test(read(path.join(root,'js','ui','settings-about.js'))),
+  'UX-004F: historical Release Notes still record the old "TAM Intelligence OS" name (history intact)');
+check(read(path.join(root,'CHANGELOG.md')).includes('TAM Intelligence OS'),
+  'UX-004F: CHANGELOG history is untouched (still records the old name)');
+
+// ---- navigation simplification: Finance primary + "More" disclosure ----
+const ux4fFinBlock = (ux4fShell.match(/\{id:'finance', label:'Finance', items:\[([\s\S]*?)\]\},/)||[,''])[1];
+const ux4fFinIds = [...ux4fFinBlock.matchAll(/\{id:'([a-zA-Z]+)'/g)].map(m=>m[1]);
+const ux4fPrimary = [...ux4fFinBlock.matchAll(/\{id:'([a-zA-Z]+)',[^}]*\}/g)].filter(m=>!/more:true/.test(m[0])).map(m=>m[1]);
+const ux4fMore = [...ux4fFinBlock.matchAll(/\{id:'([a-zA-Z]+)',[^}]*\}/g)].filter(m=>/more:true/.test(m[0])).map(m=>m[1]);
+// Finance still owns all 15 destinations (no id added/removed): route stability.
+check(ux4fFinIds.length === 15, 'UX-004F: Finance still contains all 15 destinations (no route removed) — found ' + ux4fFinIds.length);
+check(JSON.stringify(ux4fPrimary) === JSON.stringify(['financeOverview','payroll','transactions','monthlyplan']),
+  'UX-004F: exactly four Finance PRIMARY items (Overview/Payroll/Transactions/Planning): ' + ux4fPrimary.join(','));
+check(ux4fMore.length === 11 && ['overtime','supplementals','add','recurring','cashflow','budgetcenter','executioncenter','bankaccounts','projects','vendors','calendar'].every(id=>ux4fMore.includes(id)),
+  'UX-004F: every other Finance destination is disclosed under "More" (' + ux4fMore.length + ' items)');
+// Simplified labels (labels only — ids above are unchanged).
+[["financeOverview","Overview"],["payroll","Payroll"],["monthlyplan","Planning"],["supplementals","Supplements"],["add","Import"],["executioncenter","Execution"],["recurring","Recurring"]].forEach(([id,label])=>{
+  check(new RegExp("\\{id:'"+id+"', label:'"+label+"'").test(ux4fShell), 'UX-004F: '+id+' label simplified to "'+label+'"');
+});
+// The "More" disclosure machinery: derived-open helper, item helper, toggle wiring, sync.
+check(/function navItemHTML\(n, activeItem\)\{/.test(ux4fShell) && /function navMoreOpen\(g, activeItem\)\{/.test(ux4fShell),
+  'UX-004F: navItemHTML() + navMoreOpen() helpers exist');
+check(/class="nav-item nav-more-head" data-more=/.test(ux4fShell) && /class="nav-more-items"/.test(ux4fShell),
+  'UX-004F: the "More" toggle + container are rendered');
+const ux4fBindBody = (ux4fShell.match(/function bindShell\(app\)\{[\s\S]*?\n\}/)||[''])[0];
+check(/\[data-more\]/.test(ux4fBindBody) && /State\.navMore\[g\]=!State\.navMore\[g\]/.test(ux4fBindBody),
+  'UX-004F: bindShell wires the "More" disclosure toggle (session-only)');
+const ux4fSyncBody = (ux4fShell.match(/function syncShellState\(\)\{[\s\S]*?\n\}/)||[''])[0];
+check(/\[data-more\]/.test(ux4fSyncBody) && /navMoreOpen\(/.test(ux4fSyncBody),
+  'UX-004F: syncShellState re-syncs the "More" disclosure in place (no shell remount)');
+// Progressive-disclosure state is session-only (declared like navCollapsed, never persisted).
+check(/navMore:\s*\{\}/.test(read(path.join(root,'js','core','state.js'))), 'UX-004F: navMore is a session-only State field');
+check(!/navMore/.test(['core/hr-persistence-portability.js','core/stabilization.js','core/state-load-migrations.js'].map(f=>read(path.join(root,'js',f))).join('\n')),
+  'UX-004F: navMore is never persisted (no storage path references it)');
+
+// ---- preserved architecture ----
+check((ux4fShell.match(/<nav class="nav" aria-label="Primary navigation">/g)||[]).length === 1, 'UX-004F: still exactly one Primary-navigation landmark');
+check((ux4fShell.match(/aria-label="Breadcrumb"/g)||[]).length === 1 && /const QUICK_ACTIONS_BY_VIEW/.test(ux4fShell), 'UX-004F: breadcrumb + Quick Action systems unchanged');
+check((ux4fShell.match(/\bfunction\s+renderShell\s*\(/g)||[]).length === 1 && (ux4fShell.match(/\bfunction\s+navGroupHTML\s*\(/g)||[]).length === 1, 'UX-004F: single persistent-shell renderer preserved');
+check(/aria-expanded="\$\{moreOpen\}"/.test(ux4fShell), 'UX-004F: the "More" toggle exposes aria-expanded');
+// Five-domain grouping unchanged (exactly the five approved groups, same ids).
+const ux4fGroupIds = [...ux4fShell.matchAll(/\{id:'(dashboard|people|finance|analytics|system)', label:'/g)].map(m=>m[1]);
+check(JSON.stringify(ux4fGroupIds) === JSON.stringify(['dashboard','people','finance','analytics','system']), 'UX-004F: the five-domain grouping is unchanged');
+
+// ---- quieter placeholder badge (feature preserved) ----
+check(/comingSoon:'Soon'/.test(ux4fShell), 'UX-004F: placeholder badge is the quieter "Soon"');
+check(/projects:\s*\{ status:'comingSoon'/.test(ux4fShell) && /vendors:\s*\{ status:'comingSoon'/.test(ux4fShell) && /calendar:\s*\{ status:'comingSoon'/.test(ux4fShell),
+  'UX-004F: placeholder features (Projects/Vendors/Financial Calendar) are preserved');
+check(/\.nav-preview-tag\{[^}]*background:transparent/.test(ux4fCss) && /\.nav-preview-tag\{[^}]*font-weight:500/.test(ux4fCss),
+  'UX-004F: the placeholder badge is visually quieter (no fill, normal weight)');
+
+// ---- invariants unchanged ----
+check(/const SCHEMA_VERSION = 6;/.test(ux4fConstants), 'UX-004F: SCHEMA_VERSION remains 6');
+check(/const APP_VERSION = '2\.8\.5';/.test(ux4fConstants) && /const APP_RELEASE_NAME = 'Workspace & Contract Timeline Integrity';/.test(ux4fConstants),
+  'UX-004F: APP_VERSION and APP_RELEASE_NAME are unchanged');
+check(fs.existsSync(path.join(root,'tools','verify-nav-simplification-runtime.js')),
+  'UX-004F runtime harness present: tools/verify-nav-simplification-runtime.js');
 
 // UX-002B PHASE 1 — TYPOGRAPHY / TOKEN / THEME INVARIANTS.
 // These convert design rules that were previously only conventions into
