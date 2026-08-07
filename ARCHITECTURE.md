@@ -7,8 +7,9 @@ released from annotated tag `v2.8.5`, which peels to the published baseline comm
 **Current distributable:** `dist/tam-intelligence-os-v2.8.5.html`. At the **v2.8.5 publication commit**
 the repository artifact and the published Release asset were byte-identical (965,767 bytes, SHA-256
 `32e624a262ef1da47bd4ec849471ff98e428402c33722db1715cf1c23a7db8cb`). **`main` has since taken
-post-release development (UX-004B — Sidebar & Navigation foundation)**, so the repository artifact is now
-**968,800 bytes**, SHA-256 `8f1d5130bf8241bba1d02e58df6a801733039f22048063cf0c1f52011535efc9`, and no
+post-release development (UX-004B — Sidebar & Navigation foundation, then UX-004C — Domain Regrouping)**,
+so the repository artifact is now **969,255 bytes**, SHA-256
+`c25426dd03dd0bf60c42eaa5fc10ea93f78f0b06383840ce660493b1be616001`, and no
 longer equals the published asset. This is expected post-release development divergence: the **published
 v2.8.5 tag, Release, and 965,767-byte asset are immutable and unchanged**; only `main` moved forward.
 `SCHEMA_VERSION` is 6, unchanged.

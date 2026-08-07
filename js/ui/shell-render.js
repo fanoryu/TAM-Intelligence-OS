@@ -83,45 +83,48 @@ function featureBadgeHTML(id){
   const txt = FEATURE_BADGE_TEXT[f.status]; if(!txt) return '';
   return `<span class="nav-preview-tag" title="${escapeHtml(f.tooltip||txt)}">${txt}</span>`;
 }
+// UX-004C — DOMAIN REGROUPING. Exactly five top-level groups in the approved
+// order: Dashboard, People, Finance, Analytics, System — business domains, not
+// implementation history. Every item is an EXISTING view; ids, labels, icons and
+// placeholder flags are unchanged — only group membership and order changed. The
+// UX-004B manifest keeps working automatically: NAV_VIEW_OWNER maps context routes
+// to their owning item, and navItemGroup() derives each group from THIS structure,
+// so hierarchical active-state follows the regrouping with no per-view logic.
 const NAV_GROUPS = [
-  {id:'executive', label:'Executive', items:[
+  {id:'dashboard', label:'Dashboard', items:[
     {id:'execDashboard', label:'Executive Dashboard', ic:'◆'},
+    {id:'execinsights', label:'Executive Insights', ic:'✦'},
+  ]},
+  {id:'people', label:'People', items:[
+    {id:'employees', label:'Employees', ic:'☺'},
+    {id:'contracts', label:'Contracts', ic:'▦'},
   ]},
   {id:'finance', label:'Finance', items:[
     {id:'financeOverview', label:'Finance Overview', ic:'▣'},
-    {id:'executioncenter', label:'Execution Center', ic:'⚡︎'}, // v2.6.3c — VS-15 forces monochrome text (was a colored emoji that stood out)
-    {id:'transactions', label:'Transactions', ic:'≡'},
-    {id:'add', label:'Add / Upload', ic:'+'},
-    {id:'cashflow', label:'Cash Flow', ic:'∼'},
-    {id:'budgetcenter', label:'Budget Center', ic:'▥'},
-  ]},
-  {id:'people', label:'People & Contracts', items:[
-    {id:'employees', label:'Employees', ic:'☺'},
-    {id:'contracts', label:'Contracts', ic:'▦'},
     {id:'payroll', label:'Payroll Workspace', ic:'৳'},
     {id:'overtime', label:'Overtime', ic:'⏱'},
     {id:'supplementals', label:'Supplemental Payments', ic:'⊕'},
     {id:'monthlyplan', label:'Monthly Plan Generator', ic:'⊞'},
+    {id:'transactions', label:'Transactions', ic:'≡'},
+    {id:'add', label:'Add / Upload', ic:'+'},
+    {id:'recurring', label:'Recurring Expenses', ic:'↻'},
+    {id:'cashflow', label:'Cash Flow', ic:'∼'},
+    {id:'budgetcenter', label:'Budget Center', ic:'▥'},
+    {id:'executioncenter', label:'Execution Center', ic:'⚡︎'}, // v2.6.3c — VS-15 forces monochrome text (was a colored emoji that stood out)
+    {id:'bankaccounts', label:'Bank Accounts', ic:'▦'},
+    {id:'projects', label:'Projects', ic:'▢', placeholder:true},
+    {id:'vendors', label:'Vendors', ic:'▢', placeholder:true},
+    {id:'calendar', label:'Financial Calendar', ic:'▢', placeholder:true},
   ]},
   {id:'analytics', label:'Analytics', items:[
     {id:'planvsactual', label:'Planned vs Actual', ic:'⇄'},
     {id:'compare', label:'Compare Months', ic:'⧉'},
     {id:'trends', label:'Monthly Trends', ic:'∿'},
-    {id:'execinsights', label:'Executive Insights', ic:'✦'},
-  ]},
-  {id:'operations', label:'Operations', items:[
-    {id:'recurring', label:'Recurring Expenses', ic:'↻'},
-    {id:'projects', label:'Projects', ic:'▢', placeholder:true},
-    {id:'vendors', label:'Vendors', ic:'▢', placeholder:true},
-  ]},
-  {id:'management', label:'Management', items:[
-    {id:'calendar', label:'Financial Calendar', ic:'▢', placeholder:true},
     {id:'reports', label:'Reports', ic:'▤'},
-    {id:'activity', label:'Activity Log', ic:'▤'},
   ]},
   {id:'system', label:'System', items:[
     {id:'settings', label:'Settings', ic:'⚙'},
-    {id:'bankaccounts', label:'Bank Accounts', ic:'▦'},
+    {id:'activity', label:'Activity Log', ic:'▤'},
     {id:'about', label:'About', ic:'ℹ'},
     {id:'releasenotes', label:'Release Notes', ic:'▤'},
   ]},

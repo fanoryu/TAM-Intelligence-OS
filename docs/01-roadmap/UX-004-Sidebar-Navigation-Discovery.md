@@ -253,15 +253,43 @@ a `prompt()`-based Schedule action). Click-path baseline (source-traced): contra
 overtime approval **3**, **payroll execution ~10** clicks spanning two separate nav destinations —
 which Constraint 2 targets by navigation, not by removing steps.
 
-## 4. Proposed Domain Grouping (7 → 5)
+## 4. Domain Grouping (7 → 5)
 
-| Proposed group | Absorbs |
+> **Finalized by UX-004C.** The table below is the **finalized five-domain model** that UX-004C
+> implements. It **supersedes the original discovery proposal** (preserved beneath it for the record).
+> The frozen §1 constraints and §5.1 scope decisions are unchanged by this finalization.
+
+| Domain (finalized) | Items |
 |---|---|
-| **Dashboard** | Executive Dashboard, Executive Insights, Reports |
-| **People** | Employees, Contracts, Payroll Workspace, Overtime, Supplemental Payments, Monthly Plan Generator |
-| **Finance** | Finance Overview, Execution Center, Transactions, Add/Upload, Cash Flow, Budget Center, Recurring Expenses, Bank Accounts |
-| **Analytics** | Planned vs Actual, Compare Months, Monthly Trends |
-| **System** | Settings, About, Release Notes, Activity Log |
+| **Dashboard** | Executive Dashboard, Executive Insights |
+| **People** | Employees, Contracts |
+| **Finance** | Finance Overview, Payroll Workspace, Overtime, Supplemental Payments, Monthly Plan Generator, Transactions, Add/Upload, Recurring Expenses, Cash Flow, Budget Center, Execution Center, Bank Accounts, Projects*, Vendors*, Financial Calendar* |
+| **Analytics** | Planned vs Actual, Compare Months, Monthly Trends, Reports |
+| **System** | Settings, Activity Log, About, Release Notes |
+
+*Projects / Vendors / Financial Calendar are `comingSoon` placeholders.*
+
+**Product decision (finalized in UX-004C).** Payroll, Overtime, Supplemental Payments and Monthly Plan
+are **Finance**, not People: their primary function is financial processing, and grouping them with
+Execution Center keeps the *Payroll → Execution* flow inside one domain. **Reports** is **Analytics**
+(an analytical workspace), not Dashboard (executive consumption/overview). **Executive Insights** stays
+in **Dashboard**. **Employees** and **Contracts** remain **People** (workforce master data). The
+**Finance** group being larger than the others is an accepted trade-off; internal visual sub-hierarchy
+is deferred to later UX refinement and must not change canonical domain ownership without a new product
+decision.
+
+> **Original discovery proposal (superseded — kept for the record).** The grouping first *proposed*
+> during discovery differed: it placed Payroll Workspace / Overtime / Supplemental Payments / Monthly
+> Plan Generator under **People**, and Reports under **Dashboard**. That was a proposal, not a frozen
+> decision; the finalized model above is authoritative.
+>
+> | Proposed group (discovery) | Absorbs |
+> |---|---|
+> | Dashboard | Executive Dashboard, Executive Insights, Reports |
+> | People | Employees, Contracts, Payroll Workspace, Overtime, Supplemental Payments, Monthly Plan Generator |
+> | Finance | Finance Overview, Execution Center, Transactions, Add/Upload, Cash Flow, Budget Center, Recurring Expenses, Bank Accounts |
+> | Analytics | Planned vs Actual, Compare Months, Monthly Trends |
+> | System | Settings, About, Release Notes, Activity Log |
 
 ## 5. Future Module Placement
 

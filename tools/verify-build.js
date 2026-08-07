@@ -2321,6 +2321,81 @@ const ux4bForbiddenViews = ['hrDashboard','backupRestore','importExport','import
 check(ux4bForbiddenViews.length === 0, 'no frozen-scope standalone view was introduced (HR Dashboard / Backup & Restore / Import-Export Center)'
   + (ux4bForbiddenViews.length ? ' >> VIOLATION: ' + ux4bForbiddenViews.join(', ') : ''));
 
+// UX-004C — DOMAIN REGROUPING. The sidebar is exactly five business-domain groups
+// in a fixed order, every existing item lives in exactly one group, and the manifest
+// owners resolve to the approved domains. These read NAV_GROUPS structurally, so a
+// regression (a lost/duplicated item, a renamed/reordered group, a mis-homed owner,
+// or a frozen-scope violation) cannot pass verification. UX-004B checks above are
+// untouched — this layer rides on the same manifest.
+console.log('== UX-004C DOMAIN REGROUPING (five-domain navigation model) ==');
+// Parse NAV_GROUPS: ordered list of {id,label,items:[itemId,...]}.
+const ux4cGroupsBlock = (ux4bShell.match(/const\s+NAV_GROUPS\s*=\s*\[([\s\S]*?)\n\];/)||[,''])[1];
+const ux4cGroups = [];
+{
+  const gre = /\{id:'([a-z]+)',\s*label:'([^']*)',\s*items:\[([\s\S]*?)\]\}/g;
+  let gm;
+  while((gm = gre.exec(ux4cGroupsBlock)) !== null){
+    const items = [...gm[3].matchAll(/\{id:'([a-zA-Z]+)'/g)].map(m=>m[1]);
+    ux4cGroups.push({id:gm[1], label:gm[2], items:items});
+  }
+}
+const ux4cOrder = ux4cGroups.map(g=>g.label);
+const ux4cGroupOf = {}; ux4cGroups.forEach(g=>g.items.forEach(it=>{ (ux4cGroupOf[it]=ux4cGroupOf[it]||[]).push(g.label); }));
+const ux4cAllItems = ux4cGroups.flatMap(g=>g.items);
+// (1) Exactly five top-level groups.
+check(ux4cGroups.length === 5, 'exactly five top-level navigation groups (found ' + ux4cGroups.length + ')');
+// (2) Group labels are exactly the approved five domain names (as a set).
+const ux4cExpected = ['Dashboard','People','Finance','Analytics','System'];
+check(ux4cExpected.every(l=>ux4cOrder.includes(l)) && ux4cOrder.length === 5,
+  'group labels are exactly Dashboard, People, Finance, Analytics, System (found ' + ux4cOrder.join(', ') + ')');
+// (3) Group order is exactly the approved sequence.
+check(JSON.stringify(ux4cOrder) === JSON.stringify(ux4cExpected),
+  'group order is exactly Dashboard -> People -> Finance -> Analytics -> System (found ' + ux4cOrder.join(' -> ') + ')');
+// (4/5/6) Every existing nav item appears exactly once — none lost, none duplicated.
+const ux4cDupes = Object.entries(ux4cGroupOf).filter(([,gs])=>gs.length>1).map(([it,gs])=>it+' in '+gs.join('+'));
+check(ux4cDupes.length === 0, 'no nav item appears in more than one group'
+  + (ux4cDupes.length ? ' >> VIOLATION: ' + ux4cDupes.join(', ') : ''));
+check(ux4cAllItems.length === new Set(ux4cAllItems).size && new Set(ux4cAllItems).size === ux4bNavItems.size,
+  'every sidebar item appears exactly once across the five groups (' + ux4cAllItems.length + ' items, no loss/duplication vs the item set)');
+// (7) Every manifest owner resolves to an item that lives in the five-group model.
+const ux4cOwnerOrphans = Object.values(ux4bOwner).filter(item=>!ux4cGroupOf[item]);
+check(ux4cOwnerOrphans.length === 0, 'every NAV_VIEW_OWNER owner resolves to an item within the five-group model'
+  + (ux4cOwnerOrphans.length ? ' >> VIOLATION: ' + ux4cOwnerOrphans.join(', ') : ''));
+// Helper: the single group label an item belongs to.
+const ux4cIn = (item, label)=> (ux4cGroupOf[item]||[]).length === 1 && ux4cGroupOf[item][0] === label;
+// (8/9) People domain.
+check(ux4cIn('employees','People'), 'Employees resolves to the People domain');
+check(ux4cIn('contracts','People'), 'Contracts resolves to the People domain');
+// (10/11/12) Finance domain — the payroll workflow surfaces.
+check(ux4cIn('payroll','Finance'), 'Payroll resolves to the Finance domain');
+check(ux4cIn('overtime','Finance'), 'Overtime resolves to the Finance domain');
+check(ux4cIn('supplementals','Finance'), 'Supplemental Payments resolves to the Finance domain');
+// (13) Analytics domain.
+check(ux4cIn('reports','Analytics'), 'Reports resolves to the Analytics domain');
+// (14) System domain.
+check(ux4cIn('settings','System'), 'Settings resolves to the System domain');
+// Dashboard primary item.
+check(ux4cIn('execDashboard','Dashboard'), 'Executive Dashboard resolves to the Dashboard domain');
+// (15/16/17) Frozen scope: no standalone HR Dashboard, no top-level Backup & Restore,
+// no unified Import/Export Center item or group.
+check(!ux4cGroups.some(g=>/HR Dashboard/i.test(g.label)) && !/label:'HR Dashboard'/.test(ux4bShell),
+  'no standalone HR Dashboard nav item or group introduced');
+check(!/label:'Backup( &| and)? Restore'/i.test(ux4bShell) && !ux4cAllItems.includes('backupRestore'),
+  'no top-level Backup & Restore nav item introduced (stays inside Settings)');
+check(!/label:'Import ?\/ ?Export/i.test(ux4bShell) && !ux4cAllItems.some(i=>/importExport/i.test(i)),
+  'no unified Import/Export Center nav item or group introduced');
+// (18) UX-004B single-renderer + persistent-shell invariants remain intact (single
+//      NAV_GROUPS drives one renderer; no per-view group branching added).
+check((ux4bShell.match(/const\s+NAV_GROUPS\s*=\s*\[/g)||[]).length === 1
+  && (ux4bShell.match(/\bfunction\s+navGroupHTML\s*\(/g)||[]).length === 1
+  && !/State\.view\s*===\s*['"][a-zA-Z]+['"]\s*\?\s*'[a-z]+'/.test(ux4bShell),
+  'NAV_GROUPS is the single grouping source, one renderer, and no per-view group conditional was introduced');
+// (19) No stored navigation grouping state — the shell layer still persists nothing.
+check(!/localStorage|StorageAdapter|persistHR|persist\(|saveSettings/.test(ux4bShell),
+  'no stored navigation grouping state (regrouping is session-only, derived from NAV_GROUPS)');
+// (20) SCHEMA_VERSION remains 6.
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'UX-004C keeps SCHEMA_VERSION at 6');
+
 // UX-002B PHASE 1 — TYPOGRAPHY / TOKEN / THEME INVARIANTS.
 // These convert design rules that were previously only conventions into
 // mechanically enforced invariants, so they cannot silently regress.
