@@ -4,11 +4,14 @@
 released from annotated tag `v2.8.5`, which peels to the published baseline commit
 `96a8d178987142fedd43372646abf9d597b8bac2` on `main`
 **Previous release:** v2.8.4 — Monthly Plan Result Integrity (still published and unchanged; no longer Latest)
-**Current distributable:** `dist/tam-intelligence-os-v2.8.5.html` — 965,767 bytes, SHA-256
-`32e624a262ef1da47bd4ec849471ff98e428402c33722db1715cf1c23a7db8cb`. The tag-triggered release workflow
-rebuilt and verified this artifact from the tagged commit before publishing it, so the **repository
-artifact and the published Release asset are byte-identical** — `main` carries no production change
-beyond the published Release. `SCHEMA_VERSION` is 6, unchanged by the release.
+**Current distributable:** `dist/tam-intelligence-os-v2.8.5.html`. At the **v2.8.5 publication commit**
+the repository artifact and the published Release asset were byte-identical (965,767 bytes, SHA-256
+`32e624a262ef1da47bd4ec849471ff98e428402c33722db1715cf1c23a7db8cb`). **`main` has since taken
+post-release development (UX-004B — Sidebar & Navigation foundation)**, so the repository artifact is now
+**968,800 bytes**, SHA-256 `8f1d5130bf8241bba1d02e58df6a801733039f22048063cf0c1f52011535efc9`, and no
+longer equals the published asset. This is expected post-release development divergence: the **published
+v2.8.5 tag, Release, and 965,767-byte asset are immutable and unchanged**; only `main` moved forward.
+`SCHEMA_VERSION` is 6, unchanged.
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for **JS provenance**
 and the data-safety invariants). Since UX-002B it is **no longer the CSS comparator**: CSS is asserted
 against a pinned SHA-256 of `concat(css/*.css)` — currently
