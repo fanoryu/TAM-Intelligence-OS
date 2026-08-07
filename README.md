@@ -45,13 +45,16 @@ Design principles:
 
 ## Current release
 
-**v2.8.6 — Navigation Experience & TAM OS Rebrand** · `SCHEMA_VERSION` 6 · *release candidate — prepared, not yet tagged or published*
+**v2.8.6 — Navigation Experience & TAM OS Rebrand** · `SCHEMA_VERSION` 6 · **published, marked Latest**
 
-> **Release state.** v2.8.6 is a **release candidate prepared on `main`** — **not yet tagged or
-> published**. **v2.8.5 remains the latest *published* release**, from annotated tag `v2.8.5` at commit
-> `96a8d17`; its published asset `tam-intelligence-os-v2.8.5.html` (965,767 bytes) is immutable. The
-> prior release, **v2.8.4 — Monthly Plan Result Integrity**, remains published and unchanged. See
-> [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a release is cut.
+> **Release state.** v2.8.6 is **published and marked Latest**, from annotated tag `v2.8.6` on commit
+> `7ac0092d`. Its published asset `tam-os-v2.8.6.html` (998,413 bytes, SHA-256
+> `8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`) is byte-identical to the repository
+> artifact and is the first release under the TAM OS naming convention. **v2.8.5 remains published**
+> (annotated tag `v2.8.5` at commit `96a8d17`, asset `tam-intelligence-os-v2.8.5.html`, 965,767 bytes,
+> immutable) and is simply no longer the Latest release; **v2.8.4 — Monthly Plan Result Integrity** also
+> remains published and unchanged. See [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a
+> release is cut.
 
 A navigation, presentation and naming release, packaging the complete UX-004 navigation modernization
 (UX-004B–UX-004F), the sidebar interaction hotfix, and the TAM OS rebrand. No business-logic or schema

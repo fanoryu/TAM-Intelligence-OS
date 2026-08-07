@@ -323,11 +323,14 @@ check(/version-2\.8\.6/.test(readmeSrc) && /v2\.8\.6 — Navigation Experience &
 // Current-state repository slug is TAM-OS in the current-state docs (historical audit/ files exempt).
 check(!/fanoryu\/TAM-Intelligence-OS/.test(readmeSrc + securitySrc + issueCfg) && /fanoryu\/TAM-OS/.test(readmeSrc),
   'current-state docs (README/SECURITY/issue-template) use the canonical fanoryu/TAM-OS slug');
-// The candidate must NOT claim it is already published/tagged.
-check(/not yet tagged or published/i.test(relNotes),
-  'RELEASE_NOTES.md states the candidate is prepared, not yet tagged or published');
-check(!/v2\.8\.6[^\n]*\b(is published|is live|is now available|was published|has been released)\b/i.test(relNotes),
-  'RELEASE_NOTES.md does not falsely claim v2.8.6 is published');
+// POST-PUBLICATION: v2.8.6 is published; the release paperwork must reflect the
+// published state and carry no stale "not yet tagged or published" current-state wording.
+check(/v2\.8\.6 is \*\*published/i.test(relNotes) && /marked Latest/i.test(relNotes),
+  'RELEASE_NOTES.md records v2.8.6 as published and marked Latest');
+check(!/not yet tagged or published/i.test(relNotes),
+  'RELEASE_NOTES.md carries no stale "not yet tagged or published" wording (v2.8.6 is published)');
+check(!/not yet tagged or published/i.test(readmeSrc) && !/release candidate — prepared/i.test(readmeSrc),
+  'README.md carries no stale pre-publication release-candidate wording');
 // UX-005 must not be claimed as shipped/included in this release.
 check(!/UX-005[^\n]*\b(shipped|included|delivered|released)\b/i.test(relNotes)
   && /UX-005 has not begun/i.test(relNotes),
@@ -335,6 +338,10 @@ check(!/UX-005[^\n]*\b(shipped|included|delivered|released)\b/i.test(relNotes)
 // The historical published asset filename is never rewritten to the new convention.
 check(/tam-intelligence-os-v2\.8\.5\.html/.test(relNotes) && /tam-os-v2\.8\.6\.html/.test(relNotes),
   'RELEASE_NOTES.md keeps the historical v2.8.5 asset filename and names the new tam-os-v2.8.6 artifact');
+// The Release workflow publishes future Releases under the current product name (TAM OS).
+const releaseYml = read(path.join(root, '.github', 'workflows', 'release.yml'));
+check(/--title "TAM OS \$TAG"/.test(releaseYml) && !/--title "TAM Intelligence OS \$TAG"/.test(releaseYml),
+  'release.yml publishes GitHub Release titles under the current product name (TAM OS)');
 // v2.7.1 polishing pass — snapshot metadata, single historical API, compact integrity badge.
 check(dist.includes('function overtimeSnapshotMeta('), 'overtime snapshot audit metadata helper present');
 check((dist.match(/overtimeSnapshotMeta:\s*overtimeSnapshotMeta\(/g)||[]).length === 1, 'the ONE remaining commit pipeline stores overtimeSnapshotMeta {recordCount,totalHours}');

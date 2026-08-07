@@ -78,7 +78,7 @@ jobs:
             gh release upload "$TAG" "$DIST" --clobber
           else
             gh release create "$TAG" "$DIST" \
-              --title "TAM Intelligence OS $TAG" \
+              --title "TAM OS $TAG" \
               --notes-file "$NOTES" \
               --verify-tag
           fi
