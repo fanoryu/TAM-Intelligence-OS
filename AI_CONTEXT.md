@@ -6,27 +6,27 @@ AI assistants get productive quickly. It is descriptive (what *is*), whereas
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
 there rather than duplicating it.
 
-**As of the current source state:** v2.8.5 — "Workspace & Contract Timeline Integrity";
-`SCHEMA_VERSION` 6. **v2.8.5 is tagged and published, and is the latest published release** — annotated
-tag `v2.8.5` peels to the published baseline commit `96a8d178987142fedd43372646abf9d597b8bac2` on
-`main`, and the GitHub Release *TAM Intelligence OS v2.8.5* is published (not draft, not prerelease) and
-marked Latest. v2.8.4 remains published and unchanged; it is no longer marked Latest. Publication
-created a tag and a GitHub Release only — it changed no source commit, runtime behavior, schema, or
-storage key.
+**As of the current source state:** v2.8.6 — "Navigation Experience & TAM OS Rebrand"; `SCHEMA_VERSION` 6.
+This is a **release candidate prepared on `main`** — **not yet tagged or published**. **v2.8.5 remains the
+latest *published* release** — annotated tag `v2.8.5` peels to the published baseline commit
+`96a8d178987142fedd43372646abf9d597b8bac2`, and the GitHub Release *TAM Intelligence OS v2.8.5* is
+published (not draft, not prerelease) and marked Latest. v2.8.4 remains published and unchanged; it is no
+longer marked Latest. Publication created a tag and a GitHub Release only — it changed no source commit,
+runtime behavior, schema, or storage key.
 
 **`main` now carries post-release development beyond the published v2.8.5 Release** (UX-004B — Sidebar &
 Navigation foundation, UX-004C — Domain Regrouping, UX-004D — Breadcrumbs, Context Quick Actions &
 Numeric Typography, UX-004E — Sidebar Interaction: collapse/pin/hover-expand + responsive drawer, then
-UX-004F — Navigation Simplification & TAM OS rebrand),
+UX-004F — Navigation Simplification & TAM OS rebrand, the UX-004 sidebar interaction hotfix, and now the v2.8.6 release preparation),
 so the repository artifact **no longer equals**
 the published asset. At the v2.8.5 publication commit they were byte-identical; the published tag,
 Release, and 965,767-byte asset are immutable and unchanged — only `main` moved forward. This is expected
 post-release development divergence:
 
-| | Repository `main` (post UX-004F) | Published v2.8.5 Release asset |
+| | Repository `main` (v2.8.6 candidate) | Published v2.8.5 Release asset |
 |---|---|---|
-| Artifact | `dist/tam-intelligence-os-v2.8.5.html` — **996,300 bytes** | `tam-intelligence-os-v2.8.5.html` — **965,767 bytes** |
-| SHA-256 | `e88b8fa9…eeadb9b1` | `32e624a262…1c23a7db8cb` |
+| Artifact | `dist/tam-os-v2.8.6.html` — **998,413 bytes** | `tam-intelligence-os-v2.8.5.html` — **965,767 bytes** |
+| SHA-256 | `8481523c…c91d3f62` | `32e624a262…1c23a7db8cb` |
 
 The superseded `dist/tam-intelligence-os-v2.8.4.html` was removed from `dist/` by the release dist-swap,
 as `docs/RELEASE-PROCESS.md` §2 requires; the historical v2.8.4 tag, Release, and published asset
@@ -299,7 +299,7 @@ labels so exported terminology matches the screen.
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1853** on current `main`),
+  the portable single file, and a verifier runs a suite of invariant checks (**1855** on current `main`),
   joined by **fifteen** runtime harnesses (**1467** checks). PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
@@ -446,7 +446,7 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1853** checks) plus **fifteen**
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1855** checks) plus **fifteen**
   Node runtime harnesses (**1467** checks total: contract timeline 349, integrity warning rules 146,
   integrity payroll rules 144, Contract Core 129, monthly plan 118, payroll posting 106,
   contract persistence 74, payroll committed state 72, contract renewal 67, integrity rules 67,

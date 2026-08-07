@@ -4,7 +4,7 @@
  * -----------------------------------------------------------------
  * Reassembles the modular source (index.html + css/ + js/) into the
  * portable single-file release:
- *     dist/tam-intelligence-os-v${APP_VERSION}.html
+ *     dist/tam-os-v.html
  *
  * The version is NEVER hardcoded here: it is derived from the single
  * source of truth, js/core/constants.js (APP_VERSION), via app-version.js.
@@ -51,7 +51,7 @@ fs.mkdirSync(outDir, { recursive: true });
 const outPath = meta.distPath;
 
 // Guard: the generated dist filename MUST embed APP_VERSION exactly (requirement 8).
-if (path.basename(outPath) !== 'tam-intelligence-os-v' + meta.version + '.html') {
+if (path.basename(outPath) !== 'tam-os-v' + meta.version + '.html') {
   throw new Error('Generated dist filename "' + path.basename(outPath) + '" does not match APP_VERSION ' + meta.version + '.');
 }
 // Guard: the assembled HTML must actually carry this version (title + APP_VERSION const).

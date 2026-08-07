@@ -4,14 +4,14 @@
 released from annotated tag `v2.8.5`, which peels to the published baseline commit
 `96a8d178987142fedd43372646abf9d597b8bac2` on `main`
 **Previous release:** v2.8.4 — Monthly Plan Result Integrity (still published and unchanged; no longer Latest)
-**Current distributable:** `dist/tam-intelligence-os-v2.8.5.html`. At the **v2.8.5 publication commit**
+**Current distributable:** `dist/tam-os-v2.8.6.html`. At the **v2.8.5 publication commit**
 the repository artifact and the published Release asset were byte-identical (965,767 bytes, SHA-256
 `32e624a262ef1da47bd4ec849471ff98e428402c33722db1715cf1c23a7db8cb`). **`main` has since taken
 post-release development (UX-004B — Sidebar & Navigation foundation, UX-004C — Domain Regrouping,
 UX-004D — Breadcrumbs, Context Quick Actions & Numeric Typography, UX-004E — Sidebar Interaction:
-collapse/pin/hover-expand + responsive drawer, then UX-004F — Navigation Simplification & TAM OS rebrand)**,
-so the repository artifact is now **996,300 bytes**, SHA-256
-`e88b8fa9805bf4ff7429878d8f5d6d2c37fbd81fa6b13853b359cb1beeadb9b1`, and no
+collapse/pin/hover-expand + responsive drawer, UX-004F — Navigation Simplification & TAM OS rebrand, the UX-004 sidebar interaction hotfix, then the v2.8.6 release preparation)**,
+so the repository artifact is now **998,413 bytes** under the TAM OS naming `dist/tam-os-v2.8.6.html`, SHA-256
+`8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`, and no
 longer equals the published asset. This is expected post-release development divergence: the **published
 v2.8.5 tag, Release, and 965,767-byte asset are immutable and unchanged**; only `main` moved forward.
 `SCHEMA_VERSION` is 6, unchanged.
@@ -28,7 +28,7 @@ portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **65 of the 66 are bro
 load-order manifest and `index.html` agree on all 65 — and `js/cli/cli.js` is the CLI-only ingress,
 deliberately outside the browser load order. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
-**Verification:** `tools/verify-build.js` — **1853** checks; **fifteen** Node runtime harnesses — **1467**
+**Verification:** `tools/verify-build.js` — **1855** checks; **fifteen** Node runtime harnesses — **1467**
 checks (contract timeline 349, integrity warning rules 146, integrity payroll rules 144, Contract Core 129,
 monthly plan 118, payroll posting 106, contract persistence 74, payroll committed state 72,
 contract renewal 67, integrity rules 67, breadcrumb & quick actions 64, sidebar interaction 34, nav simplification 25, sidebar click regression 11,
@@ -107,7 +107,7 @@ flowchart TD
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>1853 invariant checks"]
+  VERIFY["tools/verify-build.js<br/>1855 invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX
