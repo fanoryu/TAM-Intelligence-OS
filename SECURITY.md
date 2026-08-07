@@ -10,7 +10,7 @@ with care.
 
 Report privately through GitHub Security Advisories:
 
-- <https://github.com/fanoryu/TAM-Intelligence-OS/security/advisories/new>
+- <https://github.com/fanoryu/TAM-OS/security/advisories/new>
 
 If you cannot use Security Advisories, contact the repository owner (**@fanoryu**) privately through
 GitHub. Do not disclose the issue publicly until it has been addressed.
