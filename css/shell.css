@@ -95,10 +95,20 @@
 .nav-group-head:hover{color:var(--text-dim);}
 .nav-group-head .chev{font-size:var(--fs-1);}
 .nav-group-items{display:flex;flex-direction:column;gap:2px;}
+/* UX-004F — quieter placeholder badge: same meaning, much lower visual weight. The
+   heavy filled uppercase pill becomes a light, low-contrast tag (no fill, normal
+   weight, subtle case) so planned features read as background information. */
 .nav-preview-tag{
-  margin-left:auto;font-size:var(--fs-1);font-weight:700;text-transform:uppercase;letter-spacing:.3px;
-  background:var(--surface-3);color:var(--text-dim);padding:1px var(--space-1);border-radius:var(--radius-md);
+  margin-left:auto;font-size:var(--fs-1);font-weight:500;text-transform:none;letter-spacing:.2px;
+  background:transparent;color:var(--text-faint);padding:0;border-radius:0;opacity:.75;
 }
+/* UX-004F — "More" progressive-disclosure toggle inside a nav group. Styled like a
+   nav item but visually quieter (it is a control, not a destination). */
+.nav-more-head{color:var(--text-faint);}
+.nav-more-head .chev{margin-left:auto;font-size:var(--fs-1);}
+.nav-more-items{display:flex;flex-direction:column;gap:2px;}
+/* Collapsed rail: the short wordmark "TAM OS" must fit 64px without clipping "OS". */
+.sidebar.collapsed .brand .mark{font-size:var(--fs-3);}
 .nav-item{
   display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);color:var(--text-dim);
   font-size:var(--fs-3);font-weight:500;border:none;background:transparent;text-align:left;width:100%;

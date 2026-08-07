@@ -60,7 +60,7 @@ function onboardingChecklistHTML(){
   if(done===steps.length) return '';
   return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
     <h3>Getting Started <span class="tag">${done}/${steps.length} complete</span><button class="btn btn-sm" id="dismissOnb" style="float:right;">Dismiss</button></h3>
-    <p class="hint" style="margin:-6px 0 12px;">Set up TAM Intelligence OS with your real data. Click any step to jump there. This checklist never blocks navigation.</p>
+    <p class="hint" style="margin:-6px 0 12px;">Set up TAM OS with your real data. Click any step to jump there. This checklist never blocks navigation.</p>
     <div class="insight-list">${steps.map((s,i)=>`<div class="insight-item ${s.done?'good':''}" style="cursor:pointer;" data-onb="${s.view}"><b style="min-width:18px;display:inline-block;">${s.done?'✓':(i+1)+'.'}</b> ${escapeHtml(s.label)}</div>`).join('')}</div>
   </div>`;
 }
@@ -104,7 +104,7 @@ async function maybeShowFirstRunChoice(){
   const list = nonZero.map(k=>`<b>${counts[k]} ${escapeHtml(k.toLowerCase())}</b>`).join(', ');
   openModalHTML(`
     <h3>Existing data detected</h3>
-    <p class="dim" style="font-size:13px;line-height:1.7;">TAM Intelligence OS v${APP_VERSION} ships clean, but this browser already holds data from an earlier version — ${list}. Your data has <b>not</b> been changed. Choose how to proceed:</p>
+    <p class="dim" style="font-size:13px;line-height:1.7;">TAM OS v${APP_VERSION} ships clean, but this browser already holds data from an earlier version — ${list}. Your data has <b>not</b> been changed. Choose how to proceed:</p>
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
       <button class="btn btn-accent" id="frKeep">Keep Existing Data</button>
       <button class="btn" id="frFresh">Export Backup &amp; Start Fresh…</button>
@@ -122,7 +122,7 @@ async function startFresh(){
   // 1. Force a complete JSON backup download first (never destroy without a copy).
   downloadBlob(JSON.stringify(buildCompleteBackup(),null,2), `${FILE_BASE}-pre-reset-backup-${new Date().toISOString().slice(0,10)}.json`, 'application/json');
   // 2. Typed confirmation.
-  const typed = window.prompt('A complete backup has just been downloaded.\n\nThis permanently clears ALL TAM Intelligence OS data in this browser and reloads into an empty state.\n\nType exactly:  DELETE ALL TAM DATA');
+  const typed = window.prompt('A complete backup has just been downloaded.\n\nThis permanently clears ALL TAM OS data in this browser and reloads into an empty state.\n\nType exactly:  DELETE ALL TAM DATA');
   if(typed !== 'DELETE ALL TAM DATA'){ showWarning('Reset cancelled — confirmation text did not match.'); return; }
   // 3. Clear only TAM keys (settings return to defaults on reload).
   for(const k of TAM_DATA_KEYS){ await StorageAdapter.remove(k); }

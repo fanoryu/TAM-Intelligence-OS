@@ -39,7 +39,7 @@ function cycleStatusPill(cs){
 function renderPayrollWorkspace(main){
   // Empty-state onboarding
   if(!State.employees.length || !State.contracts.length){
-    main.innerHTML = pageHeader('Payroll Workspace','Operational payroll — run the full monthly cycle inside TAM Intelligence OS.')
+    main.innerHTML = pageHeader('Payroll Workspace','Operational payroll — run the full monthly cycle inside TAM OS.')
       + `<div class="card"><div class="empty">
         <div class="big">৳</div>
         <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No employees and contracts are available yet</div>

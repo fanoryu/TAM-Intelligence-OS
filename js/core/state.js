@@ -51,6 +51,7 @@ const State = {
   trendsFilter: {range:'all', start:null, end:null, category:'Gaji'},
   settings: {...DEFAULT_SETTINGS},
   navCollapsed: {}, // group id -> collapsed bool, session-only
+  navMore: {}, // UX-004F — group id -> "More" disclosure expanded bool, session-only (progressive disclosure)
   sidebarScrollTop: 0, // preserved across full re-renders so nav doesn't jump to top on navigation
   // UX-004E — sidebar interaction, SESSION-ONLY (never persisted, no storage key, no schema):
   sidebarCollapsed: false,   // desktop collapsed rail (labels hidden, icons only)

@@ -140,7 +140,7 @@ function renderActivityLog(main){
 
   // Fully empty store (nothing has been recorded yet) — dedicated empty state.
   if(!__activityCache.length){
-    main.innerHTML = pageHeader('Activity Log','A read-only audit trail of key actions across TAM Intelligence OS. Newest first.')
+    main.innerHTML = pageHeader('Activity Log','A read-only audit trail of key actions across TAM OS. Newest first.')
       + `<div class="card"><div class="empty">
         <div class="big">▤</div>
         <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No activity recorded yet</div>
@@ -152,7 +152,7 @@ function renderActivityLog(main){
   const modules = [...new Set(__activityCache.map(e=>e.module))].sort();
   const types = [...new Set(__activityCache.map(e=>e.type))].sort((a,b)=>auditTypeLabel(a).localeCompare(auditTypeLabel(b)));
 
-  main.innerHTML = pageHeader('Activity Log', 'A read-only audit trail of key actions across TAM Intelligence OS. Newest first — search, filter and export.')
+  main.innerHTML = pageHeader('Activity Log', 'A read-only audit trail of key actions across TAM OS. Newest first — search, filter and export.')
     + `<div class="card">
       <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1.2fr 1fr;margin-bottom:12px;">
         <div class="field"><label>Search</label><input class="input" id="actSearch" placeholder="entity, description, id" value="${escapeHtml(f.search)}"></div>

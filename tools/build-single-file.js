@@ -58,7 +58,7 @@ if (path.basename(outPath) !== 'tam-intelligence-os-v' + meta.version + '.html')
 if (!html.includes("const APP_VERSION = '" + meta.version + "';")) {
   throw new Error('Assembled HTML does not contain APP_VERSION ' + meta.version + ' — is constants.js in sync?');
 }
-if (!html.includes('<title>TAM Intelligence OS v' + meta.version + '</title>')) {
+if (!html.includes('<title>TAM OS v' + meta.version + '</title>')) {  // UX-004F rebrand: TAM Intelligence OS -> TAM OS
   throw new Error('Assembled HTML <title> does not match version ' + meta.version + ' — update index.html.');
 }
 

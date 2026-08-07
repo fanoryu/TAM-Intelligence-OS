@@ -1,6 +1,6 @@
 # AI_CONTEXT.md — Repository Knowledge
 
-This document captures the **current state** of TAM Intelligence OS to help future contributors and
+This document captures the **current state** of TAM OS to help future contributors and
 AI assistants get productive quickly. It is descriptive (what *is*), whereas
 [`CLAUDE.md`](CLAUDE.md) is prescriptive (the timeless rules). For deep implementation detail and the
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
@@ -16,16 +16,17 @@ storage key.
 
 **`main` now carries post-release development beyond the published v2.8.5 Release** (UX-004B — Sidebar &
 Navigation foundation, UX-004C — Domain Regrouping, UX-004D — Breadcrumbs, Context Quick Actions &
-Numeric Typography, then UX-004E — Sidebar Interaction: collapse/pin/hover-expand + responsive drawer),
+Numeric Typography, UX-004E — Sidebar Interaction: collapse/pin/hover-expand + responsive drawer, then
+UX-004F — Navigation Simplification & TAM OS rebrand),
 so the repository artifact **no longer equals**
 the published asset. At the v2.8.5 publication commit they were byte-identical; the published tag,
 Release, and 965,767-byte asset are immutable and unchanged — only `main` moved forward. This is expected
 post-release development divergence:
 
-| | Repository `main` (post UX-004E) | Published v2.8.5 Release asset |
+| | Repository `main` (post UX-004F) | Published v2.8.5 Release asset |
 |---|---|---|
-| Artifact | `dist/tam-intelligence-os-v2.8.5.html` — **991,647 bytes** | `tam-intelligence-os-v2.8.5.html` — **965,767 bytes** |
-| SHA-256 | `c8efaa86…ef27f335` | `32e624a262…1c23a7db8cb` |
+| Artifact | `dist/tam-intelligence-os-v2.8.5.html` — **995,337 bytes** | `tam-intelligence-os-v2.8.5.html` — **965,767 bytes** |
+| SHA-256 | `ab172531…11ea8604` | `32e624a262…1c23a7db8cb` |
 
 The superseded `dist/tam-intelligence-os-v2.8.4.html` was removed from `dist/` by the release dist-swap,
 as `docs/RELEASE-PROCESS.md` §2 requires; the historical v2.8.4 tag, Release, and published asset
@@ -180,7 +181,7 @@ appears when a legacy plan disagrees with its committed transaction. No storage 
 
 ## 1. Project Overview
 
-TAM Intelligence OS is a **single-page, client-side** finance, payroll, and operations application
+TAM OS is a **single-page, client-side** finance, payroll, and operations application
 for **PT Total Asset Manajemen**. It runs entirely in the browser with no backend, database, API, or
 runtime dependencies; all data persists locally. It ships in two forms: a modular development source
 and a portable single-file HTML build. See [`README.md`](README.md) for the public overview.
@@ -298,8 +299,8 @@ labels so exported terminology matches the screen.
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1815** on current `main`),
-  joined by **thirteen** runtime harnesses (**1431** checks). PowerShell fallbacks exist for machines without Node.
+  the portable single file, and a verifier runs a suite of invariant checks (**1849** on current `main`),
+  joined by **fourteen** runtime harnesses (**1456** checks). PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
 - **Version is derived** from a single source constant; the portable filename follows it
@@ -445,11 +446,11 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1815** checks) plus **thirteen**
-  Node runtime harnesses (**1431** checks total: contract timeline 349, integrity warning rules 146,
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1849** checks) plus **fourteen**
+  Node runtime harnesses (**1456** checks total: contract timeline 349, integrity warning rules 146,
   integrity payroll rules 144, Contract Core 129, monthly plan 118, payroll posting 106,
   contract persistence 74, payroll committed state 72, contract renewal 67, integrity rules 67,
-  breadcrumb & quick actions 64, sidebar interaction 34, `saveAllData` 61) plus manual browser validation. The runtime harnesses drive real
+  breadcrumb & quick actions 64, sidebar interaction 34, nav simplification 25, `saveAllData` 61) plus manual browser validation. The runtime harnesses drive real
   behaviour against the live engine and UI seams, but they are not a general test suite.
 - **One theme-blind colour path remains.** UX-002B tokenized every chart series colour, but the shared
   `STATUS_META` / `CATEGORY_COLOR` palette in `js/core/constants.js` is still hardcoded hex. It is
@@ -546,7 +547,7 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
 
 ## 18. Technical Debt
 
-- No general automated regression suite; coverage is the invariant verifier plus thirteen targeted runtime
+- No general automated regression suite; coverage is the invariant verifier plus fourteen targeted runtime
   harnesses, with the remaining behavioural coverage manual.
 - Heavy use of direct DOM string rendering — safe today because user data is escaped, but a
   standing reason to keep escaping disciplined.
@@ -565,7 +566,7 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
   patch; that chain could not express an authorized multi-file revision without accumulating opaque,
   order-dependent patches. It was replaced **one-for-one** by an exact SHA-256 of `concat(css/*.css)`,
   which is stricter and makes every future revision one reviewable line plus a diff. The current pin is
-  `90412710de6e9bbe3c24a0be7f2d57d69480861d965a6a3811e911c0132b3bce` (revised once for UX-004E); every superseded anchor is
+  `26bf828688dd2bbe280608e28c3abb583ab18032a3089f1cf5f991af5fe79fe6` (revised once for UX-004F); every superseded anchor is
   preserved in [`audit/ux-002b-2026-08-05/`](audit/ux-002b-2026-08-05/CSS-GOLDEN-MASTER-REVISION.md).
 - **Contract timeline is TWO derived dimensions, not one list** (UX-003B). "Where is this contract in
   its lifecycle?" and "how close is it to ending?" are independent questions, so `contractTimeline()`
