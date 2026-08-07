@@ -57,6 +57,19 @@
 .page-head .desc{color:var(--text-dim);font-size:var(--fs-3);margin:0;}
 .head-controls{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;}
 
+/* UX-004D — breadcrumb landmark. A quiet trail above the page title; its own
+   navigation landmark, separate from the sidebar's Primary navigation. Only the
+   linked (owning-item) crumb is interactive; domain and terminal crumbs are text. */
+.breadcrumb{margin:0 0 var(--space-3) 0;font-size:var(--fs-2);line-height:1.4;}
+.breadcrumb .crumb-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-1);}
+.breadcrumb .crumb{display:inline-flex;align-items:center;}
+.breadcrumb .crumb-sep{color:var(--text-faint);margin:0 var(--space-1);user-select:none;}
+.breadcrumb .crumb-text{color:var(--text-dim);}
+.breadcrumb .crumb-text[aria-current="page"]{color:var(--text);font-weight:600;}
+.breadcrumb .crumb-link{background:none;border:0;padding:0;margin:0;font:inherit;color:var(--text-dim);cursor:pointer;text-decoration:none;}
+.breadcrumb .crumb-link:hover{color:var(--accent);text-decoration:underline;}
+.breadcrumb .crumb-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px;}
+
 select, .input{
   background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-md);
   padding:var(--space-2) var(--space-3);font-size:var(--fs-3);outline:none;

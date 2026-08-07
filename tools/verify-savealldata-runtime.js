@@ -54,6 +54,7 @@ function loadRuntime(){
   };
   const el = () => ({ style:{}, dataset:{}, className:'', textContent:'', innerHTML:'',
     addEventListener:noop, removeEventListener:noop, appendChild:noop, setAttribute:noop,
+    getAttribute:()=>null, hasAttribute:()=>false, removeAttribute:noop, insertAdjacentHTML:noop, // UX-004D: #main now hosts the breadcrumb landmark
     remove:noop, querySelector:()=>null, querySelectorAll:()=>[] });
   const toasts = []; const confirms = { answer:true };
   const sandbox = {
