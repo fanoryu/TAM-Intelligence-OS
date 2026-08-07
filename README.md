@@ -4,8 +4,8 @@
 payroll, and operations workspace that runs entirely in the browser, with no backend and no runtime
 dependencies.
 
-[![CI](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-Intelligence-OS/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-Intelligence-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest)
+[![CI](https://github.com/fanoryu/TAM-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-OS/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-OS/releases/latest)
 ![Version](https://img.shields.io/badge/version-2.8.5-blue)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
@@ -265,7 +265,7 @@ python -m http.server 8000
 
 Then open <http://localhost:8000>. Any static server works (`npx serve`, VS Code Live Server). The
 portable build in `dist/` — or the asset from the
-[latest release](https://github.com/fanoryu/TAM-Intelligence-OS/releases/latest) — can also be
+[latest release](https://github.com/fanoryu/TAM-OS/releases/latest) — can also be
 opened directly in a browser.
 
 ---
