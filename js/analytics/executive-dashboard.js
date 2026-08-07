@@ -25,12 +25,26 @@ function kpiCard(label, value, opts){
   } else if(opts.sub){
     subHtml = `<div class="stat-sub dim">${opts.sub}</div>`;
   }
+  // UX-005A — optional KPI drill-through. Presentation/navigation only: renders a
+  // keyboard-accessible link into an existing canonical view via [data-dash-nav],
+  // handled by bindDashboardDrill() → hrNavTo(). No calculation, no mutation.
+  const drillHtml = (opts.drill && opts.drill.to)
+    ? `<div style="margin-top:var(--space-2);"><button class="linklike dash-drill" data-dash-nav="${escapeHtml(opts.drill.to)}">${escapeHtml(opts.drill.label||'Open')} →</button></div>`
+    : '';
   return `<div class="card stat-card">
     <div class="stat-label">${escapeHtml(label)}${opts.incomplete?'<span class="pill pill-dup" style="margin-left:6px;">incomplete</span>':''}</div>
     <div class="stat-value">${value}</div>
     ${subHtml}
     ${opts.sparkline?`<div style="margin-top:8px;">${opts.sparkline}</div>`:''}
+    ${drillHtml}
   </div>`;
+}
+// UX-005A — KPI drill-through binder. A dashboard KPI link ([data-dash-nav]) opens
+// an existing canonical view via hrNavTo(). Navigation only: no mutation, no persistence.
+function bindDashboardDrill(main){
+  main.querySelectorAll('[data-dash-nav]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ hrNavTo(btn.dataset.dashNav); });
+  });
 }
 function computeExecutiveAlerts(key, months){
   const alerts = [];
@@ -82,27 +96,81 @@ function sortExecutiveAlerts(list){
     .sort((x,y)=> rank(x.a)-rank(y.a) || x.i-y.i)
     .map(x=>x.a);
 }
-function executiveAlertsCardHTML(list){
-  const all = sortExecutiveAlerts(list);
+/* ============================================================
+   UX-005A — ACTION CENTER (presentation + navigation only)
+   Recasts the former "Executive Alerts" card into an attention list that answers
+   "What requires my attention now?" and lets the CEO jump to the authoritative
+   workspace for each item.
+
+   DECISION B (approved) — resolver-based navigation. The alert GENERATORS are NOT
+   modified and keep producing their existing {type, text} objects. A destination
+   is attached HERE, in the presentation layer, by the ORIGINATING GENERATOR
+   (the alert's "category"), never by parsing the human-readable text. Each source
+   generator maps to exactly one existing canonical view — deterministic and
+   testable, with no brittle string matching:
+
+     computeExecutiveAlerts   -> financeOverview  (budget / spending / finance)
+     hrDashboardAlerts        -> contracts        (contract expiry / HR readiness)
+     overtimeDashboardAlerts  -> overtime         (overtime records)
+     payrollDashboardAlerts   -> payroll          (payroll cycle / rows)
+
+   Navigation is the ONLY effect (hrNavTo): it sets the view; it never executes,
+   approves, posts, deletes, mutates business data, or persists anything. An alert
+   whose source has no mapping renders as non-navigable information (never guessed).
+   ============================================================ */
+const ACTION_CENTER_SEV_ICON = {warn:'⚠', info:'ℹ', good:'✓'};
+// One row per source generator. `to` is the canonical destination view for every
+// item that generator emits; null would render its items as non-navigable text.
+function actionCenterSources(key, months){
+  return [
+    { to:'financeOverview', items: computeExecutiveAlerts(key, months) },
+    { to:'contracts',       items: hrDashboardAlerts(key) },
+    { to:'overtime',        items: overtimeDashboardAlerts(key) },
+    { to:'payroll',         items: payrollDashboardAlerts(key) },
+  ];
+}
+// Build the tagged, sorted attention list. Generators are called exactly once each
+// (single pass), their outputs concatenated once and sorted once (severity order,
+// reused from sortExecutiveAlerts). The `to` tag is added by mapping over each
+// generator's result — the generator's own objects are not mutated in place.
+function actionCenterItems(key, months){
+  const tagged = actionCenterSources(key, months)
+    .flatMap(s => (s.items||[]).map(a => ({ type:a.type, text:a.text, to:s.to })));
+  return sortExecutiveAlerts(tagged);
+}
+function actionCenterRowHTML(a, hidden){
+  const hide = hidden ? ' data-action-extra style="display:none;"' : '';
+  const sev = ACTION_CENTER_SEV_ICON[a.type] || ACTION_CENTER_SEV_ICON.info;
+  const sevWord = a.type==='warn'?'Attention':a.type==='good'?'Good':'Info';
+  // Severity is conveyed by an icon + a screen-reader word, never colour alone.
+  const inner = `<span class="ac-ic" aria-hidden="true">${sev}</span><span class="ac-text">${a.text}</span>`;
+  if(a.to){
+    return `<button class="insight-item ${a.type} action-item" data-ac-nav="${escapeHtml(a.to)}" aria-label="${sevWord}: navigate to ${escapeHtml(PAGE_TITLES[a.to]||a.to)}"${hide}>${inner}</button>`;
+  }
+  return `<div class="insight-item ${a.type}" role="note" aria-label="${sevWord}"${hide}>${inner}</div>`;
+}
+function actionCenterCardHTML(items){
+  const all = items || [];
   const hiddenCount = Math.max(0, all.length - EXEC_ALERT_VISIBLE);
-  const items = all.map((a,i)=>{
-    const hide = i >= EXEC_ALERT_VISIBLE ? ' data-exec-alert-extra style="display:none;"' : '';
-    return `<div class="insight-item ${a.type}"${hide}>${a.text}</div>`;
-  }).join('');
+  const rows = all.map((a,i)=>actionCenterRowHTML(a, i >= EXEC_ALERT_VISIBLE)).join('');
   return `<div class="card" style="margin-bottom:14px;">
-    <h3>Executive Alerts<span class="tag">${all.length} total</span></h3>
-    <div class="insight-list">${all.length ? items : '<div class="empty">No alerts for this period.</div>'}</div>
-    ${hiddenCount ? `<button class="btn btn-sm" id="execAlertsToggle" style="margin-top:var(--space-2);">Show all ${all.length} alerts</button>` : ''}
+    <h3>Action Center<span class="tag">${all.length} item${all.length===1?'':'s'}</span></h3>
+    <div class="insight-list">${all.length ? rows : '<div class="empty">No items need attention this period.</div>'}</div>
+    ${hiddenCount ? `<button class="btn btn-sm" id="actionCenterToggle" style="margin-top:var(--space-2);">Show all ${all.length} items</button>` : ''}
   </div>`;
 }
-function bindExecutiveAlerts(main){
-  const btn = main.querySelector('#execAlertsToggle'); if(!btn) return;
+function bindActionCenter(main){
+  // Navigation only — hrNavTo() sets the view; no business mutation is reachable here.
+  main.querySelectorAll('[data-ac-nav]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ hrNavTo(btn.dataset.acNav); });
+  });
+  const btn = main.querySelector('#actionCenterToggle'); if(!btn) return;
   btn.addEventListener('click', ()=>{
-    const extras = main.querySelectorAll('[data-exec-alert-extra]');
+    const extras = main.querySelectorAll('[data-action-extra]');
     const expanded = btn.dataset.expanded === '1';
     extras.forEach(el=>{ el.style.display = expanded ? 'none' : ''; });
     btn.dataset.expanded = expanded ? '' : '1';
-    btn.textContent = expanded ? ('Show all ' + (extras.length + EXEC_ALERT_VISIBLE) + ' alerts') : 'Show fewer alerts';
+    btn.textContent = expanded ? ('Show all ' + (extras.length + EXEC_ALERT_VISIBLE) + ' items') : 'Show fewer items';
   });
 }
 function renderExecutiveDashboard(main){
@@ -146,7 +214,10 @@ function renderExecutiveDashboard(main){
   const incomeInfo = monthIncomeInfo(key);
   const netCashFlowVal = incomeInfo.status==='none' ? null : (info.hasData ? (incomeInfo.sum||0)-tot.actual : null);
 
-  const alerts = computeExecutiveAlerts(key, months);
+  // UX-005A — Action Center attention list, built in a single pass over the four
+  // authoritative alert generators (see actionCenterItems). Replaces the former
+  // inline concat of Executive Alerts; the generators are unchanged.
+  const actionItems = actionCenterItems(key, months);
 
   main.innerHTML = `
     <div class="page-head">
@@ -156,6 +227,7 @@ function renderExecutiveDashboard(main){
 
     ${onboardingChecklistHTML()}
 
+    <h2 class="section-title" style="margin-top:0;">Company Health</h2>
     <div class="grid grid-4" style="margin-bottom:14px;">
       ${(()=>{
         // MERGED (Phase 3): Current Month Planned + Current Month Actual + Budget Used.
@@ -176,10 +248,11 @@ function renderExecutiveDashboard(main){
           <div class="stat-sub dim">${usedTxt}</div>
           ${dActualTxt}
           <div style="margin-top:8px;">${sparkActual}</div>
+          <div style="margin-top:var(--space-2);"><button class="linklike dash-drill" data-dash-nav="financeOverview">Open Finance Overview →</button></div>
         </div>`;
       })()}
-      ${kpiCard('Budget Variance', info.hasData?fmtIDRShort(tot.variance):'<span class="faint">—</span>', {deltaAbs:dVariance.abs, sub: !info.hasData?'no actual data yet':undefined})}
-      ${kpiCard('Net Cash Flow', incomeInfo.status==='none'?'<span class="faint">no income data</span>':(netCashFlowVal!==null?fmtIDRShort(netCashFlowVal):'<span class="faint">—</span>'), {sub:'income − actual expense'})}
+      ${kpiCard('Budget Variance', info.hasData?fmtIDRShort(tot.variance):'<span class="faint">—</span>', {deltaAbs:dVariance.abs, sub: !info.hasData?'no actual data yet':undefined, drill:{to:'financeOverview', label:'Open Finance Overview'}})}
+      ${kpiCard('Net Cash Flow', incomeInfo.status==='none'?'<span class="faint">no income data</span>':(netCashFlowVal!==null?fmtIDRShort(netCashFlowVal):'<span class="faint">—</span>'), {sub:'income − actual expense', drill:{to:'cashflow', label:'Open Cash Flow'}})}
       ${payrollCycleTileHTML(key)}
     </div>
 
@@ -189,8 +262,9 @@ function renderExecutiveDashboard(main){
       ${overtimeStripHTML(key)}
     </div>
 
-    ${executiveAlertsCardHTML(alerts.concat(hrDashboardAlerts(key)).concat(overtimeDashboardAlerts(key)).concat(payrollDashboardAlerts(key)))}
+    ${actionCenterCardHTML(actionItems)}
 
+    <h2 class="section-title">Trends</h2>
     <div class="card">
       <h3>Executive Trend — Planned vs. Actual</h3>
       <p class="hint">Click a point to open that month's Finance Overview.</p>
@@ -199,7 +273,8 @@ function renderExecutiveDashboard(main){
   `;
   document.getElementById('execMonth').addEventListener('change', e=>{ State.selectedMonth=e.target.value; render(); });
   bindOnboarding(main);
-  bindExecutiveAlerts(main);
+  bindActionCenter(main);
+  bindDashboardDrill(main);
   const chartMonths = months.slice(-12);
   const cRows = trendRows(chartMonths);
   const el = document.getElementById('execTrendChart');

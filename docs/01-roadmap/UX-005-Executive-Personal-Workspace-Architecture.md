@@ -313,7 +313,7 @@ present.
 
 | Phase | Title | Focus |
 |---|---|---|
-| **UX-005A** | Executive Dashboard & Information Architecture | Canonical home; resolve Exec↔Finance overlap per §12; KPI ownership; hierarchy; drill-through; Action Center contract; **preserve all computations** |
+| **UX-005A** *(implementation candidate — unmerged, branch `feature/ux-005a-executive-dashboard`)* | Executive Dashboard & Information Architecture | Canonical home; resolve Exec↔Finance overlap per §12; KPI ownership; hierarchy; drill-through; Action Center (resolver-based navigation, Option A); removal of duplicate Finance Overview Net Cash Flow tile; **all computations preserved** |
 | **UX-005B** | Data Grid Foundation | Reusable pagination + single-column sort + debounced search + result count + filtered-empty state (pagination over virtualization) |
 | **UX-005C** | Workspace Productivity | Global search / `Cmd+K` (read-oriented), recent/pinned, Action Center integration |
 | **UX-005D** | Workspace Memory & Personalization | Classify session/preference/business state; governed persistence only |

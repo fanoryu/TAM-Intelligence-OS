@@ -20,7 +20,13 @@ function renderDashboard(main){
       <div class="head-controls">${monthSelectHTML('dashMonth', key, false)}</div>
     </div>
 
-    <div class="grid grid-4">
+    <!-- UX-005A: Net Cash Flow is now owned exclusively by the Executive Dashboard
+         (canonical company-level signal). Finance Overview keeps the operational
+         finance figures. Budget Variance stays here because its "% of plan"
+         framing is operational and materially distinct from the Executive
+         Dashboard's absolute variance signal. No calculation changed —
+         monthTotals() is untouched; only the Net Cash Flow tile is removed. -->
+    <div class="grid grid-3">
       <div class="card stat-card">
         <div class="stat-label">Planned (${escapeHtml(m.month)})</div>
         <div class="stat-value">${fmtIDRShort(tot.planned)}</div>
@@ -35,11 +41,6 @@ function renderDashboard(main){
         <div class="stat-label">Budget Variance</div>
         <div class="stat-value" style="color:${tot.variance>=0?'var(--green)':'var(--brick)'}">${fmtIDRShort(tot.variance)}</div>
         <div class="stat-sub dim">${pct(tot.planned?tot.variance/tot.planned:0)} of plan</div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-label">Net Cash Flow</div>
-        <div class="stat-value" style="color:${tot.netCashFlow>=0?'var(--green)':'var(--brick)'}">${fmtIDRShort(tot.netCashFlow)}</div>
-        <div class="stat-sub dim">income − actual expense</div>
       </div>
     </div>
 
