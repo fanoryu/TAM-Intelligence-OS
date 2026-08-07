@@ -14,14 +14,16 @@ marked Latest. v2.8.4 remains published and unchanged; it is no longer marked La
 created a tag and a GitHub Release only — it changed no source commit, runtime behavior, schema, or
 storage key.
 
-**The repository artifact and the published Release asset are byte-identical.** The tag-triggered
-workflow rebuilt and verified the artifact from the tagged commit before publishing it, so `main`
-carries **no** production change beyond the published Release:
+**`main` now carries post-release development beyond the published v2.8.5 Release** (UX-004B — Sidebar &
+Navigation foundation), so the repository artifact **no longer equals** the published asset. At the
+v2.8.5 publication commit they were byte-identical; the published tag, Release, and 965,767-byte asset
+are immutable and unchanged — only `main` moved forward. This is expected post-release development
+divergence:
 
-| | Repository `main` | Published v2.8.5 Release asset |
+| | Repository `main` (post UX-004B) | Published v2.8.5 Release asset |
 |---|---|---|
-| Artifact | `dist/tam-intelligence-os-v2.8.5.html` — **965,767 bytes** | `tam-intelligence-os-v2.8.5.html` — **965,767 bytes** |
-| SHA-256 | `32e624a262…1c23a7db8cb` | `32e624a262…1c23a7db8cb` |
+| Artifact | `dist/tam-intelligence-os-v2.8.5.html` — **968,800 bytes** | `tam-intelligence-os-v2.8.5.html` — **965,767 bytes** |
+| SHA-256 | `8f1d5130…1535efc9` | `32e624a262…1c23a7db8cb` |
 
 The superseded `dist/tam-intelligence-os-v2.8.4.html` was removed from `dist/` by the release dist-swap,
 as `docs/RELEASE-PROCESS.md` §2 requires; the historical v2.8.4 tag, Release, and published asset

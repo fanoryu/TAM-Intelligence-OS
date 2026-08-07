@@ -128,6 +128,46 @@ const NAV_GROUPS = [
 ];
 const PAGE_TITLES = Object.fromEntries(NAV_GROUPS.flatMap(g=>g.items).map(i=>[i.id,i.label]));
 
+/* ============================================================
+   UX-004B — CANONICAL NAVIGATION MANIFEST
+   The single source of truth mapping every renderView() route that is NOT
+   itself a sidebar item (context-only detail, wizard and drill-down views)
+   to the sidebar nav ITEM that owns it. Direct sidebar views own themselves
+   and need no entry. The owning GROUP is never hardcoded here — it is derived
+   from NAV_GROUPS, so ownership follows automatically when UX-004C regroups.
+
+   This replaces scattered exact-match (State.view===id) active-state logic:
+   active state now resolves hierarchically through this one manifest, so a
+   detail page keeps its parent sidebar item highlighted and its group open.
+   ============================================================ */
+const NAV_VIEW_OWNER = {
+  // People drill-downs -> their parent sidebar item
+  employeeDetail:     'employees',
+  employeeDedup:      'employees',
+  contractDetail:     'contracts',
+  payrollDetail:      'payroll',
+  payrollAdjustments: 'payroll',
+  overtimeSheet:      'overtime',
+  supplementalDetail: 'supplementals',
+  legacyMap:          'payroll',
+  // Finance ingestion flow -> Add / Upload
+  smartImport:        'add',
+  importResults:      'add',
+};
+// The nav item that should carry active state for the current view: a context-only
+// view resolves to its parent item; a direct sidebar view owns itself.
+function navOwnerItem(view){ return NAV_VIEW_OWNER[view] || view; }
+// The group that contains a given nav item, derived from NAV_GROUPS (single source
+// of truth). Returns null if the id is not a sidebar item.
+function navItemGroup(itemId){
+  for(const g of NAV_GROUPS){ if(g.items.some(i=>i.id===itemId)) return g.id; }
+  return null;
+}
+// The one nav item + owning group that receive active state for the current view.
+// Every consumer (mount markup and in-place sync) resolves through this, so exactly
+// one path decides "you are here" regardless of which navigation API was used.
+function navActive(){ const item = navOwnerItem(State.view); return { item: item, group: navItemGroup(item) }; }
+
 function captureSidebarScroll(){
   const nav = document.querySelector('.nav');
   if(nav) State.sidebarScrollTop = nav.scrollTop;
@@ -160,15 +200,19 @@ function shellIsMounted(){
 // One nav group's markup. Extracted verbatim from the previous render() so the
 // mounted shell is byte-identical to what the full rebuild used to produce.
 function navGroupHTML(g){
-  const collapsed = !!State.navCollapsed[g.id];
+  const active = navActive();
+  // The active group is always shown expanded while one of its descendant views
+  // is active, so the highlighted item is never hidden inside a collapsed group.
+  const collapsed = !!State.navCollapsed[g.id] && g.id !== active.group;
   return `<div class="nav-group">
             <button class="nav-group-head" data-group="${g.id}" aria-expanded="${!collapsed}">
               <span>${escapeHtml(g.label)}</span><span class="chev">${collapsed?'▸':'▾'}</span>
             </button>
             <div class="nav-group-items" style="${collapsed?'display:none;':''}">
-              ${g.items.map(n=>`<button class="nav-item ${State.view===n.id?'active':''}" data-nav="${n.id}">
+              ${g.items.map(n=>{ const on = n.id===active.item;
+                return `<button class="nav-item ${on?'active':''}" data-nav="${n.id}"${on?' aria-current="page"':''}>
                 <span class="ic">${n.ic}</span>${escapeHtml(n.label)}${featureBadgeHTML(n.id)}
-              </button>`).join('')}
+              </button>`;}).join('')}
             </div>
           </div>`;
 }
@@ -182,9 +226,9 @@ function renderShell(){
         <div class="mark"><span class="mfull">TAM <span>Intelligence&nbsp;OS</span></span><span class="mshort">TAM <span>OS</span></span></div>
         <div class="sub">${escapeHtml(State.settings.companyName||COMPANY_NAME_DEFAULT)}</div>
       </div>
-      <div class="nav">
+      <nav class="nav" aria-label="Primary navigation">
         ${NAV_GROUPS.map(navGroupHTML).join('')}
-      </div>
+      </nav>
       <div class="sidebar-foot">${escapeHtml(APP_NAME)} v${APP_VERSION}<br>${escapeHtml(APP_TAGLINE)}<br>Data stored privately in your browser.</div>
     </div>
     <div class="main" id="main"></div>
@@ -222,11 +266,19 @@ function syncShellState(){
   const sub = app.querySelector('.brand .sub');
   const company = State.settings.companyName||COMPANY_NAME_DEFAULT;
   if(sub && sub.textContent !== company) sub.textContent = company;
+  // UX-004B — hierarchical active state resolved through the one navigation manifest,
+  // not exact State.view equality: exactly one item is active (the current view or its
+  // parent), and it alone carries aria-current="page".
+  const active = navActive();
   app.querySelectorAll('[data-nav]').forEach(btn=>{
-    btn.classList.toggle('active', State.view === btn.dataset.nav);
+    const on = btn.dataset.nav === active.item;
+    btn.classList.toggle('active', on);
+    if(on){ if(btn.getAttribute('aria-current') !== 'page') btn.setAttribute('aria-current','page'); }
+    else if(btn.hasAttribute('aria-current')) btn.removeAttribute('aria-current');
   });
   app.querySelectorAll('[data-group]').forEach(head=>{
-    const collapsed = !!State.navCollapsed[head.dataset.group];
+    // The active group is always shown expanded while one of its descendants is active.
+    const collapsed = !!State.navCollapsed[head.dataset.group] && head.dataset.group !== active.group;
     const expanded = String(!collapsed);
     // Write only on change: an unconditional assignment would replace the chevron's
     // text node on every navigation, churning the nav subtree we just stopped rebuilding.

@@ -2250,6 +2250,77 @@ check(ux2aR3.length === 0,
   'bindShell() is invoked exactly once repository-wide, and only from renderShell() (listeners bound once, never per navigation)'
   + (ux2aR3.length ? ' >> VIOLATION: ' + ux2aR3.join('; ') : ''));
 
+// UX-004B — SIDEBAR FOUNDATION (canonical nav manifest + hierarchical active state).
+// The navigation manifest is the single source of truth mapping every renderView()
+// route to its owning sidebar item; active state resolves through it, not exact
+// State.view equality. These checks inspect the real shell source so a regression
+// (scattered active-state logic, a missing owner, a second renderer, a lost landmark,
+// or a stored nav setting) cannot pass verification.
+console.log('== UX-004B SIDEBAR FOUNDATION (nav manifest + hierarchical active state) ==');
+const ux4bShell = stripComments(read(path.join(root,'js','ui','shell-render.js')));
+// (1) The manifest exists and is defined exactly once.
+const ux4bManifestDefs = (ux4bShell.match(/\bconst\s+NAV_VIEW_OWNER\s*=/g)||[]).length;
+check(ux4bManifestDefs === 1, 'canonical navigation manifest NAV_VIEW_OWNER is defined exactly once (found ' + ux4bManifestDefs + ')');
+// (2) The resolver helpers exist.
+check(/\bfunction\s+navOwnerItem\s*\(/.test(ux4bShell) && /\bfunction\s+navItemGroup\s*\(/.test(ux4bShell) && /\bfunction\s+navActive\s*\(/.test(ux4bShell),
+  'nav resolvers navOwnerItem() / navItemGroup() / navActive() are defined');
+// Parse the sidebar item ids (every NAV_GROUPS item carries an `ic:` glyph) and the
+// manifest owner map from source, then the routes renderView() actually dispatches.
+const ux4bNavItems = new Set([...ux4bShell.matchAll(/\{id:'([a-zA-Z]+)',\s*label:'[^']*',\s*ic:/g)].map(m=>m[1]));
+const ux4bOwnerBlock = (ux4bShell.match(/const\s+NAV_VIEW_OWNER\s*=\s*\{([\s\S]*?)\};/)||[,''])[1];
+const ux4bOwner = {}; [...ux4bOwnerBlock.matchAll(/([a-zA-Z]+):\s*'([a-zA-Z]+)'/g)].forEach(m=>{ ux4bOwner[m[1]]=m[2]; });
+const ux4bRenderViewBody = (ux4bShell.match(/function renderView\(main\)\{[\s\S]*?\n\}/)||[''])[0];
+const ux4bRoutes = [...new Set([...ux4bRenderViewBody.matchAll(/State\.view===['"]([a-zA-Z]+)['"]/g)].map(m=>m[1]))];
+// (3) Every dispatched route has a valid owner: it is a direct sidebar item, or the
+//     manifest names a parent that is itself a real sidebar item.
+const ux4bOrphans = ux4bRoutes.filter(v=> !ux4bNavItems.has(v) && !(v in ux4bOwner));
+check(ux4bRoutes.length >= 30 && ux4bOrphans.length === 0,
+  'every renderView() route resolves to a sidebar item or a manifest owner (' + ux4bRoutes.length + ' routes)'
+  + (ux4bOrphans.length ? ' >> VIOLATION: unowned routes: ' + ux4bOrphans.join(', ') : ''));
+// (3b) Every manifest owner value points at a real sidebar item.
+const ux4bBadOwners = Object.entries(ux4bOwner).filter(([,item])=>!ux4bNavItems.has(item)).map(([v,item])=>v+'->'+item);
+check(ux4bBadOwners.length === 0, 'every NAV_VIEW_OWNER value is a real sidebar item'
+  + (ux4bBadOwners.length ? ' >> VIOLATION: ' + ux4bBadOwners.join(', ') : ''));
+// (4/5/6/14) The three required inheritances, by nav ITEM.
+check(ux4bOwner.employeeDetail === 'employees', 'Employee Detail inherits the Employees sidebar item');
+check(ux4bOwner.contractDetail === 'contracts', 'Contract Detail inherits the Contracts sidebar item');
+check(ux4bOwner.payrollDetail === 'payroll', 'Payroll Detail inherits the Payroll sidebar item');
+check(ux4bOwner.overtimeSheet === 'overtime', 'Overtime Sheet inherits the Overtime sidebar item');
+check(ux4bOwner.supplementalDetail === 'supplementals', 'Supplemental Detail inherits the Supplemental Payments sidebar item');
+// (7) Active-state resolution reads the manifest in the in-place sync path.
+const ux4bSyncBody = (ux4bShell.match(/function syncShellState\(\)\{[\s\S]*?\n\}/)||[''])[0];
+check(/\bnavActive\s*\(/.test(ux4bSyncBody), 'syncShellState() resolves active state through navActive() (manifest, not ad-hoc)');
+// (8) Exact-match-only active logic is gone: navGroupHTML no longer keys active off State.view===id.
+const ux4bNavGroupBody = (ux4bShell.match(/function navGroupHTML\(g\)\{[\s\S]*?\n\}/)||[''])[0];
+check(!/State\.view===n\.id/.test(ux4bNavGroupBody) && /active\.item/.test(ux4bNavGroupBody),
+  'navGroupHTML() drives active state from the resolved active item, not exact State.view equality');
+// (9/10) aria-current is applied to the active item and cleared from non-active items.
+check(/aria-current/.test(ux4bNavGroupBody), 'navGroupHTML() marks the active item with aria-current="page"');
+check(/setAttribute\('aria-current','page'\)/.test(ux4bSyncBody) && /removeAttribute\('aria-current'\)/.test(ux4bSyncBody),
+  'syncShellState() sets aria-current on the active item and removes it from every non-active item');
+// (11) Exactly one navigation landmark with an accessible name.
+const ux4bNavLandmarks = (ux4bShell.match(/<nav class="nav" aria-label="Primary navigation">/g)||[]).length;
+check(ux4bNavLandmarks === 1, 'the sidebar nav is a single <nav aria-label="Primary navigation"> landmark (found ' + ux4bNavLandmarks + ')');
+// (12) One sidebar renderer only — a single renderShell() and a single navGroupHTML().
+check((ux4bShell.match(/\bfunction\s+renderShell\s*\(/g)||[]).length === 1 && (ux4bShell.match(/\bfunction\s+navGroupHTML\s*\(/g)||[]).length === 1,
+  'exactly one sidebar renderer (single renderShell() + single navGroupHTML(), no duplicate/per-view renderer)');
+// (13) renderView() never remounts the shell.
+check(!/\brenderShell\s*\(/.test(ux4bRenderViewBody) && !/\bbindShell\s*\(/.test(ux4bRenderViewBody),
+  'renderView() calls neither renderShell() nor bindShell() (shell stays mounted across navigation)');
+// (13) The active group is force-expanded while a descendant view is active: both the
+//      mount markup and the in-place sync exclude the active group from collapse.
+check(/!==\s*active\.group/.test(ux4bNavGroupBody) && /!==\s*active\.group/.test(ux4bSyncBody),
+  'the owning group is kept expanded while one of its descendant views is active (navGroupHTML + syncShellState)');
+// (15) Navigation state stays session-only — the shell layer persists nothing.
+check(!/localStorage|StorageAdapter|persistHR|persist\(|saveSettings/.test(ux4bShell),
+  'the sidebar/navigation layer persists nothing (no storage key, session-only nav state)');
+// (16/17) SCHEMA_VERSION unchanged and no new standalone view was introduced for the
+//         frozen-scope surfaces (HR Dashboard / Backup & Restore / unified Import-Export).
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'UX-004B keeps SCHEMA_VERSION at 6');
+const ux4bForbiddenViews = ['hrDashboard','backupRestore','importExport','importExportCenter'].filter(v=>ux4bRoutes.includes(v) || ux4bNavItems.has(v));
+check(ux4bForbiddenViews.length === 0, 'no frozen-scope standalone view was introduced (HR Dashboard / Backup & Restore / Import-Export Center)'
+  + (ux4bForbiddenViews.length ? ' >> VIOLATION: ' + ux4bForbiddenViews.join(', ') : ''));
+
 // UX-002B PHASE 1 — TYPOGRAPHY / TOKEN / THEME INVARIANTS.
 // These convert design rules that were previously only conventions into
 // mechanically enforced invariants, so they cannot silently regress.
