@@ -286,8 +286,16 @@ function bindShell(app){
   app.querySelectorAll('[data-group]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{
       e.preventDefault();
+      const g=btn.dataset.group;
+      // HOTFIX (UX-004 interaction regression): the active group is always kept
+      // expanded (verifier-enforced invariant, syncShellState `!== active.group`).
+      // Flipping its collapsed flag here changed nothing on screen yet silently armed
+      // a surprising collapse the next time the user navigated away — the header felt
+      // dead. When this header owns the active view, the toggle is a clean no-op so no
+      // phantom state is stored. Non-active groups toggle exactly as before.
+      if(g === navActive().group){ btn.blur(); return; }
       captureSidebarScroll();
-      const g=btn.dataset.group; State.navCollapsed[g]=!State.navCollapsed[g];
+      State.navCollapsed[g]=!State.navCollapsed[g];
       render();
       btn.blur();
     });
@@ -296,8 +304,13 @@ function bindShell(app){
   app.querySelectorAll('[data-more]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{
       e.preventDefault();
+      const g=btn.dataset.more, grp=NAV_GROUPS.find(x=>x.id===g);
+      // HOTFIX (UX-004 interaction regression): when the active view lives inside More,
+      // the disclosure is force-open (intended). Flipping navMore here was a hidden
+      // no-op that surprised on the next navigation, so it is a clean no-op instead.
+      if(grp && grp.items.some(i=>i.more && i.id===navActive().item)){ btn.blur(); return; }
       captureSidebarScroll();
-      const g=btn.dataset.more; State.navMore[g]=!State.navMore[g];
+      State.navMore[g]=!State.navMore[g];
       render();
       btn.blur();
     });

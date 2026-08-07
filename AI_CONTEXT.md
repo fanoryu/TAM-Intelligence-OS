@@ -25,8 +25,8 @@ post-release development divergence:
 
 | | Repository `main` (post UX-004F) | Published v2.8.5 Release asset |
 |---|---|---|
-| Artifact | `dist/tam-intelligence-os-v2.8.5.html` — **995,337 bytes** | `tam-intelligence-os-v2.8.5.html` — **965,767 bytes** |
-| SHA-256 | `ab172531…11ea8604` | `32e624a262…1c23a7db8cb` |
+| Artifact | `dist/tam-intelligence-os-v2.8.5.html` — **996,300 bytes** | `tam-intelligence-os-v2.8.5.html` — **965,767 bytes** |
+| SHA-256 | `e88b8fa9…eeadb9b1` | `32e624a262…1c23a7db8cb` |
 
 The superseded `dist/tam-intelligence-os-v2.8.4.html` was removed from `dist/` by the release dist-swap,
 as `docs/RELEASE-PROCESS.md` §2 requires; the historical v2.8.4 tag, Release, and published asset
@@ -299,8 +299,8 @@ labels so exported terminology matches the screen.
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1849** on current `main`),
-  joined by **fourteen** runtime harnesses (**1456** checks). PowerShell fallbacks exist for machines without Node.
+  the portable single file, and a verifier runs a suite of invariant checks (**1853** on current `main`),
+  joined by **fifteen** runtime harnesses (**1467** checks). PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
 - **Version is derived** from a single source constant; the portable filename follows it
@@ -446,11 +446,11 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1849** checks) plus **fourteen**
-  Node runtime harnesses (**1456** checks total: contract timeline 349, integrity warning rules 146,
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1853** checks) plus **fifteen**
+  Node runtime harnesses (**1467** checks total: contract timeline 349, integrity warning rules 146,
   integrity payroll rules 144, Contract Core 129, monthly plan 118, payroll posting 106,
   contract persistence 74, payroll committed state 72, contract renewal 67, integrity rules 67,
-  breadcrumb & quick actions 64, sidebar interaction 34, nav simplification 25, `saveAllData` 61) plus manual browser validation. The runtime harnesses drive real
+  breadcrumb & quick actions 64, sidebar interaction 34, nav simplification 25, sidebar click regression 11, `saveAllData` 61) plus manual browser validation. The runtime harnesses drive real
   behaviour against the live engine and UI seams, but they are not a general test suite.
 - **One theme-blind colour path remains.** UX-002B tokenized every chart series colour, but the shared
   `STATUS_META` / `CATEGORY_COLOR` palette in `js/core/constants.js` is still hardcoded hex. It is
@@ -547,7 +547,7 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
 
 ## 18. Technical Debt
 
-- No general automated regression suite; coverage is the invariant verifier plus fourteen targeted runtime
+- No general automated regression suite; coverage is the invariant verifier plus fifteen targeted runtime
   harnesses, with the remaining behavioural coverage manual.
 - Heavy use of direct DOM string rendering — safe today because user data is escaped, but a
   standing reason to keep escaping disciplined.
