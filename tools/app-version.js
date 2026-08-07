@@ -38,7 +38,7 @@ function readAppMeta() {
   if (!VERSION_RE.test(version)) {
     throw new Error('APP_VERSION "' + version + '" is not a recognized version format (expected x.y.z with an optional hotfix letter, e.g. 2.6.4 or 2.6.3c).');
   }
-  const distName = 'tam-intelligence-os-v' + version + '.html';
+  const distName = 'tam-os-v' + version + '.html';
   return {
     version,
     releaseName: rm[1],

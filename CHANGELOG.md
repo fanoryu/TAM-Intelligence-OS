@@ -1,5 +1,68 @@
 # Changelog
 
+## 2.8.6 — Navigation Experience & TAM OS Rebrand
+
+**Type:** Navigation, presentation, naming and release-packaging release. It packages the complete
+UX-004 navigation modernization (UX-004B–UX-004F) plus the sidebar interaction hotfix and the TAM OS
+rebrand. **No** business-logic, schema, storage-key, persisted-data, or persistence-mechanics change
+(still 15 keys, `SCHEMA_VERSION` 6); no migration added or re-run; no historical record is rewritten.
+UX-005 is **not** included. Starting with this release the portable artifact uses the TAM OS naming
+convention `dist/tam-os-v<version>.html`; the historical `tam-intelligence-os-v2.8.5.html` asset and
+older filenames remain immutable in Git history and their published Releases.
+
+### Added
+- **Five-domain navigation (UX-004C)** — Dashboard, People, Finance, Analytics, System — over the
+  UX-004B foundation: a persistent shell mounted once, canonical navigation ownership, hierarchical
+  active state, and a single primary-navigation landmark.
+- **Breadcrumbs (UX-004D)** derived from the canonical navigation architecture (Domain / Item / Context)
+  in their own semantic Breadcrumb landmark, with entity-aware terminal labels and no id leaks.
+- **Context-aware Quick Actions (UX-004D)** — navigation-only deep links, including a Payroll/Overtime →
+  Execution Center friction reduction. They never execute, approve or post anything, and cannot bypass
+  Review/Approval/Posting/Execution.
+- **Sidebar interaction (UX-004E)** — collapse to an icon rail, session-only pin (expanded/collapsed),
+  desktop hover-expand, and a responsive overlay drawer (hamburger, backdrop, Escape-to-close, focus
+  trap, focus restoration). All session-only; no persistence.
+- **Navigation simplification (UX-004F)** — Finance shows four primary items (Overview, Payroll,
+  Transactions, Planning); every other Finance destination lives under a **More** progressive-disclosure
+  control (session-only, auto-opens for an active secondary destination).
+
+### Changed
+- **Product identity is now TAM OS (UX-004F).** Sidebar wordmark, browser title (`TAM OS v2.8.6`),
+  About and Settings read TAM OS; the GitHub repository is now `fanoryu/TAM-OS`, and current-state
+  documentation and links were reconciled. Historical releases retain the `TAM Intelligence OS` name and
+  the `TAM-Intelligence-OS` repository slug where accurate at the time.
+- **Simplified navigation labels (UX-004F):** Finance Overview → Overview, Payroll Workspace → Payroll,
+  Monthly Plan Generator → Planning, Supplemental Payments → Supplements, Add / Upload → Import,
+  Execution Center → Execution, Recurring Expenses → Recurring — presentation labels only; no view/route/
+  id/storage/entity rename.
+- **Numeric typography (UX-004D):** business-number surfaces use the primary UI font with tabular
+  numerals — presentation only; formatters, rounding, currency rules, CSV/Excel/PDF output unchanged.
+- **Quieter Soon placeholder tag (UX-004F).** Placeholder destinations (Projects, Vendors, Financial
+  Calendar) are preserved; only the badge's visual weight was reduced.
+
+### Fixed
+- **Sidebar active-section interaction regression (hotfix).** Clicking a group header, or the Finance
+  **More** control, while its own section held the active view silently flipped hidden session state and
+  armed a surprising collapse/disclosure on the next navigation. Those clicks are now clean no-ops; the
+  active section still stays open by design (verifier-enforced invariant), and every non-active toggle
+  works normally.
+
+### Verification
+- Verifier and Node runtime harnesses over the modular source and the portable artifact, plus browser
+  validation (dark/light across desktop and responsive widths). Deterministic build: the same source
+  yields a byte-identical `dist/tam-os-v2.8.6.html`. CSS golden master unchanged from v2.8.5.
+
+### Known limitations
+- Carried forward from v2.8.5 and unchanged by this release: compound Payroll posting
+  (`commitReadyPayroll`) writes multiple storage keys sequentially and remains non-atomic (residual
+  states are detected by Integrity Check, not auto-repaired); Contract Core editor routing (ADR-014
+  step 2) stays blocked on OQ-2. This release introduces no new known issue.
+
+### Upgrade / storage
+- **`SCHEMA_VERSION` remains 6.** No migration, no storage-key add/remove/rename, no change to how or
+  when data is written. A Complete Backup exported from v2.8.5 restores into v2.8.6 unchanged, and
+  existing persisted data remains compatible. Payroll/contract/finance business semantics are unchanged.
+
 ## 2.8.5 — Workspace & Contract Timeline Integrity
 
 **Type:** Presentation, shell-architecture and derived-calculation release packaging the merged

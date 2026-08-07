@@ -6,7 +6,7 @@ dependencies.
 
 [![CI](https://github.com/fanoryu/TAM-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.8.5-blue)
+![Version](https://img.shields.io/badge/version-2.8.6-blue)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
@@ -45,17 +45,18 @@ Design principles:
 
 ## Current release
 
-**v2.8.5 — Workspace & Contract Timeline Integrity** · `SCHEMA_VERSION` 6
+**v2.8.6 — Navigation Experience & TAM OS Rebrand** · `SCHEMA_VERSION` 6 · *release candidate — prepared, not yet tagged or published*
 
-> **Release state.** v2.8.5 is **published and marked Latest**, released from annotated tag `v2.8.5` at
-> commit `96a8d17`. The published asset `tam-intelligence-os-v2.8.5.html` (965,767 bytes) is
-> byte-identical to the repository artifact. The prior release, **v2.8.4 — Monthly Plan Result
-> Integrity**, remains published and unchanged; it is simply no longer the Latest release. See
+> **Release state.** v2.8.6 is a **release candidate prepared on `main`** — **not yet tagged or
+> published**. **v2.8.5 remains the latest *published* release**, from annotated tag `v2.8.5` at commit
+> `96a8d17`; its published asset `tam-intelligence-os-v2.8.5.html` (965,767 bytes) is immutable. The
+> prior release, **v2.8.4 — Monthly Plan Result Integrity**, remains published and unchanged. See
 > [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a release is cut.
 
-A workspace-presentation and contract-timeline correctness release, packaging the merged UX-002A,
-UX-002B, UX-003A, UX-003B and UX-003C sprints. No schema change, no new or renamed storage key, no data
-migration, and **no change to how or when data is written**.
+A navigation, presentation and naming release, packaging the complete UX-004 navigation modernization
+(UX-004B–UX-004F), the sidebar interaction hotfix, and the TAM OS rebrand. No business-logic or schema
+change, no new or renamed storage key, no data migration, and **no change to how or when data is
+written**. Starting with v2.8.6 the portable artifact uses the TAM OS naming `dist/tam-os-v2.8.6.html`.
 
 - **The application shell is built once and stays mounted** — switching views replaces only the view
   content, so the sidebar and navigation keep their identity instead of being rebuilt on every
@@ -94,7 +95,7 @@ Two supported outputs:
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (66 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/ domain/ platform/ transport/ repository/ cli/` — 65 browser-loaded in one shared global scope, plus the CLI-only module), no ES modules | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-intelligence-os-v2.8.5.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-os-v2.8.6.html` |
 
 ---
 
@@ -184,7 +185,7 @@ flowchart LR
     BUILD["tools/build-single-file.js"]
     VERIFY["tools/verify-build.js<br/>(1713 checks)"]
   end
-  DIST["dist/tam-intelligence-os-v2.8.5.html<br/>(portable single file)"]
+  DIST["dist/tam-os-v2.8.6.html<br/>(portable single file)"]
 
   IDX --> JS --> STATE --> LS
   CSS --> IDX
@@ -238,7 +239,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-intelligence-os-v2.8.5.html  Portable single-file release (build output, version-controlled)
+  tam-os-v2.8.6.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact

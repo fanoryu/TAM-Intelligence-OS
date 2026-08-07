@@ -33,8 +33,9 @@ jobs:
         id: meta
         run: |
           VERSION="$(node -e "process.stdout.write(require('./tools/app-version.js').readAppMeta().version)")"
+          DISTNAME="$(node -e "process.stdout.write(require('./tools/app-version.js').readAppMeta().distName)")"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "dist=dist/tam-intelligence-os-v$VERSION.html" >> "$GITHUB_OUTPUT"
+          echo "dist=dist/$DISTNAME" >> "$GITHUB_OUTPUT"
           echo "expected_tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Confirm tag matches APP_VERSION
