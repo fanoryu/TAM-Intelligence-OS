@@ -2707,6 +2707,27 @@ check(/const APP_VERSION = '2\.8\.5';/.test(ux4fConstants) && /const APP_RELEASE
 check(fs.existsSync(path.join(root,'tools','verify-nav-simplification-runtime.js')),
   'UX-004F runtime harness present: tools/verify-nav-simplification-runtime.js');
 
+/* ============================================================
+   UX-004 SIDEBAR INTERACTION HOTFIX
+   The group-collapse and "More" toggles must not arm a phantom collapse/disclosure
+   flag for the section that owns the active view (the active section is force-open
+   by the verifier-enforced invariant, so flipping the flag changed nothing on screen
+   yet surprised the user on the next navigation). Both handlers now no-op in that
+   case. Behaviour proven by tools/verify-sidebar-click-regression-runtime.js.
+   ============================================================ */
+console.log('== UX-004 SIDEBAR INTERACTION HOTFIX INVARIANTS ==');
+const ux4hBind = (ux4eShell.match(/function bindShell\(app\)\{[\s\S]*?\n\}/)||[''])[0];
+const ux4hGroupHandler = (ux4hBind.match(/querySelectorAll\('\[data-group\]'\)[\s\S]*?\n  \}\);/)||[''])[0];
+const ux4hMoreHandler  = (ux4hBind.match(/querySelectorAll\('\[data-more\]'\)[\s\S]*?\n  \}\);/)||[''])[0];
+check(/g === navActive\(\)\.group/.test(ux4hGroupHandler) && /return;/.test(ux4hGroupHandler),
+  'UX-004 hotfix: the group-toggle handler no-ops for the active group (no phantom collapse)');
+check(/navActive\(\)\.item/.test(ux4hMoreHandler) && /i\.more/.test(ux4hMoreHandler) && /return;/.test(ux4hMoreHandler),
+  'UX-004 hotfix: the More-toggle handler no-ops when the active view lives inside More');
+// The force-open invariant it relies on must still be present (not weakened).
+check(/!==\s*active\.group/.test(ux4bSyncBody), 'UX-004 hotfix: the active-group force-open invariant is preserved');
+check(fs.existsSync(path.join(root,'tools','verify-sidebar-click-regression-runtime.js')),
+  'UX-004 hotfix runtime harness present: tools/verify-sidebar-click-regression-runtime.js');
+
 // UX-002B PHASE 1 — TYPOGRAPHY / TOKEN / THEME INVARIANTS.
 // These convert design rules that were previously only conventions into
 // mechanically enforced invariants, so they cannot silently regress.

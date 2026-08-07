@@ -10,8 +10,8 @@ the repository artifact and the published Release asset were byte-identical (965
 post-release development (UX-004B — Sidebar & Navigation foundation, UX-004C — Domain Regrouping,
 UX-004D — Breadcrumbs, Context Quick Actions & Numeric Typography, UX-004E — Sidebar Interaction:
 collapse/pin/hover-expand + responsive drawer, then UX-004F — Navigation Simplification & TAM OS rebrand)**,
-so the repository artifact is now **995,337 bytes**, SHA-256
-`ab1725314ef88de3862615a63c65b9257e77df49026ea6b0ad66e26911ea8604`, and no
+so the repository artifact is now **996,300 bytes**, SHA-256
+`e88b8fa9805bf4ff7429878d8f5d6d2c37fbd81fa6b13853b359cb1beeadb9b1`, and no
 longer equals the published asset. This is expected post-release development divergence: the **published
 v2.8.5 tag, Release, and 965,767-byte asset are immutable and unchanged**; only `main` moved forward.
 `SCHEMA_VERSION` is 6, unchanged.
@@ -28,10 +28,10 @@ portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **65 of the 66 are bro
 load-order manifest and `index.html` agree on all 65 — and `js/cli/cli.js` is the CLI-only ingress,
 deliberately outside the browser load order. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
-**Verification:** `tools/verify-build.js` — **1849** checks; **fourteen** Node runtime harnesses — **1456**
+**Verification:** `tools/verify-build.js` — **1853** checks; **fifteen** Node runtime harnesses — **1467**
 checks (contract timeline 349, integrity warning rules 146, integrity payroll rules 144, Contract Core 129,
 monthly plan 118, payroll posting 106, contract persistence 74, payroll committed state 72,
-contract renewal 67, integrity rules 67, breadcrumb & quick actions 64, sidebar interaction 34, nav simplification 25,
+contract renewal 67, integrity rules 67, breadcrumb & quick actions 64, sidebar interaction 34, nav simplification 25, sidebar click regression 11,
 `saveAllData` 61).
 **Presentation architecture (UX-002A / UX-002B):** the application shell is mounted once by
 `renderShell()` and persists; ordinary navigation replaces only the content inside `#main`
@@ -107,7 +107,7 @@ flowchart TD
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>1849 invariant checks"]
+  VERIFY["tools/verify-build.js<br/>1853 invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX
