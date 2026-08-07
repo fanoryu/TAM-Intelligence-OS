@@ -8,17 +8,19 @@ released from annotated tag `v2.8.5`, which peels to the published baseline comm
 the repository artifact and the published Release asset were byte-identical (965,767 bytes, SHA-256
 `32e624a262ef1da47bd4ec849471ff98e428402c33722db1715cf1c23a7db8cb`). **`main` has since taken
 post-release development (UX-004B — Sidebar & Navigation foundation, UX-004C — Domain Regrouping,
-then UX-004D — Breadcrumbs, Context Quick Actions & Numeric Typography)**,
-so the repository artifact is now **979,563 bytes**, SHA-256
-`1c9f2409f7497b7efbf3f377a105c2d5078e20ddf151b79b8838cdbc0e72c977`, and no
+UX-004D — Breadcrumbs, Context Quick Actions & Numeric Typography, then UX-004E — Sidebar Interaction:
+collapse/pin/hover-expand + responsive drawer)**,
+so the repository artifact is now **991,647 bytes**, SHA-256
+`c8efaa86318f3eebd02000dc0d62949ae5f8d829e52294561010f037ef27f335`, and no
 longer equals the published asset. This is expected post-release development divergence: the **published
 v2.8.5 tag, Release, and 965,767-byte asset are immutable and unchanged**; only `main` moved forward.
 `SCHEMA_VERSION` is 6, unchanged.
 **Basis:** `tam-intelligence-os-v2.5.2.html` (frozen golden-master source of truth for **JS provenance**
 and the data-safety invariants). Since UX-002B it is **no longer the CSS comparator**: CSS is asserted
 against a pinned SHA-256 of `concat(css/*.css)` — currently
-`49d87fbfe09436bc28e7f1e4ec0146cd9dd9169e4db90ef0089e1e95a65b7539` (revised once for UX-004D: breadcrumb
-landmark styles + the Numeric Typography Standard) — with every superseded anchor kept
+`90412710de6e9bbe3c24a0be7f2d57d69480861d965a6a3811e911c0132b3bce` (revised once for UX-004E: sidebar
+interaction styles — collapse rail, hamburger + backdrop, responsive drawer and desktop hover-expand) —
+with every superseded anchor kept
 in [`audit/ux-002b-2026-08-05/`](audit/ux-002b-2026-08-05/CSS-GOLDEN-MASTER-REVISION.md).
 **Shape today:** a modular source of **66 classic-script JS modules** (in `core/ ui/ finance/ people/
 import/ analytics/ domain/ platform/ transport/ repository/ cli/`) + 5 CSS files, assembled into one
@@ -26,10 +28,11 @@ portable `dist/tam-intelligence-os-v${APP_VERSION}.html`. **65 of the 66 are bro
 load-order manifest and `index.html` agree on all 65 — and `js/cli/cli.js` is the CLI-only ingress,
 deliberately outside the browser load order. Still one shared global scope — no ES modules,
 no bundler. `SCHEMA_VERSION` is 6.
-**Verification:** `tools/verify-build.js` — **1784** checks; **twelve** Node runtime harnesses — **1397**
+**Verification:** `tools/verify-build.js` — **1815** checks; **thirteen** Node runtime harnesses — **1431**
 checks (contract timeline 349, integrity warning rules 146, integrity payroll rules 144, Contract Core 129,
 monthly plan 118, payroll posting 106, contract persistence 74, payroll committed state 72,
-contract renewal 67, integrity rules 67, breadcrumb & quick actions 64, `saveAllData` 61).
+contract renewal 67, integrity rules 67, breadcrumb & quick actions 64, sidebar interaction 34,
+`saveAllData` 61).
 **Presentation architecture (UX-002A / UX-002B):** the application shell is mounted once by
 `renderShell()` and persists; ordinary navigation replaces only the content inside `#main`
 (`renderView()`) and reapplies the nav's derived state in place (`syncShellState()`), with `render()`
@@ -104,7 +107,7 @@ flowchart TD
   CONST["js/core/constants.js<br/>APP_VERSION (single source)"]
   AV["tools/app-version.js"]
   BUILD["tools/build-single-file.js"]
-  VERIFY["tools/verify-build.js<br/>1784 invariant checks"]
+  VERIFY["tools/verify-build.js<br/>1815 invariant checks"]
   DIST["dist/tam-intelligence-os-v{APP_VERSION}.html<br/>portable single file"]
 
   CSS --> IDX
@@ -598,7 +601,7 @@ ranges are the provenance; they are the authority for how the split was derived.
 | 05 | `05-state-load-migrations.js` | 1091–1205 | `loadState` orchestration, `migrateToExecutionSchema`, `loadSettings`/`saveSettings`/`persist` |
 | 06 | `06-domain-services.js` | 1206–1336 | Derived business logic: `getMonths`, `monthTotals`, `categoryBreakdown`, `execStats`, `recurringItems`, `computeInsights` |
 | 07 | `07-import-parser.js` | 1337–1766 | Excel/CSV parsers, letter-doc + generic table parsing, column mapping, `parseUploadedFile` (XLSX), `detectDuplicates` |
-| 08 | `08-ui-shell-render.js` | 1767–1932 | `NAV_GROUPS`, `render()`, `renderView()` → `renderViewContent()` dispatcher, sidebar scroll, placeholder pages, `monthSelectHTML`; UX-004D breadcrumbs (`breadcrumbTrail`/`breadcrumbHTML`/`mountBreadcrumb`, derived from `navOwnerItem`/`navItemGroup`) and the centralized `QUICK_ACTIONS_BY_VIEW` manifest (`quickActionsFor`/`mountQuickActions`, navigation-only via `hrNavTo`) |
+| 08 | `08-ui-shell-render.js` | 1767–1932 | `NAV_GROUPS`, `render()`, `renderView()` → `renderViewContent()` dispatcher, sidebar scroll, placeholder pages, `monthSelectHTML`; UX-004D breadcrumbs (`breadcrumbTrail`/`breadcrumbHTML`/`mountBreadcrumb`, derived from `navOwnerItem`/`navItemGroup`) and the centralized `QUICK_ACTIONS_BY_VIEW` manifest (`quickActionsFor`/`mountQuickActions`, navigation-only via `hrNavTo`); UX-004E sidebar interaction (`sidebarApplyState`/`setSidebarCollapsed`/`openSidebarDrawer`/`closeSidebarDrawer`, session-only collapse/pin/drawer, class-toggle only — never remounts the shell) |
 | 09 | `09-finance-pages.js` | 1933–2918 | Dashboard, Execution Center, Transactions, Add/Upload, execution-engine actions, execute/edit/detail modals, backup panel |
 | 10 | `10-hr-persistence-portability.js` | 2919–3147 | `HR_KEYS`, `loadHRData`/`persistHR`, HR/overtime/payroll-ops/dedup migrations, **atomic:** complete backup / validate / restore |
 | 11 | `11-import-ui-analytics.js` | 3148–4727 | `handleFile`, import preview + update-diff UI, Planned vs Actual, Compare, Trends, Executive Dashboard, Cash Flow, Budget Center, Settings, About, **Release Notes**, Reports |

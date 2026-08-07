@@ -213,8 +213,8 @@ function navGroupHTML(g){
             </button>
             <div class="nav-group-items" style="${collapsed?'display:none;':''}">
               ${g.items.map(n=>{ const on = n.id===active.item;
-                return `<button class="nav-item ${on?'active':''}" data-nav="${n.id}"${on?' aria-current="page"':''}>
-                <span class="ic">${n.ic}</span>${escapeHtml(n.label)}${featureBadgeHTML(n.id)}
+                return `<button class="nav-item ${on?'active':''}" data-nav="${n.id}"${on?' aria-current="page"':''} title="${escapeHtml(n.label)}">
+                <span class="ic">${n.ic}</span><span class="nav-label">${escapeHtml(n.label)}</span>${featureBadgeHTML(n.id)}
               </button>`;}).join('')}
             </div>
           </div>`;
@@ -224,10 +224,13 @@ function navGroupHTML(g){
 function renderShell(){
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div class="sidebar">
+    <button class="nav-hamburger" id="navHamburger" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span class="hbars" aria-hidden="true">☰</span></button>
+    <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
+    <div class="sidebar" id="sidebar">
       <div class="brand">
         <div class="mark"><span class="mfull">TAM <span>Intelligence&nbsp;OS</span></span><span class="mshort">TAM <span>OS</span></span></div>
         <div class="sub">${escapeHtml(State.settings.companyName||COMPANY_NAME_DEFAULT)}</div>
+        <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar"><span class="cbar" aria-hidden="true">«</span></button>
       </div>
       <nav class="nav" aria-label="Primary navigation">
         ${NAV_GROUPS.map(navGroupHTML).join('')}
@@ -237,6 +240,7 @@ function renderShell(){
     <div class="main" id="main"></div>
   `;
   bindShell(app);
+  sidebarApplyState(); // apply session collapse/drawer state to the freshly mounted shell
 }
 // Shell listeners are bound once, against nodes that now outlive navigation.
 function bindShell(app){
@@ -245,6 +249,7 @@ function bindShell(app){
       e.preventDefault();
       captureSidebarScroll();
       State.view = btn.dataset.nav; State.pendingImport=null;
+      if(State.sidebarDrawerOpen) closeSidebarDrawer(); // a tap in the mobile drawer navigates then dismisses it
       render();
       btn.blur(); // unchanged: navigation leaves focus off the nav item, as before
     });
@@ -260,6 +265,31 @@ function bindShell(app){
   });
   const navEl = app.querySelector('.nav');
   if(navEl) navEl.addEventListener('scroll', ()=>{ State.sidebarScrollTop = navEl.scrollTop; });
+  // UX-004E — sidebar interaction listeners, bound ONCE against the persistent shell.
+  const collapseBtn = app.querySelector('#sidebarCollapseBtn');
+  if(collapseBtn) collapseBtn.addEventListener('click', (e)=>{ e.preventDefault(); toggleSidebarCollapsed(); });
+  const hamburger = app.querySelector('#navHamburger');
+  if(hamburger) hamburger.addEventListener('click', (e)=>{ e.preventDefault(); if(State.sidebarDrawerOpen) closeSidebarDrawer(); else openSidebarDrawer(); });
+  const backdrop = app.querySelector('#sidebarBackdrop');
+  if(backdrop) backdrop.addEventListener('click', ()=>closeSidebarDrawer());
+  const sidebar = app.querySelector('.sidebar');
+  // ESC closes the drawer; Tab is trapped inside the sidebar while the drawer is open.
+  if(sidebar) sidebar.addEventListener('keydown', (e)=>{
+    if(!State.sidebarDrawerOpen) return;
+    if(e.key==='Escape'){ e.preventDefault(); closeSidebarDrawer(); return; }
+    if(e.key==='Tab'){
+      const f = sidebarFocusables(sidebar); if(!f.length) return;
+      const first=f[0], last=f[f.length-1];
+      if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+    }
+  });
+  // A viewport change (e.g. mobile -> desktop) re-asserts state and dismisses a dangling drawer.
+  if(typeof matchMedia === 'function'){
+    const mq = matchMedia('(max-width:768px)');
+    const onMq = ()=>{ if(!sidebarIsDrawerMode() && State.sidebarDrawerOpen){ closeSidebarDrawer(); } else { sidebarApplyState(); } };
+    if(mq.addEventListener) mq.addEventListener('change', onMq); else if(mq.addListener) mq.addListener(onMq);
+  }
 }
 // Reapplies to the persistent shell exactly the derived state that the old full
 // rebuild used to re-emit from scratch. Same inputs, same resulting DOM.
@@ -293,6 +323,89 @@ function syncShellState(){
     const disp = collapsed?'none':'';
     if(items && items.style.display !== disp) items.style.display = disp;
   });
+  // UX-004E — re-assert sidebar collapse/drawer state after each in-place sync, so
+  // the session interaction state survives navigation without a shell remount.
+  sidebarApplyState();
+}
+/* ============================================================
+   UX-004E — SIDEBAR INTERACTION (collapse, pin, hover-expand, responsive drawer)
+   INTERACTION ONLY. Every behaviour toggles classes / aria attributes on the
+   ALREADY-MOUNTED persistent shell nodes — it never remounts the shell, never
+   changes node identity, and never touches active-state, breadcrumb or Quick Action
+   logic. All state is SESSION-ONLY on State (sidebarCollapsed / sidebarPinned /
+   sidebarDrawerOpen): no storage key, no persistence, no schema. Hover-expand is
+   pure CSS (desktop only). The drawer is width-driven CSS; JS only toggles the
+   open class, manages the focus trap, ESC/backdrop close, and focus restoration.
+   ============================================================ */
+// Drawer mode = tablet/mobile widths, where the sidebar is an off-canvas overlay.
+function sidebarIsDrawerMode(){
+  return typeof matchMedia === 'function' ? matchMedia('(max-width:768px)').matches : false;
+}
+// Re-assert the current session state onto the persistent nodes. Idempotent and
+// cheap; safe to call after mount and on every navigation sync.
+function sidebarApplyState(){
+  const app = document.getElementById('app'); if(!app) return;
+  const sidebar = app.querySelector('.sidebar');
+  const drawer  = sidebarIsDrawerMode();
+  const collapsed = !drawer && !!State.sidebarCollapsed; // collapse is a desktop-only rail
+  if(sidebar){
+    sidebar.classList.toggle('collapsed', collapsed);
+    // In drawer mode the sidebar is hidden off-canvas unless the drawer is open.
+    const hidden = drawer && !State.sidebarDrawerOpen;
+    if(hidden){ sidebar.setAttribute('aria-hidden','true'); }
+    else if(sidebar.hasAttribute('aria-hidden')){ sidebar.removeAttribute('aria-hidden'); }
+  }
+  app.classList.toggle('drawer-open', drawer && !!State.sidebarDrawerOpen);
+  const back = app.querySelector('#sidebarBackdrop');
+  if(back){ const show = drawer && !!State.sidebarDrawerOpen; if(show){ back.hidden = false; } else { back.hidden = true; } }
+  const cbtn = app.querySelector('#sidebarCollapseBtn');
+  if(cbtn){
+    cbtn.setAttribute('aria-expanded', String(!collapsed));
+    cbtn.setAttribute('aria-label', collapsed?'Expand sidebar':'Collapse sidebar');
+    cbtn.setAttribute('title', collapsed?'Expand sidebar':'Collapse sidebar');
+    const bar = cbtn.querySelector('.cbar'); if(bar){ const g = collapsed?'»':'«'; if(bar.textContent!==g) bar.textContent=g; }
+  }
+  const ham = app.querySelector('#navHamburger');
+  if(ham) ham.setAttribute('aria-expanded', String(drawer && !!State.sidebarDrawerOpen));
+}
+// Collapse / expand the desktop rail. This IS the session pin — the chosen state is
+// remembered for the session (in memory) and never persisted.
+function setSidebarCollapsed(collapsed){
+  State.sidebarCollapsed = !!collapsed;
+  State.sidebarPinned = collapsed ? 'collapsed' : 'expanded'; // session-only pin, never stored
+  sidebarApplyState();
+}
+function toggleSidebarCollapsed(){ setSidebarCollapsed(!State.sidebarCollapsed); }
+// Focus trap for the open mobile drawer: Tab cycles within the sidebar; nothing
+// outside it receives focus while the overlay is up.
+function sidebarFocusables(sidebar){
+  return Array.from(sidebar.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+    .filter(el=>!el.disabled && el.offsetParent !== null);
+}
+function openSidebarDrawer(){
+  if(!sidebarIsDrawerMode()) return;
+  State._sidebarFocusReturn = document.activeElement; // restore here on close
+  State.sidebarDrawerOpen = true;
+  sidebarApplyState();
+  const app = document.getElementById('app'); const sidebar = app && app.querySelector('.sidebar');
+  const f = sidebar ? sidebarFocusables(sidebar) : [];
+  if(f.length) f[0].focus();
+}
+function closeSidebarDrawer(){
+  const wasOpen = !!State.sidebarDrawerOpen;
+  State.sidebarDrawerOpen = false;
+  sidebarApplyState();
+  if(wasOpen){
+    const ret = State._sidebarFocusReturn;
+    const app = document.getElementById('app');
+    const ham = app && app.querySelector('#navHamburger');
+    // Restore to where focus was before opening; if that was nowhere meaningful
+    // (body/detached), fall back to the control that opened the drawer.
+    const retOk = ret && ret !== document.body && typeof ret.focus==='function' && document.contains(ret);
+    const target = retOk ? ret : ham;
+    if(target && typeof target.focus==='function') target.focus();
+    State._sidebarFocusReturn = null;
+  }
 }
 /* Compatibility facade — the entry point every existing caller already uses.
    Mounts the shell on first use, then only syncs it and replaces the view. */
