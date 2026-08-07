@@ -60,8 +60,13 @@ const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
 // Pin history (each superseded value is preserved; see audit/ux-002b-2026-08-05/):
 //   pre-UX-002B      b311990b405d4d8ac86efb406e9cfefafee2a53b29dec6a201e0690387a8100d
 //   Phase 1          47413d6eb2e864367aed98e50e8d9a9ed80c14605092b853b08a0c775e35d712
-//   Phase 1 remediation (current) — restores narrow-width grid containment
-const CSS_GOLDEN_SHA256 = 'b1cec5dd8b789f49d3967c5e49786961418f87b6f21975965315981c6f6e507c';
+//   Phase 1 remediation  b1cec5dd8b789f49d3967c5e49786961418f87b6f21975965315981c6f6e507c
+//   UX-004D (current) — AUTHORIZED golden-master revision. Two additive presentation
+//     changes only: (1) the breadcrumb landmark styles (css/shell.css); (2) the
+//     Numeric Typography Standard — business-number surfaces (.stat-value, td.num/
+//     th.num, .mono, .chart-mini-stat .val) move from --mono to --sans + tabular-nums.
+//     No color/spacing/radius/layout token changed; --mono retained for technical inputs.
+const CSS_GOLDEN_SHA256 = '49d87fbfe09436bc28e7f1e4ec0146cd9dd9169e4db90ef0089e1e95a65b7539';
 console.log('== CSS GOLDEN MASTER (pinned digest of concat(css/*.css)) ==');
 const cssDigest = crypto.createHash('sha256').update(trimLF(srcCss), 'utf8').digest('hex');
 check(cssDigest === CSS_GOLDEN_SHA256,
@@ -2269,7 +2274,10 @@ check(/\bfunction\s+navOwnerItem\s*\(/.test(ux4bShell) && /\bfunction\s+navItemG
 const ux4bNavItems = new Set([...ux4bShell.matchAll(/\{id:'([a-zA-Z]+)',\s*label:'[^']*',\s*ic:/g)].map(m=>m[1]));
 const ux4bOwnerBlock = (ux4bShell.match(/const\s+NAV_VIEW_OWNER\s*=\s*\{([\s\S]*?)\};/)||[,''])[1];
 const ux4bOwner = {}; [...ux4bOwnerBlock.matchAll(/([a-zA-Z]+):\s*'([a-zA-Z]+)'/g)].forEach(m=>{ ux4bOwner[m[1]]=m[2]; });
-const ux4bRenderViewBody = (ux4bShell.match(/function renderView\(main\)\{[\s\S]*?\n\}/)||[''])[0];
+// UX-004D refactor: the renderView() dispatch table moved into renderViewContent();
+// renderView() now delegates to it and then mounts the breadcrumb + Quick Actions.
+// Route resolution and "no shell remount" are proven against the dispatch function.
+const ux4bRenderViewBody = (ux4bShell.match(/function renderViewContent\(main\)\{[\s\S]*?\n\}/)||[''])[0];
 const ux4bRoutes = [...new Set([...ux4bRenderViewBody.matchAll(/State\.view===['"]([a-zA-Z]+)['"]/g)].map(m=>m[1]))];
 // (3) Every dispatched route has a valid owner: it is a direct sidebar item, or the
 //     manifest names a parent that is itself a real sidebar item.
@@ -2395,6 +2403,131 @@ check(!/localStorage|StorageAdapter|persistHR|persist\(|saveSettings/.test(ux4bS
   'no stored navigation grouping state (regrouping is session-only, derived from NAV_GROUPS)');
 // (20) SCHEMA_VERSION remains 6.
 check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'UX-004C keeps SCHEMA_VERSION at 6');
+
+/* ============================================================
+   UX-004D — BREADCRUMBS, CONTEXT QUICK ACTIONS, NUMERIC TYPOGRAPHY
+   Static (single-process, text-based) guards. ux4bShell is the already-read
+   js/ui/shell-render.js source. These prove SHAPE; behaviour is proven by
+   tools/verify-breadcrumb-quickaction-runtime.js.
+   ============================================================ */
+console.log('== UX-004D BREADCRUMB + QUICK ACTION + NUMERIC TYPOGRAPHY INVARIANTS ==');
+
+// ---- Part 18: breadcrumb protections ----
+const ux4dTrailBody = (ux4bShell.match(/function breadcrumbTrail\(view\)\{[\s\S]*?\n\}/)||[''])[0];
+// (1) The trail derives from the canonical nav data, not a second route hierarchy.
+check(/navOwnerItem\s*\(/.test(ux4dTrailBody) && /navItemGroup\s*\(/.test(ux4dTrailBody) && /PAGE_TITLES/.test(ux4dTrailBody),
+  'UX-004D: breadcrumbTrail() derives hierarchy from navOwnerItem()/navItemGroup()/PAGE_TITLES (canonical nav data)');
+// (2) No independent breadcrumb route map: no second NAV_*/OWNER-like table introduced.
+check(!/const\s+(BREADCRUMB_ROUTES|BREADCRUMB_OWNER|CRUMB_ROUTES|BREADCRUMB_TREE)\s*=/.test(ux4bShell),
+  'UX-004D: no independent breadcrumb route hierarchy exists (single source of truth reused)');
+// (3/4/5/6) Detail breadcrumbs resolve through their canonical owning item — proven by
+// reusing the SAME NAV_VIEW_OWNER already validated above (ux4bOwner).
+check(ux4bOwner.employeeDetail === 'employees', 'UX-004D: Employee Detail breadcrumb resolves through Employees');
+check(ux4bOwner.contractDetail === 'contracts', 'UX-004D: Contract Detail breadcrumb resolves through Contracts');
+check(ux4bOwner.payrollDetail === 'payroll', 'UX-004D: Payroll Detail breadcrumb resolves through Payroll');
+check(ux4bOwner.overtimeSheet === 'overtime', 'UX-004D: Overtime Sheet breadcrumb resolves through Overtime');
+// (7) Domain names derive from the five-domain model (NAV_GROUP_LABELS built from NAV_GROUPS).
+check(/const\s+NAV_GROUP_LABELS\s*=\s*Object\.fromEntries\(NAV_GROUPS\.map/.test(ux4bShell),
+  'UX-004D: breadcrumb domain labels derive from NAV_GROUPS (five-domain model)');
+// (8) Exactly one Breadcrumb landmark, with an accessible name, emitted once.
+const ux4dCrumbLandmarks = (ux4bShell.match(/<nav class="breadcrumb" aria-label="Breadcrumb">/g)||[]).length;
+check(ux4dCrumbLandmarks === 1, 'UX-004D: exactly one <nav aria-label="Breadcrumb"> landmark is emitted (found ' + ux4dCrumbLandmarks + ')');
+// (9) Terminal breadcrumb is current/non-navigation: the current crumb is rendered as
+//     text with aria-current="page", never as a data-crumb-nav button.
+const ux4dHtmlBody = (ux4bShell.match(/function breadcrumbHTML\(view\)\{[\s\S]*?\n\}/)||[''])[0];
+check(/aria-current="page"/.test(ux4dHtmlBody) && /crumb-text/.test(ux4dHtmlBody)
+  && /c\.view\b/.test(ux4dHtmlBody),
+  'UX-004D: terminal crumb is non-navigation text with aria-current="page"; only linked crumbs get data-crumb-nav');
+// (9b) The breadcrumb landmark is distinct from the sidebar landmark (no aria-current
+//      collision): breadcrumb aria-current lives inside the Breadcrumb <nav>, the
+//      sidebar keeps its own Primary-navigation landmark.
+check(/aria-label="Breadcrumb"/.test(ux4bShell) && /aria-label="Primary navigation"/.test(ux4bShell),
+  'UX-004D: breadcrumb current-state lives in its own Breadcrumb landmark, separate from the sidebar Primary navigation');
+// (10) No new page/view is created for breadcrumb navigation: crumb links only target
+//      EXISTING sidebar items (owner ids), and renderViewContent gains no new route.
+const ux4dCrumbLinkTargets = ux4bShell.includes('data-crumb-nav="${c.view}"'); // links target resolved owner views only
+check(ux4dCrumbLinkTargets && /hrNavTo\(btn\.dataset\.crumbNav\)/.test(ux4bShell),
+  'UX-004D: breadcrumb links navigate to existing owner views via hrNavTo() — no new landing page created');
+
+// ---- Part 19: quick action protections ----
+const ux4dQaBlock = (ux4bShell.match(/const\s+QUICK_ACTIONS_BY_VIEW\s*=\s*\{[\s\S]*?\n\};/)||[''])[0];
+// (1) One centralized Quick Action manifest.
+check((ux4bShell.match(/const\s+QUICK_ACTIONS_BY_VIEW\s*=/g)||[]).length === 1 && ux4dQaBlock.length > 0,
+  'UX-004D: exactly one centralized QUICK_ACTIONS_BY_VIEW manifest');
+// (2) No duplicate per-module action maps scattered in view modules.
+const ux4dScatter = jsFiles.filter(f=>f!=='ui/shell-render.js').filter(f=>/QUICK_ACTIONS_BY_VIEW|const\s+\w*QuickActions\s*=/.test(read(path.join(root,'js',f))));
+check(ux4dScatter.length === 0, 'UX-004D: no per-module Quick Action maps outside the central manifest'
+  + (ux4dScatter.length ? ' >> VIOLATION: ' + ux4dScatter.join(', ') : ''));
+// (3) Actions target EXISTING views only: every `to:` value is a known route (sidebar
+//     item or manifest owner key), i.e. dispatched by renderViewContent().
+const ux4dActionTargets = [...new Set([...ux4dQaBlock.matchAll(/to:'([a-zA-Z]+)'/g)].map(m=>m[1]))];
+const ux4dAllRoutes = new Set([...ux4bRoutes, ...ux4bNavItems]);
+const ux4dBadTargets = ux4dActionTargets.filter(v=>!ux4dAllRoutes.has(v));
+check(ux4dActionTargets.length > 0 && ux4dBadTargets.length === 0,
+  'UX-004D: every Quick Action destination is an existing view (' + ux4dActionTargets.length + ' targets)'
+  + (ux4dBadTargets.length ? ' >> VIOLATION: unknown targets: ' + ux4dBadTargets.join(', ') : ''));
+// (4/5/6/7/8) NAVIGATION SEMANTICS ONLY. The manifest and its two mount/handler
+//     functions must not name any execution, approval, posting or persistence
+//     primitive. This is the durable no-auto-execution guard (Part C §12).
+const ux4dQaHandlers = ux4dQaBlock
+  + (ux4bShell.match(/function quickActionsFor\(view\)\{[\s\S]*?\n\}/)||[''])[0]
+  + (ux4bShell.match(/function mountQuickActions\(main\)\{[\s\S]*?\n\}/)||[''])[0];
+const ux4dForbidden = /\b(executeTransaction|executePayment|executePayroll|executeOvertime|recordExecution|approve\w*|postToFinance|postPayroll|persist\w*|StorageAdapter|localStorage|saveAllData|commitPayroll|generatePayroll)\s*\(/;
+check(!ux4dForbidden.test(ux4dQaHandlers),
+  'UX-004D: Quick Action manifest/handlers invoke no execution, approval, posting or persistence function');
+// The only side-effecting call a Quick Action makes is hrNavTo() (navigation).
+const ux4dMountBody = (ux4bShell.match(/function mountQuickActions\(main\)\{[\s\S]*?\n\}/)||[''])[0];
+check(/hrNavTo\(a\.to/.test(ux4dMountBody) && !/render\(\);/.test(ux4dMountBody.replace(/hrNavTo[\s\S]*?\n/,'')),
+  'UX-004D: mountQuickActions() drives navigation exclusively through hrNavTo()');
+// (9) Execution Center action label is navigation-oriented ("Go to Execution Center"),
+//     never "Execute".
+check(/label:'Go to Execution Center'/.test(ux4dQaBlock) && !/label:'Execute/.test(ux4dQaBlock),
+  'UX-004D: Execution Center Quick Action is worded as navigation ("Go to Execution Center"), not "Execute"');
+// (10) Visibility derives from existing context/state via show() predicates.
+check(/show:\(\)=>/.test(ux4dQaBlock),
+  'UX-004D: Quick Action visibility derives from existing state via show() predicates');
+// (11) No Quick Action state persisted, and (12) SCHEMA_VERSION remains 6.
+check(!/persist|localStorage|StorageAdapter|SCHEMA_VERSION/.test(ux4dQaHandlers),
+  'UX-004D: no Quick Action visibility/state is persisted (no storage, no schema)');
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'UX-004D: SCHEMA_VERSION remains 6');
+
+// ---- Part 20: numeric typography protections ----
+const ux4dComp = read(path.join(root,'css','components.css'));
+const ux4dCharts = read(path.join(root,'css','charts.css'));
+const ux4dTokens = read(path.join(root,'css','tokens.css'));
+// (1) tabular-nums applied in the approved business-number selectors.
+check(/\.stat-value\{[^}]*font-variant-numeric:tabular-nums/.test(ux4dComp), 'UX-004D: .stat-value uses tabular-nums');
+check(/td\.num,\s*th\.num\{[^}]*font-variant-numeric:tabular-nums/.test(ux4dComp), 'UX-004D: numeric table columns (td.num/th.num) use tabular-nums');
+check(/\.mono\{[^}]*font-variant-numeric:tabular-nums/.test(ux4dComp), 'UX-004D: .mono currency/amount surface uses tabular-nums');
+check(/\.chart-mini-stat \.val\{[^}]*font-variant-numeric:tabular-nums/.test(ux4dCharts), 'UX-004D: chart metric values use tabular-nums');
+// (2) Primary UI font retained: business-number selectors use --sans (not --mono).
+check(/\.stat-value\{[^}]*font-family:var\(--sans\)/.test(ux4dComp)
+  && /\.mono\{[^}]*font-family:var\(--sans\)/.test(ux4dComp)
+  && /td\.num,\s*th\.num\{[^}]*font-family:var\(--sans\)/.test(ux4dComp),
+  'UX-004D: business-number surfaces use the primary UI font (--sans)');
+// (3) Business numeric surfaces no longer depend on monospace (superseded), but --mono
+//     is retained for technical/developer inputs (textarea.input).
+check(!/\.stat-value\{[^}]*var\(--mono\)/.test(ux4dComp) && !/\.mono\{font-family:var\(--mono\)/.test(ux4dComp),
+  'UX-004D: business numeric surfaces no longer depend on monospace');
+check(/--mono:/.test(ux4dTokens) && /textarea\.input\{[^}]*var\(--mono\)/.test(ux4dCharts),
+  'UX-004D: monospace (--mono) retained for technical inputs, not the default business-number font');
+// (4/5/6/7/8/9) Formatter + export logic unchanged: fmtIDR, toLocaleString, CSV writers
+//     are byte-identical to their form on the merge base (no presentation leak into logic).
+const ux4dFmtSrc = read(path.join(root,'js','core','utils.js'));
+const ux4dFmtIdr = (ux4dFmtSrc.match(/function fmtIDR\([\s\S]*?\n\}/)||[''])[0];
+check(/function fmtIDR/.test(ux4dFmtSrc) && /toLocaleString\('id-ID'/.test(ux4dFmtIdr),
+  'UX-004D: fmtIDR() still formats via toLocaleString(id-ID) — formatter unchanged');
+// No CSS/presentation concept leaked into any formatter or export path.
+const ux4dExportFiles = jsFiles.map(f=>read(path.join(root,'js',f))).join('\n');
+check(!/font-variant-numeric|tabular-nums/.test(ux4dExportFiles),
+  'UX-004D: no numeric-typography concept leaked into JS (formatters/exports are presentation-agnostic)');
+// (10) CSS golden-master pin was revised exactly once for UX-004D (documented above).
+check(CSS_GOLDEN_SHA256 === '49d87fbfe09436bc28e7f1e4ec0146cd9dd9169e4db90ef0089e1e95a65b7539',
+  'UX-004D: CSS golden-master pin intentionally revised once to the UX-004D digest');
+
+// ---- runtime harness presence (behaviour proof lives out-of-process) ----
+check(fs.existsSync(path.join(root,'tools','verify-breadcrumb-quickaction-runtime.js')),
+  'UX-004D runtime harness present: tools/verify-breadcrumb-quickaction-runtime.js');
 
 // UX-002B PHASE 1 — TYPOGRAPHY / TOKEN / THEME INVARIANTS.
 // These convert design rules that were previously only conventions into

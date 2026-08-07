@@ -308,6 +308,13 @@ function render(){
 const PLACEHOLDER_IDS = new Set(NAV_GROUPS.flatMap(g=>g.items).filter(i=>i.placeholder).map(i=>i.id));
 
 function renderView(main){
+  renderViewContent(main);
+  // UX-004D — centralized, single-landmark breadcrumb + context Quick Actions,
+  // mounted AFTER the view content so they attach to the freshly rendered page-head.
+  mountBreadcrumb(main);
+  mountQuickActions(main);
+}
+function renderViewContent(main){
   if(PLACEHOLDER_IDS.has(State.view)) return renderPlaceholderPage(main, State.view);
   if(State.view==='execDashboard') return renderExecutiveDashboard(main);
   if(State.view==='financeOverview') return renderDashboard(main);
@@ -344,6 +351,150 @@ function renderView(main){
   if(State.view==='about') return renderAbout(main);
   if(State.view==='releasenotes') return renderReleaseNotes(main);
   return renderExecutiveDashboard(main);
+}
+/* ============================================================
+   UX-004D — BREADCRUMBS (derived from the canonical navigation architecture)
+   Breadcrumbs are NOT a second route hierarchy. Every trail is computed from the
+   SAME sources that drive the sidebar: navOwnerItem() (NAV_VIEW_OWNER) resolves the
+   owning sidebar item, navItemGroup() (NAV_GROUPS) resolves its domain, and
+   PAGE_TITLES supplies canonical item labels. Conceptual shape: Domain / Item /
+   Context. Domain crumbs are non-interactive (no dedicated domain landing page
+   exists); the owning-item crumb links to its canonical view only when the current
+   view is a deeper context; the terminal crumb is the current page (aria-current).
+   ============================================================ */
+const NAV_GROUP_LABELS = Object.fromEntries(NAV_GROUPS.map(g=>[g.id,g.label]));
+// Terminal (context) label for a drill-down view. Entity-aware where reliable
+// runtime context already exists — read SYNCHRONOUSLY from the already-selected id,
+// never a new fetch and never async — otherwise a stable generic label. Internal
+// ids are never exposed: a human label (name / contract number) or a generic falls
+// back in their place.
+function breadcrumbTerminalLabel(view){
+  switch(view){
+    case 'employeeDetail':     { const e = (typeof empById==='function') && empById(State.detailEmpId); return (e && e.fullName) || 'Employee Detail'; }
+    case 'contractDetail':     { const c = (typeof contractById==='function') && contractById(State.detailContractId); return (c && c.contractNumber) || 'Contract Detail'; }
+    case 'payrollDetail':      { const p = (typeof payrollPlanById==='function') && payrollPlanById(State.detailPayrollId); return (p && p.employeeName) || 'Payroll Detail'; }
+    case 'supplementalDetail': return 'Supplemental Detail';
+    case 'payrollAdjustments': return 'Payroll Adjustments';
+    case 'overtimeSheet':      return 'Overtime Sheet';
+    case 'employeeDedup':      return 'Duplicate Review';
+    case 'legacyMap':          return 'Legacy Mapping';
+    case 'smartImport':        return 'Smart Import';
+    case 'importResults':      return 'Import Results';
+    default:                   return PAGE_TITLES[view] || view;
+  }
+}
+// The trail, derived entirely from the canonical nav data. Returns
+// [{label, view|null, current}]. view!==null means the crumb navigates to that
+// existing sidebar view; current marks the terminal (present) page.
+function breadcrumbTrail(view){
+  const ownerId = navOwnerItem(view);      // sidebar item that owns this view (NAV_VIEW_OWNER)
+  const groupId = navItemGroup(ownerId);   // its domain (NAV_GROUPS) — single source of truth
+  const isContext = view !== ownerId;      // a context-only drill-down (owner differs)
+  const trail = [];
+  // Domain: no dedicated per-domain landing page exists, so it is non-interactive text.
+  if(groupId) trail.push({ label: NAV_GROUP_LABELS[groupId] || groupId, view: null, current: false });
+  // Owning nav item: links to its canonical view when we are deeper; else it is current.
+  trail.push({ label: PAGE_TITLES[ownerId] || ownerId, view: isContext ? ownerId : null, current: !isContext });
+  // Terminal context/detail crumb (present page).
+  if(isContext) trail.push({ label: breadcrumbTerminalLabel(view), view: null, current: true });
+  return trail;
+}
+function breadcrumbHTML(view){
+  const trail = breadcrumbTrail(view);
+  if(!trail.length) return '';
+  const items = trail.map((c,i)=>{
+    const sep = i>0 ? '<span class="crumb-sep" aria-hidden="true">/</span>' : '';
+    const inner = c.view
+      ? `<button type="button" class="crumb-link" data-crumb-nav="${c.view}">${escapeHtml(c.label)}</button>`
+      : `<span class="crumb-text"${c.current?' aria-current="page"':''}>${escapeHtml(c.label)}</span>`;
+    return `${sep}<li class="crumb">${inner}</li>`;
+  }).join('');
+  // Exactly ONE Breadcrumb landmark per render; the sidebar keeps its own separate
+  // Primary-navigation landmark and its own active item's aria-current="page".
+  return `<nav class="breadcrumb" aria-label="Breadcrumb"><ol class="crumb-list">${items}</ol></nav>`;
+}
+function mountBreadcrumb(main){
+  const html = breadcrumbHTML(State.view);
+  if(!html) return;
+  main.insertAdjacentHTML('afterbegin', html);
+  main.querySelectorAll('[data-crumb-nav]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.preventDefault(); hrNavTo(btn.dataset.crumbNav); });
+  });
+}
+/* ============================================================
+   UX-004D — CONTEXT-AWARE QUICK ACTIONS (one centralized manifest)
+   NAVIGATION METADATA ONLY. Each action names a destination VIEW, an optional
+   resolver returning the State context patch needed to open it, and an optional
+   visibility predicate over existing derived state. No execution, approval, posting
+   or persistence is expressible here — the only side effect any action can produce
+   is hrNavTo(): set navigation/context state and change the view. Every destination
+   is an EXISTING view where the existing controls, confirmations, permissions and
+   audit behaviour remain authoritative. Execution-Center actions are worded as
+   navigation ("Go to Execution Center"), never as "Execute".
+   ============================================================ */
+const QUICK_ACTIONS_BY_VIEW = {
+  employeeDetail: [
+    { label:'View Contract', to:'contractDetail',
+      show:()=>!!activeContractToday(State.detailEmpId),
+      resolve:()=>({ detailContractId: (activeContractToday(State.detailEmpId)||{}).id }) },
+    { label:'Go to Payroll', to:'payroll' },
+  ],
+  contractDetail: [
+    { label:'View Employee', to:'employeeDetail',
+      show:()=>{ const c=contractById(State.detailContractId); return !!(c && empById(c.employeeId)); },
+      resolve:()=>({ detailEmpId: (contractById(State.detailContractId)||{}).employeeId }) },
+    { label:'Go to Payroll', to:'payroll' },
+  ],
+  payroll: [
+    { label:'Go to Execution Center', to:'executioncenter',
+      show:()=>State.payrollPlans.some(p=>{ const s=payrollStage(p); return s==='Posted' || s==='Executed'; }) },
+  ],
+  payrollDetail: [
+    { label:'View Posted Transactions', to:'transactions',
+      show:()=>!!payrollTxnOf(payrollPlanById(State.detailPayrollId)) },
+    { label:'Go to Execution Center', to:'executioncenter',
+      show:()=>{ const p=payrollPlanById(State.detailPayrollId); if(!p) return false; const s=payrollStage(p); return s==='Posted' || s==='Executed'; } },
+  ],
+  overtime: [
+    { label:'Go to Payroll', to:'payroll' },
+    { label:'Go to Execution Center', to:'executioncenter',
+      show:()=>State.payrollPlans.some(p=>{ const s=payrollStage(p); return s==='Posted' || s==='Executed'; }) },
+  ],
+  executioncenter: [
+    { label:'View Posted Transactions', to:'transactions' },
+    { label:'Go to Payroll', to:'payroll' },
+    { label:'Go to Overtime', to:'overtime' },
+  ],
+};
+// Visible actions for a view — visibility derives from existing state at render time
+// and is never persisted. A throwing predicate hides its action (fail-safe).
+function quickActionsFor(view){
+  const defs = QUICK_ACTIONS_BY_VIEW[view];
+  if(!defs) return [];
+  return defs.filter(a=>{ try{ return a.show ? !!a.show() : true; }catch(e){ return false; } });
+}
+// Quick Actions live in the existing page-header .head-controls slot — native to the
+// workspace header, no floating button, palette or second toolbar. hrNavTo() is the
+// ONLY effect: navigation and context state, nothing else.
+function mountQuickActions(main){
+  const acts = quickActionsFor(State.view);
+  if(!acts.length) return;
+  const head = main.querySelector('.page-head');
+  if(!head) return;
+  let controls = head.querySelector('.head-controls');
+  if(!controls){ controls = document.createElement('div'); controls.className='head-controls'; head.appendChild(controls); }
+  acts.forEach(a=>{
+    const btn = document.createElement('button');
+    btn.type='button';
+    btn.className='btn quick-action';
+    btn.textContent = a.label;
+    btn.setAttribute('data-quick-action', a.to);
+    btn.addEventListener('click', ()=>{
+      const extra = a.resolve ? a.resolve() : null;
+      hrNavTo(a.to, extra || undefined); // navigation only — sets view + required context
+    });
+    controls.appendChild(btn);
+  });
 }
 function goToMonthOverview(monthKey){ State.selectedMonth = monthKey; State.view = 'financeOverview'; render(); }
 function renderPlaceholderPage(main, id){

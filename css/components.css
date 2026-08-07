@@ -25,7 +25,13 @@
 /* UX-002B: a stat card holds one number — it does not need 16/18px of chrome. */
 .stat-card{padding:var(--space-3) var(--space-4);}
 .stat-label{font-size:var(--fs-1);color:var(--text-faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:var(--space-2);}
-.stat-value{font-family:var(--mono);font-size:var(--fs-5);font-weight:600;letter-spacing:-.3px;}
+/* UX-004D — Numeric Typography Standard. Business numbers use the primary UI font
+   (--sans) with tabular-nums so digits share a fixed advance width: KPI values,
+   currency, salaries, totals and metrics align in columns and never jitter as their
+   values change. Presentation only — no formatter, precision, locale or export
+   behaviour is affected. Monospace (--mono) is retained for technical/developer
+   inputs (e.g. textarea.input), not as the default business-number font. */
+.stat-value{font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:var(--fs-5);font-weight:600;letter-spacing:-.3px;}
 .stat-sub{font-size:var(--fs-2);margin-top:var(--space-1);color:var(--text-dim);}
 .stat-sub.pos{color:var(--green);}
 .stat-sub.neg{color:var(--brick);}
@@ -41,8 +47,8 @@ th{
 }
 td{padding:9px 10px;border-bottom:1px solid var(--border-soft);color:var(--text);vertical-align:middle;}
 tr:hover td{background:var(--surface-2);}
-td.num, th.num{text-align:right;font-family:var(--mono);}
-.mono{font-family:var(--mono);}
+td.num, th.num{text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums;}
+.mono{font-family:var(--sans);font-variant-numeric:tabular-nums;}
 .dim{color:var(--text-dim);}
 .faint{color:var(--text-faint);}
 
