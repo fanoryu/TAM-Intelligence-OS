@@ -7,26 +7,23 @@ authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file
 there rather than duplicating it.
 
 **As of the current source state:** v2.8.6 — "Navigation Experience & TAM OS Rebrand"; `SCHEMA_VERSION` 6.
-This is a **release candidate prepared on `main`** — **not yet tagged or published**. **v2.8.5 remains the
-latest *published* release** — annotated tag `v2.8.5` peels to the published baseline commit
-`96a8d178987142fedd43372646abf9d597b8bac2`, and the GitHub Release *TAM Intelligence OS v2.8.5* is
-published (not draft, not prerelease) and marked Latest. v2.8.4 remains published and unchanged; it is no
-longer marked Latest. Publication created a tag and a GitHub Release only — it changed no source commit,
-runtime behavior, schema, or storage key.
+**v2.8.6 is tagged and published, and is the latest published release** — annotated tag `v2.8.6` peels to
+the release commit `7ac0092d8f60a00118c86e26a7dce429660017c9` on `main`, and the GitHub Release is published
+(not draft, not prerelease) and marked Latest. UX-004 is complete; UX-005 has not begun. v2.8.5 remains
+published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
+only — it changed no source commit, runtime behavior, schema, or storage key.
 
-**`main` now carries post-release development beyond the published v2.8.5 Release** (UX-004B — Sidebar &
-Navigation foundation, UX-004C — Domain Regrouping, UX-004D — Breadcrumbs, Context Quick Actions &
-Numeric Typography, UX-004E — Sidebar Interaction: collapse/pin/hover-expand + responsive drawer, then
-UX-004F — Navigation Simplification & TAM OS rebrand, the UX-004 sidebar interaction hotfix, and now the v2.8.6 release preparation),
-so the repository artifact **no longer equals**
-the published asset. At the v2.8.5 publication commit they were byte-identical; the published tag,
-Release, and 965,767-byte asset are immutable and unchanged — only `main` moved forward. This is expected
-post-release development divergence:
+**`main` is at the published v2.8.6 release commit**, so the repository artifact **equals** the published
+v2.8.6 Release asset (they are byte-identical). UX-004B–UX-004F, the UX-004 sidebar interaction hotfix,
+and the TAM OS rebrand are all shipped in v2.8.6:
 
-| | Repository `main` (v2.8.6 candidate) | Published v2.8.5 Release asset |
+| | Repository `main` (published v2.8.6) | Published v2.8.6 Release asset |
 |---|---|---|
-| Artifact | `dist/tam-os-v2.8.6.html` — **998,413 bytes** | `tam-intelligence-os-v2.8.5.html` — **965,767 bytes** |
-| SHA-256 | `8481523c…c91d3f62` | `32e624a262…1c23a7db8cb` |
+| Artifact | `dist/tam-os-v2.8.6.html` — **998,413 bytes** | `tam-os-v2.8.6.html` — **998,413 bytes** |
+| SHA-256 | `8481523c…c91d3f62` | `8481523c…c91d3f62` (byte-identical) |
+
+The prior published asset `tam-intelligence-os-v2.8.5.html` (965,767 bytes, `32e624a262…1c23a7db8cb`) and
+its v2.8.5 tag/Release remain immutable and unchanged.
 
 The superseded `dist/tam-intelligence-os-v2.8.4.html` was removed from `dist/` by the release dist-swap,
 as `docs/RELEASE-PROCESS.md` §2 requires; the historical v2.8.4 tag, Release, and published asset

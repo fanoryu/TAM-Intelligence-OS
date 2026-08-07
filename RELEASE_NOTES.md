@@ -1,7 +1,7 @@
 # TAM OS v2.8.6 — Navigation Experience & TAM OS Rebrand
 
 **Release Name:** Navigation Experience & TAM OS Rebrand
-**Status:** Release candidate — **prepared, not yet tagged or published.**
+**Status:** **Published and marked Latest** — annotated tag `v2.8.6` on commit `7ac0092d`; asset `tam-os-v2.8.6.html` (998,413 bytes, SHA-256 `8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`).
 
 ## Product
 TAM OS is now the current product identity. The sidebar wordmark, the browser title
@@ -77,6 +77,8 @@ Carried forward from prior releases and **verified still present**; not introduc
 - CSS golden master unchanged from v2.8.5.
 
 ## Release state
-This is a **release candidate prepared on `main`** and is **not yet tagged or published**. The published
-**v2.8.5** tag, GitHub Release, and asset (`tam-intelligence-os-v2.8.5.html`, 965,767 bytes) remain
-historical and immutable. **UX-005 has not begun.**
+v2.8.6 is **published and marked Latest**, from annotated tag `v2.8.6` on commit `7ac0092d`. The published
+asset `tam-os-v2.8.6.html` (998,413 bytes, SHA-256
+`8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`) is byte-identical to the repository
+artifact. The prior **v2.8.5** tag, GitHub Release, and asset (`tam-intelligence-os-v2.8.5.html`, 965,767
+bytes) remain historical and immutable. **UX-005 has not begun.**
