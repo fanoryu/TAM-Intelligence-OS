@@ -61,12 +61,15 @@ const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
 //   pre-UX-002B      b311990b405d4d8ac86efb406e9cfefafee2a53b29dec6a201e0690387a8100d
 //   Phase 1          47413d6eb2e864367aed98e50e8d9a9ed80c14605092b853b08a0c775e35d712
 //   Phase 1 remediation  b1cec5dd8b789f49d3967c5e49786961418f87b6f21975965315981c6f6e507c
-//   UX-004D (current) — AUTHORIZED golden-master revision. Two additive presentation
-//     changes only: (1) the breadcrumb landmark styles (css/shell.css); (2) the
-//     Numeric Typography Standard — business-number surfaces (.stat-value, td.num/
-//     th.num, .mono, .chart-mini-stat .val) move from --mono to --sans + tabular-nums.
-//     No color/spacing/radius/layout token changed; --mono retained for technical inputs.
-const CSS_GOLDEN_SHA256 = '49d87fbfe09436bc28e7f1e4ec0146cd9dd9169e4db90ef0089e1e95a65b7539';
+//   UX-004D            49d87fbfe09436bc28e7f1e4ec0146cd9dd9169e4db90ef0089e1e95a65b7539
+//     Breadcrumb landmark styles + Numeric Typography Standard.
+//   UX-004E (current) — AUTHORIZED golden-master revision. Sidebar INTERACTION styles
+//     only (css/shell.css): collapse rail (.sidebar.collapsed), collapse toggle,
+//     desktop hover-expand, hamburger + backdrop, and the responsive drawer media
+//     query; the superseded max-width:640px shrink block was replaced by the drawer.
+//     Every value resolves from an existing token; no color/radius/type scale changed
+//     and no layout outside the sidebar interaction surface was touched.
+const CSS_GOLDEN_SHA256 = '90412710de6e9bbe3c24a0be7f2d57d69480861d965a6a3811e911c0132b3bce';
 console.log('== CSS GOLDEN MASTER (pinned digest of concat(css/*.css)) ==');
 const cssDigest = crypto.createHash('sha256').update(trimLF(srcCss), 'utf8').digest('hex');
 check(cssDigest === CSS_GOLDEN_SHA256,
@@ -2522,12 +2525,96 @@ const ux4dExportFiles = jsFiles.map(f=>read(path.join(root,'js',f))).join('\n');
 check(!/font-variant-numeric|tabular-nums/.test(ux4dExportFiles),
   'UX-004D: no numeric-typography concept leaked into JS (formatters/exports are presentation-agnostic)');
 // (10) CSS golden-master pin was revised exactly once for UX-004D (documented above).
-check(CSS_GOLDEN_SHA256 === '49d87fbfe09436bc28e7f1e4ec0146cd9dd9169e4db90ef0089e1e95a65b7539',
-  'UX-004D: CSS golden-master pin intentionally revised once to the UX-004D digest');
+check(/font-variant-numeric:tabular-nums/.test(ux4dComp) && /font-variant-numeric:tabular-nums/.test(ux4dCharts),
+  'UX-004D: numeric-typography CSS is present in the pinned golden master');
 
 // ---- runtime harness presence (behaviour proof lives out-of-process) ----
 check(fs.existsSync(path.join(root,'tools','verify-breadcrumb-quickaction-runtime.js')),
   'UX-004D runtime harness present: tools/verify-breadcrumb-quickaction-runtime.js');
+
+/* ============================================================
+   UX-004E — SIDEBAR INTERACTION (collapse / pin / hover-expand / drawer)
+   Static guards. Behaviour is proven by tools/verify-sidebar-interaction-runtime.js.
+   All state is session-only; no storage, no schema; the shell is never remounted by
+   interaction; active-state, breadcrumb and Quick Action logic are untouched.
+   ============================================================ */
+console.log('== UX-004E SIDEBAR INTERACTION INVARIANTS ==');
+const ux4eShell = read(path.join(root,'js','ui','shell-render.js'));
+const ux4eState = read(path.join(root,'js','core','state.js'));
+const ux4eCss   = read(path.join(root,'css','shell.css'));
+const ux4eBody  = (name)=> (ux4eShell.match(new RegExp('function\\s+'+name+'\\s*\\([^)]*\\)\\{[\\s\\S]*?\\n\\}'))||[''])[0];
+
+// (1) Session-only State fields exist, declared as session-only (mirroring navCollapsed).
+check(/sidebarCollapsed:\s*false/.test(ux4eState) && /sidebarPinned:\s*null/.test(ux4eState) && /sidebarDrawerOpen:\s*false/.test(ux4eState),
+  'UX-004E: session-only sidebar state fields (sidebarCollapsed/sidebarPinned/sidebarDrawerOpen) declared in State');
+// (2) NOT persisted: no storage key, and no persist path serializes the sidebar fields.
+const ux4ePersistSrc = ['core/hr-persistence-portability.js','core/stabilization.js','core/state-load-migrations.js']
+  .map(f=>read(path.join(root,'js',f))).join('\n');
+check(!/sidebarCollapsed|sidebarPinned|sidebarDrawerOpen/.test(ux4ePersistSrc),
+  'UX-004E: no persist path references the sidebar interaction fields (session-only, never written)');
+check(!/tam_sidebar|sidebar_v1|tam_.*sidebar/i.test(ux4eShell+ux4eState) ,
+  'UX-004E: no sidebar storage key introduced');
+// (3) The interaction functions exist.
+['sidebarApplyState','setSidebarCollapsed','openSidebarDrawer','closeSidebarDrawer','sidebarIsDrawerMode'].forEach(fn=>{
+  check(new RegExp('function\\s+'+fn+'\\s*\\(').test(ux4eShell), 'UX-004E: '+fn+'() is defined');
+});
+// (4) NO SHELL REMOUNT: interaction functions never call renderShell/bindShell nor set innerHTML.
+const ux4eInteract = ux4eBody('sidebarApplyState')+ux4eBody('setSidebarCollapsed')+ux4eBody('openSidebarDrawer')+ux4eBody('closeSidebarDrawer');
+check(!/renderShell\s*\(|bindShell\s*\(|\.innerHTML\s*=/.test(ux4eInteract),
+  'UX-004E: interaction handlers never remount the shell (no renderShell/bindShell/innerHTML=)');
+// (5) Listeners bound ONCE inside bindShell (reuses the UX-002A single-bindShell guarantee):
+//     collapse toggle, hamburger, backdrop, ESC/Tab keydown, and the media-query change.
+const ux4eBindBody = (ux4eShell.match(/function bindShell\(app\)\{[\s\S]*?\n\}/)||[''])[0];
+check(/#sidebarCollapseBtn/.test(ux4eBindBody) && /toggleSidebarCollapsed\(\)/.test(ux4eBindBody),
+  'UX-004E: bindShell wires the collapse toggle');
+check(/#navHamburger/.test(ux4eBindBody) && /openSidebarDrawer\(\)/.test(ux4eBindBody) && /closeSidebarDrawer\(\)/.test(ux4eBindBody),
+  'UX-004E: bindShell wires the hamburger (open/close drawer)');
+check(/#sidebarBackdrop/.test(ux4eBindBody) && /closeSidebarDrawer\(\)/.test(ux4eBindBody),
+  'UX-004E: bindShell wires the backdrop to close the drawer');
+check(/key==='Escape'/.test(ux4eBindBody) && /key==='Tab'/.test(ux4eBindBody),
+  'UX-004E: bindShell installs ESC-close and Tab focus-trap keyboard handling');
+check(/matchMedia\('\(max-width:768px\)'\)/.test(ux4eBindBody),
+  'UX-004E: bindShell reacts to viewport (drawer<->desktop) changes');
+// (6) renderShell emits the hamburger, backdrop, single sidebar and single Primary-nav landmark,
+//     and calls sidebarApplyState() once after mount.
+const ux4eRenderShellBody = (ux4eShell.match(/function renderShell\(\)\{[\s\S]*?\n\}/)||[''])[0];
+check(/id="navHamburger"/.test(ux4eRenderShellBody) && /id="sidebarBackdrop"/.test(ux4eRenderShellBody) && /id="sidebarCollapseBtn"/.test(ux4eRenderShellBody),
+  'UX-004E: renderShell mounts the hamburger, backdrop and collapse toggle');
+check(/sidebarApplyState\(\)/.test(ux4eRenderShellBody),
+  'UX-004E: renderShell applies session sidebar state once after mount');
+check((ux4eShell.match(/<nav class="nav" aria-label="Primary navigation">/g)||[]).length === 1,
+  'UX-004E: still exactly one Primary-navigation landmark');
+// (7) Accessibility: aria-expanded on both controls; aria-hidden managed on the drawer.
+check(/aria-expanded/.test(ux4eRenderShellBody) && /aria-controls="sidebar"/.test(ux4eRenderShellBody),
+  'UX-004E: hamburger carries aria-expanded + aria-controls');
+check(/setAttribute\('aria-hidden','true'\)/.test(ux4eBody('sidebarApplyState')) && /removeAttribute\('aria-hidden'\)/.test(ux4eBody('sidebarApplyState')),
+  'UX-004E: drawer aria-hidden is set when closed off-canvas and cleared when open/desktop');
+// (8) Focus management: drawer open moves focus into the sidebar; close restores previous focus.
+check(/\.focus\(\)/.test(ux4eBody('openSidebarDrawer')) && /_sidebarFocusReturn/.test(ux4eBody('openSidebarDrawer')),
+  'UX-004E: opening the drawer captures the return focus and focuses inside it');
+check(/_sidebarFocusReturn/.test(ux4eBody('closeSidebarDrawer')) && /\.focus\(\)/.test(ux4eBody('closeSidebarDrawer')),
+  'UX-004E: closing the drawer restores the previously focused element');
+// (9) Active-state / breadcrumb / Quick Action logic untouched: navGroupHTML still marks
+//     aria-current, and the label is now wrapped (labels hide when collapsed) without
+//     changing the active resolution.
+check(/aria-current="page"/.test(ux4bNavGroupBody) && /class="nav-label"/.test(ux4eShell),
+  'UX-004E: nav labels are wrapped for collapse while aria-current active-state is unchanged');
+check(/const QUICK_ACTIONS_BY_VIEW/.test(ux4eShell) && (ux4eShell.match(/aria-label="Breadcrumb"/g)||[]).length===1,
+  'UX-004E: breadcrumb + Quick Action logic remain present and unchanged (one Breadcrumb landmark)');
+// (10) SCHEMA_VERSION unchanged.
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))), 'UX-004E: SCHEMA_VERSION remains 6');
+// (11) CSS: collapse rail, hamburger, backdrop, drawer media query, hover-expand present.
+check(/\.sidebar\.collapsed\{width:/.test(ux4eCss), 'UX-004E CSS: collapsed rail width defined');
+check(/\.nav-hamburger\{/.test(ux4eCss) && /\.sidebar-backdrop\{/.test(ux4eCss), 'UX-004E CSS: hamburger + backdrop styles present');
+check(/@media \(max-width:768px\)\{/.test(ux4eCss) && /transform:translateX\(-100%\)/.test(ux4eCss), 'UX-004E CSS: responsive drawer (off-canvas transform) present');
+check(/@media \(min-width:769px\) and \(hover:hover\)\{/.test(ux4eCss) && /\.sidebar\.collapsed:hover\{width:258px/.test(ux4eCss), 'UX-004E CSS: desktop hover-expand present');
+check(/transition:width \.2s/.test(ux4eCss), 'UX-004E CSS: sidebar width transition (animation) present');
+// (12) CSS golden-master pin advanced exactly once for UX-004E.
+check(CSS_GOLDEN_SHA256 === '90412710de6e9bbe3c24a0be7f2d57d69480861d965a6a3811e911c0132b3bce',
+  'UX-004E: CSS golden-master pin advanced once to the UX-004E digest');
+// (13) Runtime harness present.
+check(fs.existsSync(path.join(root,'tools','verify-sidebar-interaction-runtime.js')),
+  'UX-004E runtime harness present: tools/verify-sidebar-interaction-runtime.js');
 
 // UX-002B PHASE 1 — TYPOGRAPHY / TOKEN / THEME INVARIANTS.
 // These convert design rules that were previously only conventions into

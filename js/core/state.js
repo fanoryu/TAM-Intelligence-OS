@@ -52,6 +52,10 @@ const State = {
   settings: {...DEFAULT_SETTINGS},
   navCollapsed: {}, // group id -> collapsed bool, session-only
   sidebarScrollTop: 0, // preserved across full re-renders so nav doesn't jump to top on navigation
+  // UX-004E — sidebar interaction, SESSION-ONLY (never persisted, no storage key, no schema):
+  sidebarCollapsed: false,   // desktop collapsed rail (labels hidden, icons only)
+  sidebarPinned: null,       // 'expanded' | 'collapsed' | null — the session pin the user chose
+  sidebarDrawerOpen: false,  // tablet/mobile overlay drawer open state
   budgetSim: {expensePct:0, payrollPct:0, opsPct:0}, // ephemeral, never persisted
   storageReady: false,
   lastSaveAt: null,        // epoch ms of the last successful StorageAdapter write (session-only, v2.2.1)

@@ -8,17 +8,81 @@
 .sidebar{
   width:258px;flex:none;background:var(--surface);border-right:1px solid var(--border-soft);
   display:flex;flex-direction:column;padding:var(--space-5) 0;position:sticky;top:0;height:100vh;
+  transition:width .2s ease; /* UX-004E: collapse animates width only (no layout thrash) */
 }
-.brand{padding:0 var(--space-5) var(--space-4) var(--space-5);border-bottom:1px solid var(--border-soft);margin-bottom:var(--space-3);}
+.brand{position:relative;padding:0 var(--space-5) var(--space-4) var(--space-5);border-bottom:1px solid var(--border-soft);margin-bottom:var(--space-3);}
 /* The wordmark is the ONE place the serif survives (UX-002B / PD-B). */
 .brand .mark{font-family:var(--serif);font-weight:700;font-size:var(--fs-5);letter-spacing:0.1px;color:var(--text);white-space:nowrap;line-height:1.2;}
 .brand .mark span{color:var(--brand);}
 .brand .mark .mshort{display:none;}
 .brand .sub{font-size:var(--fs-1);color:var(--text-faint);margin-top:var(--space-1);letter-spacing:0.5px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-@media(max-width:640px){
-  .sidebar{width:170px;}
-  .brand .mark .mfull{display:none;}
-  .brand .mark .mshort{display:inline;}
+
+/* ===== UX-004E — sidebar interaction (collapse / pin / hover-expand / drawer) ===== */
+.nav-label{white-space:nowrap;overflow:hidden;}
+/* Desktop collapse toggle — lives in the brand block, hidden in drawer mode. */
+.sidebar-collapse-btn{position:absolute;top:0;right:var(--space-3);background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:var(--fs-3);line-height:1;padding:var(--space-1);border-radius:var(--radius-md);}
+.sidebar-collapse-btn:hover{color:var(--text);background:var(--surface-2);}
+/* Hamburger + backdrop are desktop-hidden; the drawer media query reveals them. */
+.nav-hamburger{display:none;position:fixed;top:var(--space-3);left:var(--space-3);z-index:890;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text);font-size:var(--fs-4);line-height:1;padding:var(--space-2) var(--space-3);cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.25);}
+.sidebar-backdrop{display:none;}
+
+/* Collapsed rail (desktop): icons only, labels/sub/foot hidden, narrow width. */
+.sidebar.collapsed{width:64px;}
+.sidebar.collapsed .brand{padding-left:0;padding-right:0;text-align:center;}
+.sidebar.collapsed .brand .mark .mfull{display:none;}
+.sidebar.collapsed .brand .mark .mshort{display:inline;}
+.sidebar.collapsed .brand .sub{display:none;}
+.sidebar.collapsed .sidebar-collapse-btn{position:static;display:block;margin:var(--space-2) auto 0;right:auto;}
+.sidebar.collapsed .nav{padding:0 var(--space-1);}
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .nav-preview-tag,
+.sidebar.collapsed .nav-group-head > span:first-child,
+.sidebar.collapsed .nav-group-head .chev,
+.sidebar.collapsed .sidebar-foot{display:none;}
+.sidebar.collapsed .nav-group-head{justify-content:center;padding:var(--space-1) 0;}
+.sidebar.collapsed .nav-item{justify-content:center;padding-left:0;padding-right:0;gap:0;}
+
+/* Hover-expand: desktop only, when collapsed. Pure CSS temporary peek; mouseleave
+   re-collapses. Pinned-expanded never reaches here (it is not .collapsed). */
+@media (min-width:769px) and (hover:hover){
+  .sidebar.collapsed:hover{width:258px;}
+  .sidebar.collapsed:hover .brand{padding-left:var(--space-5);padding-right:var(--space-5);text-align:left;}
+  .sidebar.collapsed:hover .brand .mark .mfull{display:inline;}
+  .sidebar.collapsed:hover .brand .mark .mshort{display:none;}
+  .sidebar.collapsed:hover .brand .sub{display:block;}
+  .sidebar.collapsed:hover .sidebar-collapse-btn{position:absolute;margin:0;right:var(--space-3);}
+  .sidebar.collapsed:hover .nav{padding:0 var(--space-2);}
+  .sidebar.collapsed:hover .nav-label,
+  .sidebar.collapsed:hover .nav-preview-tag,
+  .sidebar.collapsed:hover .nav-group-head > span:first-child,
+  .sidebar.collapsed:hover .nav-group-head .chev,
+  .sidebar.collapsed:hover .sidebar-foot{display:revert;}
+  .sidebar.collapsed:hover .nav-group-head{justify-content:space-between;padding:var(--space-2) var(--space-2);}
+  .sidebar.collapsed:hover .nav-item{justify-content:flex-start;padding:var(--space-2) var(--space-3);gap:var(--space-2);}
+}
+
+/* Responsive drawer: tablet/mobile. The sidebar becomes an off-canvas overlay; the
+   hamburger toggles it; a backdrop dims the page; collapse has no meaning here. */
+@media (max-width:768px){
+  .nav-hamburger{display:inline-flex;align-items:center;justify-content:center;}
+  .main{padding-top:calc(var(--space-5) + var(--space-6));} /* clear the fixed hamburger (token-only) */
+  .sidebar{position:fixed;top:0;left:0;height:100vh;width:258px;z-index:910;
+    transform:translateX(-100%);transition:transform .2s ease;box-shadow:2px 0 18px rgba(0,0,0,.35);}
+  #app.drawer-open .sidebar{transform:translateX(0);}
+  #app.drawer-open .sidebar-backdrop{display:block;position:fixed;inset:0;background:rgba(6,9,16,.5);z-index:900;}
+  /* Collapsed styling is ignored inside the drawer — always show full labels. */
+  .sidebar.collapsed{width:258px;}
+  .sidebar.collapsed .brand{padding-left:var(--space-5);padding-right:var(--space-5);text-align:left;}
+  .sidebar.collapsed .brand .mark .mfull{display:inline;}
+  .sidebar.collapsed .brand .mark .mshort{display:none;}
+  .sidebar.collapsed .brand .sub{display:block;}
+  .sidebar.collapsed .nav-label,
+  .sidebar.collapsed .nav-preview-tag,
+  .sidebar.collapsed .nav-group-head > span:first-child,
+  .sidebar.collapsed .nav-group-head .chev,
+  .sidebar.collapsed .sidebar-foot{display:revert;}
+  .sidebar.collapsed .nav-item{justify-content:flex-start;padding:var(--space-2) var(--space-3);gap:var(--space-2);}
+  .sidebar-collapse-btn{display:none;} /* collapse control is desktop-only */
 }
 
 .nav{display:flex;flex-direction:column;gap:var(--space-2);padding:0 var(--space-2);overflow-y:auto;}
