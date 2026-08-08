@@ -98,5 +98,55 @@ UX-005C/D/E/F, UX-006, Data Grid redesign, business-logic/calculation changes,
 
 ---
 
+## 7. Post-MAINT-001 follow-up backlog (recorded, not started)
+
+The MAINT-001 core (legacy-script removal, documentation sync, official branding adoption,
+README refresh) is **merged and complete**. During that work three follow-up items were
+approved and are recorded here so the decisions are durable in the roadmap rather than only
+in a report. Each is **documentation/branding planning only** — none authorizes runtime,
+schema, storage, or backend work.
+
+### Follow-up 1 — Branding asset organization
+Reorganize `assets/branding/` into a scalable structure once the asset set grows:
+
+```text
+assets/
+└── branding/
+    ├── logos/
+    ├── favicon/
+    ├── screenshots/
+    ├── social/
+    ├── BRAND_GUIDELINES.pdf
+    └── BRAND_GUIDELINES.md
+```
+
+Future housekeeping only. **Do not move or rename** the current branding assets until this
+task is authorized (renames would break the README/BRAND_GUIDELINES references).
+
+### Follow-up 2 — README screenshot refresh
+Documentation-only task to capture and commit official product screenshots. **Frozen
+screenshot standard:** 1920×1080 · dark theme · sidebar expanded · official TAM OS
+branding · consistent fabricated demo dataset · high-resolution PNG · no modal/dialog · no
+sensitive data · no placeholder images. **Recommended set:** Executive Dashboard, Finance
+Overview, Transactions, Employees, Payroll Workspace, Overtime, Reports, Settings. Captures
+land under `docs/screenshots/` (or `assets/branding/screenshots/` per Follow-up 1).
+
+### Follow-up 3 — Brand integration
+Branding-integration task for: favicon, browser-tab icon, Open Graph image, and social
+preview image. A future app/PWA icon may reference the official TAM OS **monogram**. This
+work must use the **already-approved official assets** — do not redesign, recolor, recreate,
+or substitute the logo — and introduces **no backend work**. Any runtime wiring (e.g. a
+favicon `<link>`) is deferred to its own authorized task, with the portable single-file
+build's standalone behaviour considered at that time.
+
+### Branding principle (persisted)
+The approved **TAM OS Brand Guidelines** and the supplied official assets are the canonical
+visual identity. **Primary:** Full-Color logo. **Secondary / variants:** Flat Blue, White,
+Black, Monogram/Icon, Favicon. Historical release branding (in `CHANGELOG.md`,
+`RELEASE_NOTES.md`, and past release notes) must remain historically accurate and is never
+retroactively rebranded.
+
+---
+
 *Forward-looking planning only. Implementation of any part is authorized solely by a
 subsequent Sprint Assignment.*
