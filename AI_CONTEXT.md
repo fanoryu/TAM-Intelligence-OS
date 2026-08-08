@@ -27,13 +27,18 @@ density-preference change; the table density invariant (td 9px/10px, th 8px/10px
 architecture stay frozen. The three deferred responsive items (`.exec-timeline` reflow, `.form-grid`
 mobile 1-col, KPI stacking) were empirically re-tested in UX-005F and confirmed **non-defective** at 480px,
 so none were changed.
-**UX-005F (Final Workspace Polish & Accessibility Hardening) is an unmerged implementation candidate** on
-branch `feature/ux-005f-final-accessibility-hardening`: an accessibility-hardening sprint implementing
-A1 skip-to-content + a real `<main>` landmark, A2 modal Tab/Shift+Tab focus containment (on the existing
-single-install modal seam), A3 `role="dialog"`/`aria-modal`/`aria-labelledby` on the three finance
-transaction dialogs, A4 `aria-hidden` on decorative nav glyphs, A5 focus-visible coverage for borderless
-controls, and A6 relocating Data Grid `aria-sort` onto the `<th>`. Presentation/semantics only — no
-business logic, no token/schema/storage change, no new breakpoint, no UX-006. UX-006 has not begun. v2.8.5 remains
+**UX-005F (Final Workspace Polish & Accessibility Hardening) is merged to `main`**: an
+accessibility-hardening sprint implementing A1 skip-to-content + a real `<main>` landmark, A2 modal
+Tab/Shift+Tab focus containment (on the existing single-install modal seam), A3
+`role="dialog"`/`aria-modal`/`aria-labelledby` on the three finance transaction dialogs, A4 `aria-hidden`
+on decorative nav glyphs, A5 focus-visible coverage for borderless controls, and A6 relocating Data Grid
+`aria-sort` onto the `<th>`. Presentation/semantics only — no business logic, no token/schema/storage
+change, no new breakpoint, no UX-006.
+**UX-005A–F are complete and merged; the UX-005 Platform Freeze Review has been performed** (baseline
+`main @ fd6cf536`; verifier 2001; 18 runtime harnesses / 1552 checks; artifact SHA `0026af50…`; CSS pin
+`5528908b…`; tokens `60dde600…`). The review found the platform coherent and stable — no freeze-blocking
+defect — with residual work (MAINT-001 follow-up, the four pre-existing CodeQL alerts, and UX-006 scope)
+correctly deferred. **UX-006 has not begun.** v2.8.5 remains
 published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
 only — it changed no source commit, runtime behavior, schema, or storage key.
 

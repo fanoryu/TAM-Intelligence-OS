@@ -466,14 +466,26 @@ Delivered since v2.8.6 (merged to `main`; see [`AI_CONTEXT.md`](AI_CONTEXT.md)):
 - ✅ **UX-005B** — Data Grid Foundation (`js/core/data-grid.js`: reusable column definitions, comparator
   registry, single-column sort, pagination 20/50/100, debounced search, result count, filtered-empty
   states, declarative feature flags), adopted by Transactions and Employees.
+- ✅ **UX-005C** — Design System Consistency (canonical section rhythm; eliminated off-grid spacing drift;
+  numeric-typography standard; nav glyph disambiguation), tokens frozen.
+- ✅ **UX-005D** — Global Search (`Ctrl/Cmd+K` command palette over a pure, source-agnostic engine;
+  navigation-only activation; Navigation/Employee/Contract/Payroll result types; transaction entity search
+  deferred).
+- ✅ **UX-005E** — Responsive & Density Polish (shared `.modal` viewport containment `max-height:88vh;
+  overflow-y:auto`; no density preference; table density and breakpoints frozen).
+- ✅ **UX-005F** — Final Workspace Polish & Accessibility Hardening (skip-to-content + `<main>` landmark;
+  modal Tab focus containment; finance dialog semantics; decorative-glyph hiding; focus-visible coverage;
+  Data Grid `aria-sort` on `<th>`).
+- ✅ **UX-005 Platform Freeze Review** — UX-005A–F verified coherent and stable; platform frozen as the
+  basis for v2.9.0.
 
 Next, in order:
 
 1. **MAINT-001** — Repository maintenance & branding refresh (legacy-script removal, documentation
    synchronization, official branding adoption, README refresh). See
    [`docs/01-roadmap/MAINT-001-repository-maintenance.md`](docs/01-roadmap/MAINT-001-repository-maintenance.md).
-2. **UX-005C–UX-005F** — Workspace productivity (global search / command palette), workspace memory,
-   design-system consolidation, and responsive/accessibility polish.
+2. **v2.9.0 Release Preparation** — dedicated release-prep and controlled publication of the frozen
+   UX-005 platform.
 3. **UX-006** — Personal Workspace (employee self-service) with route/record authorization. See the
    [UX-005/UX-006 architecture freeze](docs/01-roadmap/UX-005-Executive-Personal-Workspace-Architecture.md).
    **Not started.**
