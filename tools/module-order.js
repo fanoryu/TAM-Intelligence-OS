@@ -13,6 +13,7 @@ module.exports = [
   'core/constants.js',
   'core/utils.js',
   'core/data-grid.js',
+  'core/global-search.js',
   'core/storage-adapter.js',
   'ui/charts.js',
   'core/state.js',
@@ -20,6 +21,7 @@ module.exports = [
   'core/domain-services.js',
   'import/parser.js',
   'ui/shell-render.js',
+  'ui/global-search-ui.js',
   // --- finance pages (from 09) ---
   'finance/dashboard.js',
   'finance/execution-center.js',
