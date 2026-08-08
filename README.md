@@ -12,7 +12,7 @@ support backend capabilities in future roadmap phases.
 
 [![CI](https://github.com/fanoryu/TAM-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-OS/releases/latest)
-![Version](https://img.shields.io/badge/version-2.8.6-blue)
+![Version](https://img.shields.io/badge/version-2.9.0-blue)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-red)
 ![JavaScript](https://img.shields.io/badge/JavaScript-vanilla%20%C2%B7%20no%20framework-f7df1e)
 ![HTML](https://img.shields.io/badge/HTML-single--file%20app-e34f26)
@@ -79,50 +79,45 @@ The operational payroll worksheet — period KPIs and the Draft → Review → A
 
 ## Current release
 
-**v2.8.6 — Navigation Experience & TAM OS Rebrand** · `SCHEMA_VERSION` 6 · **published, marked Latest**
+**v2.9.0 — Workspace Experience** · `SCHEMA_VERSION` 6 · **release candidate — prepared, not yet published**
 
-> **Release state.** v2.8.6 is **published and marked Latest**, from annotated tag `v2.8.6` on commit
-> `7ac0092d`. Its published asset `tam-os-v2.8.6.html` (998,413 bytes, SHA-256
-> `8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`) is byte-identical to the repository
-> artifact and is the first release under the TAM OS naming convention. **v2.8.5 remains published**
-> (annotated tag `v2.8.5` at commit `96a8d17`, asset `tam-intelligence-os-v2.8.5.html`, 965,767 bytes,
-> immutable) and is simply no longer the Latest release; **v2.8.4 — Monthly Plan Result Integrity** also
-> remains published and unchanged. See [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a
+> **Release state.** v2.9.0 is a **prepared release candidate** on `main`; the source `APP_VERSION` is
+> `2.9.0` and the portable artifact is `dist/tam-os-v2.9.0.html`. Publication (annotated tag `v2.9.0`,
+> GitHub Release, and asset upload) is a **separate controlled step** and has not happened yet — until it
+> does, **v2.8.6 remains the last published release, marked Latest** (annotated tag `v2.8.6` on commit
+> `7ac0092d`; asset `tam-os-v2.8.6.html`, 998,413 bytes, SHA-256
+> `8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`, immutable). **v2.8.5** (asset
+> `tam-intelligence-os-v2.8.5.html`, 965,767 bytes) and **v2.8.4 — Monthly Plan Result Integrity** also
+> remain published and unchanged. See [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a
 > release is cut.
 
-A navigation, presentation and naming release, packaging the complete UX-004 navigation modernization
-(UX-004B–UX-004F), the sidebar interaction hotfix, and the TAM OS rebrand. No business-logic or schema
-change, no new or renamed storage key, no data migration, and **no change to how or when data is
-written**. Starting with v2.8.6 the portable artifact uses the TAM OS naming `dist/tam-os-v2.8.6.html`.
+A feature/minor release completing the **UX-005** workspace line (Executive Dashboard & Action Center,
+Data Grid Foundation, Design-System Consistency, Global Search, responsive polish, accessibility
+hardening) and the **MAINT-001** repository/branding follow-up. No business-logic or schema change, no new
+or renamed storage key, no data migration, and **no change to how or when data is written**; the portable
+artifact uses the TAM OS naming `dist/tam-os-v2.9.0.html`.
 
-- **The application shell is built once and stays mounted** — switching views replaces only the view
-  content, so the sidebar and navigation keep their identity instead of being rebuilt on every
-  navigation.
-- **Refreshed UI chrome** — a sans-serif UI typeface with shared spacing, radius and type token scales.
-  Chart colours now come from the theme tokens, and the light-theme chart colours were corrected.
-- **A calmer Executive Dashboard** — reduced from 20 metric containers to 13, with the alert list capped
-  while every alert remains reachable.
-- **Contract timeline figures use one coherent reference date** — today-facing results are unchanged;
-  results advised for a historical date are now correct.
-- **Contract state and contract expiry are two separate derived facts** — a contract can be Active and
-  at the same time be flagged as ending today, this week, this month or next month. Scheduled is derived
-  from the dates and is never stored, and the calendar horizons do not depend on the warning-days
-  setting.
-- **Contract progress wording is fixed** — on a three-month contract, month 1 reads `1/3` with 2 months
-  remaining, month 2 reads `2/3` with 1 month remaining, and month 3 reads `3/3` as the final month with
-  0 months remaining. **`3/3` no longer implies a month is still left**; the month after the end reads
-  Expired.
-- **Every contract counter resolves through one shared helper** — the dashboard counts, the status
-  filters and the badges agree. Active includes active contracts that are ending soon, and excludes
-  Scheduled and Expired. Wording follows a fixed priority: Ends Today → Ends This Week → Final Month →
-  Ends Next Month → Ending Soon, and the exported CSV Status column uses the same words.
+- **A clearer Executive workspace (UX-005A)** — a consolidated Executive Dashboard with a navigation-only
+  Action Center that surfaces what needs attention; Finance Overview is the operational finance workspace.
+- **Scalable Data Grids (UX-005B)** — Transactions and Employees run on a shared grid: single-column
+  sorting, pagination (20/50/100), debounced search and live result counts; source records are never
+  reordered or mutated.
+- **Global Search (UX-005D)** — a navigation-only `Ctrl/Cmd+K` command palette over a pure,
+  source-agnostic engine (Navigation / Employee / Contract / Payroll results).
+- **Design-system consistency (UX-005C)** — canonical spacing/rhythm, numeric tabular typography, and
+  navigation glyph disambiguation from shared tokens.
+- **Responsive & accessibility hardening (UX-005E / UX-005F)** — modals stay inside the viewport and
+  scroll internally on small screens; a Skip to main content link, a real `<main>` landmark, modal
+  keyboard focus containment, dialog semantics, clearer visible focus, and correct Data Grid `aria-sort`.
+- **Refreshed TAM OS branding (MAINT-001)** — official branding, a self-contained inline favicon, README
+  product screenshots, and a repository social-preview asset.
 
-**What this release does not do.** **UX-001 was discovery only** — its direction is recorded, not
-shipped. The redesigned sidebar and navigation (**UX-004**), breadcrumbs and quick actions, the
-collapsed / pinned / hover-expand rail, and the mobile drawer (**UX-005**) are **not included** and
-remain future work. **OQ-2 and OQ-3 remain OPEN**; no contract editor authority migration and no
-deletion-command migration occurred. Payroll and committed-payroll semantics are unchanged, and existing
-backups remain compatible.
+**What this release does not do.** Presentation, navigation and query-state only — **no** change to
+payroll, overtime, contract, finance, execution, approval, posting, import or export behaviour, and **no**
+schema, storage-key or migration change (`SCHEMA_VERSION` 6; existing backups remain compatible). It adds
+**no** authentication, roles/permissions, or Personal Workspace, and **no** backend — those remain future
+roadmap work (UX-006 onward). The app is **client-side today** while staying compatible with a future,
+separately-approved backend direction.
 
 Builds on the **v2.8.4 Monthly Plan Result Integrity** release. See [`CHANGELOG.md`](CHANGELOG.md)
 and [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for full history.
@@ -132,7 +127,7 @@ Two supported outputs:
 | Output | What it is | Where |
 |---|---|---|
 | **A. Modular development source** | `index.html` + `css/` (5 files) + `js/` (66 classic-script modules across `core/ ui/ finance/ people/ import/ analytics/ domain/ platform/ transport/ repository/ cli/` — 65 browser-loaded in one shared global scope, plus the CLI-only module), no ES modules | project root |
-| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-os-v2.8.6.html` |
+| **B. Portable single-file release** | one self-contained HTML file, identical in behavior | `dist/tam-os-v2.9.0.html` |
 
 ---
 
@@ -229,7 +224,7 @@ flowchart LR
     BUILD["tools/build-single-file.js"]
     VERIFY["tools/verify-build.js<br/>(2001 checks)"]
   end
-  DIST["dist/tam-os-v2.8.6.html<br/>(portable single file)"]
+  DIST["dist/tam-os-v2.9.0.html<br/>(portable single file)"]
 
   IDX --> JS --> STATE --> LS
   CSS --> IDX
@@ -281,7 +276,7 @@ tools/
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
-  tam-os-v2.8.6.html  Portable single-file release (build output, version-controlled)
+  tam-os-v2.9.0.html  Portable single-file release (build output, version-controlled)
 tam-intelligence-os-v2.5.2.html    Frozen stable reference (source of truth for invariants)
 .github/                           Repository governance & delivery
   workflows/ci.yml                 Build + verify on push/PR to main; uploads dist artifact

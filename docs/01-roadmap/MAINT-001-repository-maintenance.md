@@ -139,9 +139,10 @@ or substitute the logo — and introduces **no backend work**. Any runtime wirin
 favicon `<link>`) is deferred to its own authorized task, with the portable single-file
 build's standalone behaviour considered at that time.
 
-### Follow-up status (implementation candidate — PR open, not yet merged)
-The three follow-ups above are implemented on branch `chore/maint-001-branding-integration`
-(after the UX-005 Platform Freeze):
+### Follow-up status (merged and complete)
+The three follow-ups above are **merged to `main`** (branch `chore/maint-001-branding-integration`, after
+the UX-005 Platform Freeze). The one remaining action is external: the GitHub repository **Social Preview**
+Settings upload of `assets/social/tam-os-social.png` (not expressible in repository code). What shipped:
 - **Favicon** — derived by resize only from the official `assets/branding/tam-os-logo-secondary.png`
   (64×64), embedded in `index.html` as an inline PNG `data:` URI so the portable artifact stays
   self-contained (no external request); a provenance copy is `assets/branding/tam-os-favicon-64.png`.
@@ -152,9 +153,10 @@ The three follow-ups above are implemented on branch `chore/maint-001-branding-i
   on-navy wordmark; the GitHub repository Social-Preview **Settings** upload is a separate manual step
   after merge (committing the file does not configure it).
 
-No `APP_VERSION` bump, no `SCHEMA_VERSION`/storage change, no application CSS/JS change (favicon is an
-`index.html` `<link>` only); `css/*` golden master and `tokens.css` are byte-identical. Mark **complete**
-only after the controlled merge.
+The branding follow-up added no `APP_VERSION` bump, no `SCHEMA_VERSION`/storage change, and no application
+CSS/JS change (favicon is an `index.html` `<link>` only); `css/*` golden master and `tokens.css` stayed
+byte-identical. **Status: merged and complete** — the subsequent v2.9.0 Release Preparation carries the
+version identity forward and folds these assets into the v2.9.0 release.
 
 ### Branding principle (persisted)
 The approved **TAM OS Brand Guidelines** and the supplied official assets are the canonical

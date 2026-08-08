@@ -1,5 +1,46 @@
 # Changelog
 
+## 2.9.0 — Workspace Experience
+
+**Type:** Feature/minor release completing the **UX-005** workspace line plus the **MAINT-001**
+repository/branding follow-up. Presentation, navigation, query-state and repository-surface changes
+only — **no** business-logic, calculation, finance, payroll, overtime, contract, execution, import or
+export change; **no** schema, storage-key, persisted-data or migration change (`SCHEMA_VERSION` stays
+**6**); no historical record is rewritten. Not included: authentication, roles/permissions, Personal
+Workspace, or any backend — those remain future roadmap work (UX-006 onward).
+
+### Added
+- **Global Search (UX-005D)** — a navigation-only `Ctrl/Cmd+K` command palette over a pure,
+  source-agnostic engine returning Navigation, Employee, Contract and Payroll results; activation is
+  navigation only, and the engine only ranks the document set it is handed (scope-safe for future work).
+- **Data Grid Foundation (UX-005B)** — a reusable grid (single-column sorting, pagination 20/50/100,
+  debounced search, live result counts, filtered-empty states, declarative feature flags) adopted by
+  Transactions and Employees; source records are never reordered or mutated.
+- **TAM OS branding assets (MAINT-001)** — official branding, a self-contained inline favicon, README
+  product-preview screenshots, and a repository social-preview asset.
+
+### Changed
+- **Executive Dashboard & Finance hierarchy (UX-005A)** — dashboard consolidation with a navigation-only
+  Action Center; Finance Overview recast as the operational finance workspace; a single owner for Net
+  Cash Flow.
+- **Design-system consistency (UX-005C)** — canonical spacing/rhythm, numeric (tabular) typography, and
+  navigation glyph disambiguation from shared tokens.
+- **Responsive modal behaviour (UX-005E)** — the shared modal surface stays inside the viewport and
+  scrolls internally on short/mobile screens; table density preserved.
+- **Repository presentation (MAINT-001)** — README Product Preview, documentation cleanup, legacy
+  migration-tool review.
+
+### Accessibility (UX-005F)
+- Skip to main content link and a real `<main>` landmark.
+- Modal Tab/Shift+Tab keyboard focus containment; correct dialog semantics on the finance transaction
+  dialogs; opener focus restoration unchanged.
+- Broader visible-focus (`:focus-visible`) coverage; decorative navigation glyphs hidden from assistive
+  technology; Data Grid `aria-sort` moved onto the column-header cell.
+
+### Maintenance
+- Legacy migration-tooling review and repository/documentation cleanup (MAINT-001); official branding
+  adoption and favicon/social-preview integration.
+
 ## 2.8.6 — Navigation Experience & TAM OS Rebrand
 
 **Type:** Navigation, presentation, naming and release-packaging release. It packages the complete
