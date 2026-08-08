@@ -66,13 +66,14 @@ const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
 //   UX-004E            90412710de6e9bbe3c24a0be7f2d57d69480861d965a6a3811e911c0132b3bce
 //     Sidebar interaction: collapse rail, hamburger + backdrop, responsive drawer,
 //     desktop hover-expand.
-//   UX-004F (current) — AUTHORIZED golden-master revision. Navigation-simplification
-//     + rebrand presentation only (css/shell.css): the quieter placeholder badge
-//     (.nav-preview-tag), the "More" progressive-disclosure control (.nav-more-head/
-//     .nav-more-items), and the collapsed-rail wordmark fit (.sidebar.collapsed .brand
-//     .mark). Every value resolves from an existing token; no color/radius/type scale
-//     changed and no layout outside these surfaces was touched.
-const CSS_GOLDEN_SHA256 = '26bf828688dd2bbe280608e28c3abb583ab18032a3089f1cf5f991af5fe79fe6';
+//   UX-004F              26bf828688dd2bbe280608e28c3abb583ab18032a3089f1cf5f991af5fe79fe6
+//     Navigation-simplification + rebrand presentation only (css/shell.css).
+//   UX-005A (current) — AUTHORIZED golden-master revision. Executive Dashboard
+//     consolidation, presentation only (css/components.css): the Action Center
+//     navigable row (.action-item + .ac-ic), added additively beside the existing
+//     .insight-item styles. Every value resolves from an existing token; no color/
+//     radius/type scale changed and no layout outside this surface was touched.
+const CSS_GOLDEN_SHA256 = 'fff716cb0c32719530ef2dc397064d4299d45de308101ad754d0dac11ce5c793';
 console.log('== CSS GOLDEN MASTER (pinned digest of concat(css/*.css)) ==');
 const cssDigest = crypto.createHash('sha256').update(trimLF(srcCss), 'utf8').digest('hex');
 check(cssDigest === CSS_GOLDEN_SHA256,
@@ -3303,6 +3304,85 @@ check(/PARTITION the collection/.test(ux3cHarness) && /a true subset/.test(ux3cH
   'UX-003C harness proves the partition and the subset relationship');
 check(/never implies/.test(ux3cHarness),
   'UX-003C harness proves the final month never implies one month remaining');
+
+// ============================================================
+// UX-005A — EXECUTIVE DASHBOARD & INFORMATION ARCHITECTURE
+// Presentation, ownership and navigation only. These checks guard the frozen
+// product decisions: Executive Dashboard is the canonical home, Finance Overview
+// stays an operational workspace, the Action Center reuses the existing alert
+// pipeline (no second engine, no mutation), and no calculation/schema changed.
+// ============================================================
+console.log('== UX-005A: Executive Dashboard & Information Architecture ==');
+const ux5aExec = read(path.join(root,'js','analytics','executive-dashboard.js'));
+const ux5aDash = read(path.join(root,'js','finance','dashboard.js'));
+const ux5aShell = read(path.join(root,'js','ui','shell-render.js'));
+const ux5aStateMig = read(path.join(root,'js','core','state-load-migrations.js'));
+const ux5aSettings = read(path.join(root,'js','ui','settings-about.js'));
+
+// 1. Executive Dashboard remains the default/fallback canonical home.
+check(/return renderExecutiveDashboard\(main\);\s*\n\}/.test(ux5aShell) || /\n  return renderExecutiveDashboard\(main\);/.test(ux5aShell),
+  'UX-005A: renderViewContent falls back to the Executive Dashboard (canonical home)');
+check(/defaultLandingPage: 'execDashboard'/.test(read(path.join(root,'js','core','state.js'))),
+  'UX-005A: execDashboard remains the default landing page');
+// 2. Finance Overview remains routed.
+check(/State\.view==='financeOverview'\) return renderDashboard\(main\)/.test(ux5aShell),
+  'UX-005A: Finance Overview (financeOverview) remains a routed view');
+// 3. Finance Overview remains a valid landing-page choice (allowlist + Settings select).
+check(/'financeOverview'/.test(ux5aStateMig) && /includes\(State\.settings\.defaultLandingPage\)/.test(ux5aStateMig),
+  'UX-005A: financeOverview remains in the defaultLandingPage allowlist');
+check(/value="financeOverview"/.test(ux5aSettings),
+  'UX-005A: Finance Overview remains selectable in Settings landing-page options');
+// 4. Net Cash Flow is not duplicated on Finance Overview (removed there; Executive owns it).
+check(!/stat-label">\s*Net Cash Flow/.test(ux5aDash),
+  'UX-005A: Finance Overview no longer renders a Net Cash Flow tile (Executive owns it)');
+check(/'Net Cash Flow'/.test(ux5aExec),
+  'UX-005A: Executive Dashboard still owns the Net Cash Flow signal');
+// Budget Variance stays on BOTH with distinct framing (operational "% of plan" on Finance).
+check(/Budget Variance/.test(ux5aDash) && /of plan/.test(ux5aDash),
+  'UX-005A: Finance Overview keeps Budget Variance with its distinct "% of plan" framing');
+// 5. Action Center consumes the existing alert pipeline (all four generators).
+check(/computeExecutiveAlerts\(key, months\)/.test(ux5aExec) && /hrDashboardAlerts\(key\)/.test(ux5aExec)
+      && /overtimeDashboardAlerts\(key\)/.test(ux5aExec) && /payrollDashboardAlerts\(key\)/.test(ux5aExec),
+  'UX-005A: Action Center reuses all four existing alert generators');
+check(/function actionCenterCardHTML\(/.test(ux5aExec) && /Action Center/.test(ux5aExec),
+  'UX-005A: the Action Center presentation card exists');
+// 6. No second alert engine — the generators are not redefined in the dashboard.
+check((ux5aExec.match(/function computeExecutiveAlerts\(/g)||[]).length === 1,
+  'UX-005A: no duplicate/second executive alert engine is introduced');
+check(!/function (hrDashboardAlerts|overtimeDashboardAlerts|payrollDashboardAlerts)\(/.test(ux5aExec),
+  'UX-005A: dashboard does not redefine the domain alert generators');
+// 7-9. Action Center handler performs navigation only — no execution/approval/posting mutation.
+const ux5aBindAC = (ux5aExec.match(/function bindActionCenter\(main\)\{[\s\S]*?\n\}/)||[''])[0];
+check(ux5aBindAC.includes('hrNavTo(btn.dataset.acNav)'),
+  'UX-005A: Action Center navigation uses hrNavTo (navigation only)');
+check(!/(executePayment|postPayroll|commit|approve|persist|StorageAdapter|\.save|delete)/i.test(ux5aBindAC),
+  'UX-005A: Action Center handler contains no execution/approval/posting/persistence mutation');
+// 10. Drill-through destinations are existing routes.
+const ux5aDrillTargets = [...ux5aExec.matchAll(/data-(?:dash|ac)-nav="([a-zA-Z]+)"/g)].map(m=>m[1]);
+const ux5aResolverTargets = [...ux5aExec.matchAll(/to:'([a-zA-Z]+)'/g)].map(m=>m[1]);
+const ux5aRoutedViews = new Set([...ux5aShell.matchAll(/State\.view==='([a-zA-Z]+)'/g)].map(m=>m[1]));
+[...new Set([...ux5aDrillTargets, ...ux5aResolverTargets])].forEach((v)=>{
+  check(ux5aRoutedViews.has(v), 'UX-005A: drill-through/resolver destination "'+v+'" is an existing route');
+});
+// 11. Protected calculation functions are not modified. Pin the CRITICAL computation
+//     expressions (not just the function header), so a semantic change to the money
+//     math is detected — UX-005A is presentation/navigation only.
+const ux5aDomainSvc = read(path.join(root,'js','core','domain-services.js'));
+check(ux5aDomainSvc.includes('return {planned, actual, income, incomeActual, variance: planned-actual, netCashFlow: incomeActual - actual, count: txns.length};'),
+  'UX-005A: monthTotals computation is byte-for-byte unchanged (planned/actual/variance/netCashFlow/count)');
+check(ux5aDomainSvc.includes('const rate = planned? (executed/planned*100) : 0;')
+      && ux5aDomainSvc.includes('const remaining = planned-executed;'),
+  'UX-005A: execStats computation is unchanged (execution rate & remaining)');
+// 12. Schema unchanged.
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))),
+  'UX-005A: SCHEMA_VERSION remains 6 (presentation/navigation only)');
+// 13-15. No Personal Workspace / role / auth / UX-006 implementation introduced.
+check(!/PersonalWorkspace|personalWorkspace|My Payroll|My Contract|My Profile/.test(ux5aExec + ux5aDash),
+  'UX-005A: no Personal Workspace implementation introduced');
+check(!/\b(currentUser|isEmployee|userRole|requireAuth|authenticate)\b/.test(ux5aExec + ux5aDash),
+  'UX-005A: no role/auth/identity implementation introduced');
+check(!/UX-006/.test(ux5aExec + ux5aDash),
+  'UX-005A: no UX-006 implementation introduced in the dashboard sources');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
