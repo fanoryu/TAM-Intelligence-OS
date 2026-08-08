@@ -1,8 +1,14 @@
+<div align="center">
+
+<img src="assets/branding/tam-os-logo-full-color.png" alt="TAM OS" width="360">
+
 # TAM OS
 
 **Integrated Management Intelligence for PT Total Asset Manajemen** — a single-page finance,
-payroll, and operations workspace that runs entirely in the browser, with no backend and no runtime
-dependencies.
+payroll, and operations workspace. It runs entirely in the browser today and is architected to
+support backend capabilities in future roadmap phases.
+
+</div>
 
 [![CI](https://github.com/fanoryu/TAM-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fanoryu/TAM-OS/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/fanoryu/TAM-OS?sort=semver&display_name=tag&label=release)](https://github.com/fanoryu/TAM-OS/releases/latest)
@@ -31,14 +37,16 @@ self-contained HTML application.
 
 Design principles:
 
-- **Client-side only.** All data is stored locally in the browser's `localStorage` (or the Claude
-  Artifact storage environment). Nothing is sent to a server; there is no backend, database, or API.
+- **Client-side today.** All data is currently stored locally in the browser's `localStorage` (or the
+  Claude Artifact storage environment); the shipped application sends nothing to a server. Backend
+  capabilities are a **future roadmap direction** and are introduced only under a separate, explicitly
+  approved architecture decision — the current release remains client-only.
 - **No build framework, no dependencies.** The app is plain HTML, CSS, and classic-script JavaScript
   sharing one global scope. Node.js is used **only** for the build/verify tooling, never to run the
   app. The only external network references are the XLSX parser and web fonts (CDN).
 - **Two shippable forms.** A modular development source and a single portable HTML file that behaves
   identically.
-- **Data-safety first.** A 1713-check verifier guards the persisted-data schema, storage keys,
+- **Data-safety first.** A 1931-check verifier guards the persisted-data schema, storage keys,
   migration flags, and build fidelity on every change.
 
 ---
@@ -163,10 +171,17 @@ This matrix lists shipped functionality only; it does not promise unavailable fe
 
 ## Screenshots
 
-No screenshots are committed yet (to avoid any risk of exposing real company data). A capture plan —
-which screens to show, the required fabricated sample data, target filenames under `docs/images/`,
-and recommended dimensions — is maintained by the maintainer and will be added here once
-safe, sanitized captures exist. Until then, run the app locally (below) to explore the UI.
+Product screenshots are captured to a fixed, safe standard: **1920×1080**, **dark theme**, **sidebar
+expanded**, using **clearly fabricated demo data only** (never real company, employee, payroll, or
+backup data). Target views are the Executive Dashboard (Company Health + Action Center), Finance
+Overview, and the Transactions data grid (sorting + pagination). Sanitized captures are committed under
+`docs/screenshots/` and embedded here.
+
+> **Status (MAINT-001):** the branding assets and capture standard are in place; the high-resolution
+> screenshot files are added in a follow-up capture pass performed in an environment with pixel export
+> (this sprint's environment can render the UI but cannot export 1920×1080 image files). No placeholder
+> or low-resolution images are committed in the interim. Until they land, run the app locally (below)
+> to explore the UI.
 
 ---
 
@@ -186,7 +201,7 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(1713 checks)"]
+    VERIFY["tools/verify-build.js<br/>(1931 checks)"]
   end
   DIST["dist/tam-os-v2.8.6.html<br/>(portable single file)"]
 
@@ -237,8 +252,6 @@ js/                                66 classic-script modules (65 browser-loaded,
 tools/
   module-order.js                  Single source of truth for JS load order
   app-version.js                   Single source of truth for the version (reads constants.js)
-  decompose.js                     One-time feature-folder splitter (v2.6.2, byte-checked)
-  extract-source.ps1               One-time deterministic splitter (v2.5.2 -> source, v2.6.0)
   build-single-file.js / .ps1      Modular source -> dist single file (version-derived filename)
   verify-build.js / .ps1           Build + invariant + focus-fix + decomposition + audit verification
 dist/
@@ -304,7 +317,7 @@ Build the portable single file from the modular source:
 node tools/build-single-file.js
 ```
 
-Verify (1713 checks):
+Verify (1931 checks):
 
 ```bash
 node tools/verify-build.js
@@ -347,7 +360,7 @@ Releases are tag-driven and guarded end-to-end (see [`docs/RELEASE-PROCESS.md`](
 
 ```mermaid
 flowchart LR
-  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1713)"]
+  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1931)"]
   V --> C["commit source + dist"] --> T["push tag vX.Y.Z"]
   T --> GA["GitHub Actions: Release"]
   GA --> GATE{"tag matches<br/>v-APP_VERSION?"}
@@ -444,13 +457,25 @@ Milestone status:
 - ✅ **Documentation Reconciliation** — living documents reconciled with the repository state.
 - ✅ **v2.8.5 Published** — annotated tag `v2.8.5`, published GitHub Release, asset verified.
 
+Delivered since v2.8.6 (merged to `main`; see [`AI_CONTEXT.md`](AI_CONTEXT.md)):
+
+- ✅ **UX-004** — Sidebar & Navigation (domain-grouped sidebar, context-aware navigation, breadcrumbs,
+  quick actions, collapsed rail, pinned mode, hover-expand, responsive drawer).
+- ✅ **UX-005A** — Executive Dashboard & Information Architecture (canonical home, Action Center,
+  KPI drill-through; Finance Overview recast as the operational finance workspace).
+- ✅ **UX-005B** — Data Grid Foundation (`js/core/data-grid.js`: reusable column definitions, comparator
+  registry, single-column sort, pagination 20/50/100, debounced search, result count, filtered-empty
+  states, declarative feature flags), adopted by Transactions and Employees.
+
 Next, in order:
 
-1. **UX-004** — Sidebar & Navigation: sidebar grouped by business domain (Dashboard, People,
-   Finance, Analytics, System), with Executive and HR dashboards under Dashboard, Employees and
-   Contracts under People, Payroll under Finance; context-aware navigation, breadcrumbs, quick
-   actions, collapsed rail, pinned mode and hover-expand. **Not started.**
-2. **UX-005** — Responsive/Mobile Refinement, including the mobile drawer where appropriate.
+1. **MAINT-001** — Repository maintenance & branding refresh (legacy-script removal, documentation
+   synchronization, official branding adoption, README refresh). See
+   [`docs/01-roadmap/MAINT-001-repository-maintenance.md`](docs/01-roadmap/MAINT-001-repository-maintenance.md).
+2. **UX-005C–UX-005F** — Workspace productivity (global search / command palette), workspace memory,
+   design-system consolidation, and responsive/accessibility polish.
+3. **UX-006** — Personal Workspace (employee self-service) with route/record authorization. See the
+   [UX-005/UX-006 architecture freeze](docs/01-roadmap/UX-005-Executive-Personal-Workspace-Architecture.md).
    **Not started.**
 
 **Released**
@@ -511,6 +536,22 @@ These are candidate directions, not commitments.
   security reports are routed privately.
 - **Conduct:** [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 - **CI/Release:** official GitHub Actions only; minimal permissions; tag/version guardrails.
+
+---
+
+## Branding
+
+Official TAM OS brand assets live in [`assets/branding/`](assets/branding/). The **canonical**
+reference is [`assets/branding/TAM-OS-Brand-Guidelines.pdf`](assets/branding/TAM-OS-Brand-Guidelines.pdf),
+summarized for engineers in [`assets/branding/BRAND_GUIDELINES.md`](assets/branding/BRAND_GUIDELINES.md).
+
+- **Primary wordmark:** `tam-os-logo-full-color.png` (light backgrounds) — the default signature.
+- **Secondary monogram:** `tam-os-logo-secondary.png` (favicon, app icon, avatar, compact nav).
+- **On-dark variants:** `tam-os-logo-dark-navy.png` (navy) · `tam-os-logo-black-background.png` (black).
+- **Core colors:** TAM Navy `#062E5B` · TAM Blue `#1478F2` · TAM Teal `#08B9B0` · Ink `#102A43` ·
+  Cloud `#F4F8FC`. Typeface: **Inter** (Arial fallback).
+
+Use the supplied artwork only — never recolor, rebuild, stretch, rotate, or substitute the logo.
 
 ---
 
