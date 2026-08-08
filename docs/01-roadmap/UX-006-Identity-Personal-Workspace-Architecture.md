@@ -4,7 +4,10 @@
 document. It records the current architecture **as found in code on `main`**, the identity/workspace/
 authorization contracts UX-006 must adopt, the migration and compatibility requirements, and a reviewable
 phase decomposition. Implementation is authorized only by a subsequent Sprint Assignment per
-[`README.md`](README.md). It extends — and does not supersede — the frozen product decisions in
+[`README.md`](README.md). **The two former gating product questions (identity mechanism; whether an
+Employee principal ships) are now owner-approved and recorded as resolved decisions in §1A — UX-006A
+planning is GO; UX-006A implementation remains NOT YET AUTHORIZED (§20.1).** It extends — and does not
+supersede — the frozen product decisions in
 [`UX-005-Executive-Personal-Workspace-Architecture.md`](UX-005-Executive-Personal-Workspace-Architecture.md)
 (hereafter **UX-005-Arch**), whose §3–§9, §21–§24 remain the authoritative product model.
 
@@ -30,6 +33,50 @@ phase decomposition. Implementation is authorized only by a subsequent Sprint As
 | UX-006 | **not begun** | ✓ |
 
 This discovery changes none of the above. No product/runtime/CSS/artifact/version/tag change is made.
+
+---
+
+## 1A. Approved Owner Decisions (resolved — supersede the former gating questions)
+
+The two product decisions that this discovery previously listed as **gating open questions** (former Q1/Q2)
+have been **decided by the owner** and are now **resolved architecture inputs**. They are recorded here as
+approved decisions and are reflected throughout §3, §6–§8, §10, §13, §18, §20 and the ADRs. No further
+product decision blocks UX-006A planning.
+
+### Decision Q1 — Identity mechanism (APPROVED): provider-based local principal selection as an identity abstraction
+
+v3.0.0 resolves the active application principal through **provider-based local principal selection** — an
+`IdentityProvider` supplies the set of available principals and resolves the currently-selected one into the
+single `currentUser` contract. **This mechanism is an identity abstraction, not authentication.** It MUST
+NOT be described or built as secure login, account authentication, session security, credential
+verification, or an authorization security boundary.
+
+The architecture preserves, as invariants:
+- an **`IdentityProvider`** seam as the sole source of the active principal;
+- a single **`currentUser` consumer contract** (one selector; no module resolves identity independently);
+- **provider-supplied principal resolution** (the provider owns which principals exist and which is active);
+- **future replacement by real backend/auth infrastructure** behind the same interface, with **no
+  widespread consumer changes**.
+
+**No password, token, OAuth, session, credential, or real-authentication implementation is authorized.**
+A local principal selection changes *who the app is acting as* within a single trusted local session; it
+proves nothing about *who the human is*. See §6, §7, §17.3, §22 (risk 4), and ADR-006-01/02.
+
+### Decision Q2 — v3.0.0 ships both CEO and Employee principals (APPROVED)
+
+v3.0.0 **MUST** ship with **at least both** canonical principals so the identity, workspace-scope, and
+authorization architecture is proven against a lower-privilege principal — not only a CEO identity
+abstraction:
+
+| Principal | `principalType` | Workspace | Scope |
+|---|---|---|---|
+| CEO | `ceo` | Executive Workspace | `ALL_COMPANY` |
+| Employee | `employee` | Personal Workspace | `SELF` |
+
+Employee capabilities remain **intentionally minimal and policy-driven**. **No generic employee CRUD** is
+introduced. The frozen product intent stands: employee access is primarily **SELF-scoped and
+read-oriented**, with only explicitly approved self-service mutations (e.g. `submit-own-overtime`) enabled
+when their authorized phase is reached. This is reflected in §3, §8, §10, §18 and the §20 success criteria.
 
 ---
 
@@ -87,11 +134,14 @@ foundation, branding. Global Search and Data Grid are **explicitly source-agnost
 with company-wide scope; "Payroll Workspace" is a view label, not an ownership boundary. No ownership
 exists on any record.
 
-**Target (UX-006, per UX-005-Arch §3–§9, frozen):** two explicit **workspace types** —
-- **Executive Workspace** — CEO principal, scope **ALL COMPANY**; owns every existing module unchanged.
-- **Personal Workspace** — Employee principal, scope **SELF ONLY**; a separate, purpose-built experience
+**Target (UX-006, per UX-005-Arch §3–§9, frozen):** two explicit **workspace types**, **both of which
+v3.0.0 must ship and validate** (Decision Q2, §1A) —
+- **Executive Workspace** — `ceo` principal, scope **ALL_COMPANY**; owns every existing module unchanged.
+- **Personal Workspace** — `employee` principal, scope **SELF** only; a separate, purpose-built experience
   with its **own** navigation manifest (not a filtered `NAV_GROUPS`); read-only except **submit own
-  overtime request** (the single approved employee mutation).
+  overtime request** (the single approved employee mutation). Employee capability stays intentionally
+  minimal and policy-driven — **no generic employee CRUD**. Shipping both principals (not a CEO-only
+  abstraction) is what proves the scope and authorization architecture against a lower-privilege principal.
 
 Assumptions that become invalid once >1 principal exists: (a) every resolver returns any record; (b)
 `State.view` alone determines what is shown; (c) settings/UI prefs are global; (d) all data is readable by
@@ -139,9 +189,11 @@ last-login, address. No credential material is ever stored client-side.
 - **Bootstrap:** during `loadState()` identity resolves *after* storage/migration and *before* workspace
   resolution (§18/§27). Until resolved, `currentUser === null` and the app shows an identity-resolution
   state, never company data.
-- **Provider seam:** `currentUser` is supplied by an **`IdentityProvider` interface**, not hard-wired.
-  The initial client provider resolves identity from local state (single-principal, no real auth); a
-  future backend/session provider implements the same interface with **zero call-site changes**.
+- **Provider seam:** `currentUser` is supplied by an **`IdentityProvider` interface**, not hard-wired
+  (Decision Q1, §1A). The initial client provider performs **provider-based local principal selection** —
+  it owns the set of available principals (at minimum `ceo` + `employee`, Decision Q2) and resolves the
+  currently-selected one; this is an identity abstraction, **not** real authentication. A future
+  backend/session provider implements the same interface with **zero call-site changes**.
 - **Invariant:** *`currentUser` identifies the active application principal; it never implies
   authentication unless supplied by a trusted auth provider.* (§28)
 
@@ -149,9 +201,12 @@ last-login, address. No credential material is ever stored client-side.
 
 ## 7. Authentication Boundary (accurate trust statement)
 
-**Chosen model: (C) identity abstraction with future authentication compatibility.** UX-006 introduces an
-**identity primitive and an `IdentityProvider` seam**, plus a **local principal-selection** mechanism —
-**not** real authentication. **Explicit, non-overclaimed limitations (client-only architecture):**
+**Chosen model (owner-approved, Decision Q1 §1A): (C) provider-based local principal selection as an
+identity abstraction with future authentication compatibility.** UX-006 introduces an **identity primitive
+and an `IdentityProvider` seam**, plus a **provider-based local principal-selection** mechanism — **not**
+real authentication. It must not be represented as secure login, account authentication, session security,
+credential verification, or an authorization security boundary. **Explicit, non-overclaimed limitations
+(client-only architecture):**
 - Client-side identity can be **spoofed** by editing `localStorage`/`State`; the browser owner has full
   control of their device. **Client-side role/permission checks are UX enforcement, not security.**
 - No credential verification, no session integrity, no server-enforced authorization exists or is
@@ -201,9 +256,17 @@ required for v3.0.0.
 | **Workspace** | System (identity) | `ownerId` | owner | identity provider | new (created at bind) | n/a | Personal: never |
 | Personal UI prefs (future) | User | `user.id` | self | self | new (per-user key) | n/a | with user |
 
-**Key point:** business data stays **Executive-workspace-owned** (company data is the CEO's). The
-Employee's SELF-ONLY *read* access is a **scope filter over Executive-owned data keyed by
-`user.employeeId`**, not a transfer of ownership. This avoids re-homing any existing record.
+**Key point (owner-confirmed ownership model):** business data stays **Executive-workspace-owned** (company
+data is the CEO's). The Employee's SELF-only *read* access is a **scope filter over Executive-owned data
+keyed by `user.employeeId`** (or the appropriate source-grounded relationship), not a transfer of
+ownership. The Personal Workspace is **not** architected by duplicating or re-homing company records — it
+provides a SELF-scoped access context over the canonical company records. Explicitly preserved:
+- **one canonical business record** per entity (company-wide canonical storage);
+- **no employee-owned duplicate** payroll/employee records;
+- **SELF visibility derived** through scoped resolvers/policies, not by copying data;
+- existing business records remain **canonical company / Executive Workspace data**.
+
+This avoids re-homing any existing record.
 
 ---
 
@@ -268,10 +331,23 @@ Checks belong at the **mutation boundary and the resolver boundary**, not only i
 
 ## 13. Storage & Schema Strategy (recommendation)
 
-- **New persisted state:** `User` records, `Workspace` records, and the active-principal reference.
-  Recommend **new dedicated keys** (`tam_users_v1`, `tam_workspaces_v1`, `tam_active_principal_v1`) rather
-  than overloading existing keys — additive, mirrors the per-dataset convention, and keeps existing
-  business keys byte-stable.
+- **Persistence is evidence-based, not assumed (UX-006A storage correction).** UX-006A must prefer the
+  **smallest architecture that proves the identity contract**. The persisted keys formerly named as likely
+  UX-006A additions (`tam_users_v1`, `tam_active_principal_v1`, and a `tam_workspaces_v1`) are **NOT
+  mandatory UX-006A requirements**. Distinguish:
+  - **Required in UX-006A (no persistence assumed):** the `User` contract; the `IdentityProvider` seam; the
+    `currentUser` selector/contract; runtime identity state; **CEO + Employee representative principals**
+    (Decision Q2); fail-closed identity behavior; identity-focused tests/verifier guardrails. A
+    fixture/default/local provider **may supply principals at runtime without any persisted identity
+    storage** if that is sufficient to prove the contract.
+  - **Conditional / evidence-based (persist only on a concrete need):** persistence of the available
+    principals, of the selected principal, or of any identity-related local state. **Persist principal
+    selection only if there is a concrete UX-continuity requirement** (e.g. the selected principal must
+    survive reload). Do **not** create storage coupling merely because the architecture can support it.
+  - If persistence is later justified, use **new dedicated additive keys** (following the per-dataset
+    convention, e.g. `tam_users_v1` / `tam_active_principal_v1`) — never by overloading existing business
+    keys, which stay byte-stable. `Workspace` persistence belongs with the UX-006B workspace-binding
+    migration, not with the UX-006A identity foundation.
 - **Existing business keys stay unchanged in shape**; ownership is expressed by the **derived
   Executive-workspace binding**, not by adding `ownerId` to every record (avoids a mass in-place
   migration of business data). If a per-record `ownerId` is later required, it is an additive field with
@@ -281,7 +357,11 @@ Checks belong at the **mutation boundary and the resolver boundary**, not only i
   7`** should occur at **UX-006B/E**, when the legacy-binding migration first *transforms or governs*
   persisted business data (workspace binding + self-scope governance). Rationale: bump only for a real
   data migration (Constitution §7.2); a staged bump keeps the identity foundation reversible and low-risk.
-  Do **not** change `SCHEMA_VERSION` in this discovery.
+  Do **not** change `SCHEMA_VERSION` in this discovery **or in UX-006A**. **Architecture rule (owner-
+  affirmed): schema-version changes follow actual persisted-schema migrations — never milestone names or
+  feature labels.** `SCHEMA_VERSION = 6` is preserved through UX-006A unless UX-006A introduces a real
+  persisted-state migration (it should not). The likely `SCHEMA_VERSION 7` transition remains associated
+  with the workspace-binding / ownership migration in a later UX-006 phase (UX-006B/E).
 
 ---
 
@@ -387,8 +467,9 @@ Each records context / options / recommendation / rationale / tradeoffs / risks 
 implemented; final ADRs are authored in `docs/03-adr/` when the owning phase is authorized.
 
 - **ADR-006-01 — Identity representation.** *Options:* raw id vs `User` object vs external claim.
-  *Recommend:* a minimal `User` object (§5) behind an `IdentityProvider`. *Rationale:* stable contract,
-  backend-swappable. *Tradeoff:* an extra indirection. *Deferred:* email/PII inclusion.
+  *Decided (owner-approved, §1A):* a minimal `User` object (§5) behind an `IdentityProvider` using
+  **provider-based local principal selection** — an identity abstraction, not authentication. *Rationale:*
+  stable contract, backend-swappable. *Tradeoff:* an extra indirection. *Deferred:* email/PII inclusion.
 - **ADR-006-02 — `currentUser` contract.** *Recommend:* nullable resolved `User` via a single selector,
   fail-closed on null, provider-supplied (§6). *Rationale:* decouples UI from auth. *Risk:* callers
   reading stale identity — mitigated by a single accessor.
@@ -403,8 +484,11 @@ implemented; final ADRs are authored in `docs/03-adr/` when the owning phase is 
   capability policy `can(...)`, no generic RBAC (§10/§12). *Risk:* role proliferation — verifier-guarded.
 - **ADR-006-07 — Authorization enforcement boundary.** *Recommend:* four fail-closed layers, checks at
   resolver + mutation boundaries (§11, frozen §8/§22). *Rule:* UI hiding ≠ authorization.
-- **ADR-006-08 — Storage/schema strategy.** *Recommend:* additive identity/workspace keys, no
-  `SCHEMA_VERSION` bump for the foundation; first bump at the workspace-binding migration (§13).
+- **ADR-006-08 — Storage/schema strategy.** *Recommend:* **evidence-based identity persistence** — UX-006A
+  persists nothing unless a concrete UX-continuity need is shown; a runtime provider may supply CEO +
+  Employee principals with no persisted key. If justified, use additive dedicated keys. No `SCHEMA_VERSION`
+  bump for the foundation (stays `6`); schema changes follow real persisted-data migrations only, so the
+  first bump is at the workspace-binding migration (§13).
 - **ADR-006-09 — Legacy migration strategy.** *Recommend:* bind existing local data to the CEO's Executive
   Workspace, flag-guarded, idempotent, back-up-first, no data loss (§14).
 - **ADR-006-10 — Backend-compatibility boundary.** *Recommend:* `IdentityProvider`/`WorkspaceProvider`/
@@ -420,7 +504,7 @@ Foundation** must come first. Recommended sequence (maps onto §21):
 
 | Phase | Objective | Allowed surfaces | Forbidden | Schema | Key tests | Acceptance | Stop-if |
 |---|---|---|---|---|---|---|---|
-| **UX-006A — Identity Foundation** | `User` contract, `currentUser` selector, `IdentityProvider` seam, identity state; **no real auth** | new `js/core/identity.js`, state, additive `tam_users_v1`/`tam_active_principal_v1`, verifier, new harness | any auth/session/token; UI redesign; touching business logic/frozen surfaces | **6** (no bump) | identity resolution + null fail-closed | `currentUser` resolvable/nullable, fail-closed; GS 26 / DG 36 intact | real auth required |
+| **UX-006A — Identity Foundation** | `User` contract, `currentUser` selector, `IdentityProvider` seam (provider-based local principal selection), runtime identity state, **CEO + Employee representative principals**; **no real auth** | new `js/core/identity.js`, state, verifier, new harness; **identity persistence only if a concrete UX-continuity need is shown** (then additive `tam_users_v1`/`tam_active_principal_v1`) | any auth/session/token/credential; assumed identity persistence with no evidenced need; UI redesign; touching business logic/frozen surfaces | **6** (no bump) | identity resolution + null fail-closed; both `ceo` and `employee` principals resolvable | `currentUser` resolvable/nullable, fail-closed; CEO + Employee principals present; GS 26 / DG 36 intact | real auth required |
 | **UX-006B — Personal Workspace & Self-Scope** | `Workspace` contract, Personal Workspace, active workspace, scope-guarded resolvers, workspace-binding migration | new `js/core/workspace.js`, resolver wrappers, second nav manifest, migration, verifier/harness | executive-module changes; GS/DG engine edits | **→ 7** (binding migration) | workspace resolution, self-scope resolvers, migration idempotency/no-loss | employee reads self-only; migration idempotent; no data loss | ambiguous ownership risks loss |
 | **UX-006C — Authorization** | roles, centralized `can(...)` policy, mutation enforcement, employee submit-own-overtime state | new `js/core/authz.js`, overtime submit path, verifier/harness | scattered role checks; new employee permissions | 7 | allow/deny/unknown; submit≠approve | all four layers fail-closed; only approved mutation | new permission needed |
 | **UX-006D — Workspace UI Integration** | workspace/account context UI, Personal navigation, unauthorized states | shell/nav (authorized), Personal views | changing frozen business behavior | 7 | nav-per-principal; unauthorized routes blocked | employee never reaches exec routes/data | UI-only "authorization" |
@@ -429,6 +513,22 @@ Foundation** must come first. Recommended sequence (maps onto §21):
 
 **Parallelism:** UX-006A must precede all; B depends on A; C depends on B; D depends on C; E overlaps
 B/C on migration; F is last. Documentation/test scaffolding for later phases may be drafted in parallel.
+
+**v3.0.0 success criteria (Decision Q2):** v3.0.0 ships and validates **both** canonical access models —
+CEO (`ceo` / Executive / `ALL_COMPANY`) and Employee (`employee` / Personal / `SELF`). The authorization
+suite must prove the lower-privilege Employee path (self-only read; every non-approved write denied; only
+`submit-own-overtime` permitted where its authorized phase is reached), not merely a CEO identity
+abstraction. Shipping a CEO-only build does not satisfy v3.0.0.
+
+### 20.1 UX-006A implementation-planning status
+
+- **GO for UX-006A implementation *planning*.** After the owner decisions in §1A, **no unresolved product
+  decision blocks UX-006A planning.** The identity contract, provider seam, `currentUser` contract,
+  principal set (CEO + Employee), fail-closed behavior, and the evidence-based persistence stance are all
+  settled at the architecture level.
+- **NOT YET AUTHORIZED for UX-006A *implementation*.** No code, runtime files, storage, schema, verifier,
+  harness, or artifact change is authorized by this document. Implementation begins only under a subsequent
+  Sprint Assignment (per `README.md`). This follow-up remains architecture documentation only.
 
 ---
 
@@ -472,23 +572,30 @@ Workspace ownership  ──►  active workspace / scope-guarded resolvers  ─�
 
 ## 23. Open Questions
 
-**Must resolve before UX-006A:**
-- (Q1) Principal-selection UX for the client (identity foundation): how is the active principal chosen in
-  a client-only build (single-CEO default vs an explicit local chooser)? — product decision.
-- (Q2) Does an employee principal exist locally at all in v3.0.0, or is UX-006 CEO-only foundation +
-  Personal Workspace scaffolding? — product decision (affects whether self-scope ships in v3.0.0).
+**Resolved by owner decision (formerly gating — see §1A):**
+- ~~(Q1) Principal-selection mechanism for the client.~~ **RESOLVED — APPROVED:** provider-based local
+  principal selection as an identity abstraction (not authentication). See §1A, §6, §7.
+- ~~(Q2) Does an employee principal exist locally in v3.0.0?~~ **RESOLVED — APPROVED:** yes — v3.0.0 ships
+  **at least both** CEO and Employee principals; self-scope ships in v3.0.0. See §1A, §3, §20.
 
-**Can defer to later UX-006 phases:**
-- (Q3) Employee-submitted overtime state machine details (Submitted/Pending) — UX-006C.
-- (Q4) Personal Documents scope — UX-006D (only if product need confirmed).
-- (Q5) Per-record `ownerId` vs derived binding — revisit at 006E if backend arrives.
+**No unresolved product decision blocks UX-006A planning.** The only open items are phase-scoped or
+out-of-scope, categorized below.
 
-**Can defer beyond v3.0.0:**
+**Must resolve before the later UX-006 phase noted (not before UX-006A):**
+- (Q3) Employee-submitted overtime state-machine details (Submitted/Pending) — before **UX-006C**.
+- (Q4) Personal Documents scope — before **UX-006D**, and only if a product need is confirmed.
+
+**Safely deferred (revisit only if triggered):**
+- (Q5) Per-record `ownerId` vs derived binding — revisit at **UX-006E** if a backend arrives.
+- (Q8) Whether identity/selected-principal persistence is needed at all — evidence-based; decide during
+  UX-006A/B on concrete UX-continuity evidence (§13). Default is no persistence.
+
+**Beyond v3.0.0 (new product decision / separate milestone required):**
 - (Q6) Shared workspaces / membership / additional roles — new product decision required.
 - (Q7) Real authentication / backend authorization — separate infrastructure milestone.
 
-Foundational identity/ownership semantics (§5–§14) are resolved here at the architecture level; the two
-**Q1/Q2 product decisions** are the only owner inputs required before UX-006A planning.
+Foundational identity/ownership semantics (§5–§14) and the two former product gates (Q1/Q2) are all
+resolved. UX-006A planning is unblocked; implementation remains unauthorized until a Sprint Assignment.
 
 ---
 
@@ -504,7 +611,8 @@ tag change.
 
 ## 25. Confirmation — No Implementation Began
 
-No UX-006 implementation was started. No production/runtime/CSS/business code was written or changed. No
-`currentUser`, authentication, workspace, ownership, role, permission, migration, or schema change was
-implemented. This is a documentation-only discovery/architecture baseline. The published v2.9.0 artifact,
-tag, and all historical releases remain immutable.
+No UX-006 implementation was started. Incorporating the owner decisions (§1A) is a **documentation-only**
+revision. No production/runtime/CSS/business code was written or changed; no `js/*`, CSS, storage, schema,
+verifier, harness, or `dist/` artifact change was made; `APP_VERSION` stays `2.9.0` and `SCHEMA_VERSION`
+stays `6`. No `currentUser`, authentication, workspace, ownership, role, permission, migration, or schema
+change was implemented. The published v2.9.0 artifact, tag, and all historical releases remain immutable.
