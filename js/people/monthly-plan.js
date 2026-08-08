@@ -116,18 +116,18 @@ function renderMonthlyPlanGenerator(main){
         <button class="btn btn-accent" id="buildPreview">Build Preview</button>
       </div>
     </div>
-    <div class="grid grid-3" style="margin-bottom:14px;">
+    <div class="grid grid-3 stack-section">
       <div class="card stat-card"><div class="stat-label">Plan Status</div><div class="stat-value" style="font-size:16px;">${plan?hrStatusBadge(plan.status,PLAN_STATUS_META):'<span class="faint">Not started</span>'}</div><div class="stat-sub dim">${escapeHtml(mo.month)} ${mo.year}</div></div>
       <div class="card stat-card"><div class="stat-label">Committed Rows</div><div class="stat-value">${plan?plan.committedTxnIds.length:0}</div><div class="stat-sub dim">planned transactions in this month's plan</div></div>
       <div class="card stat-card"><div class="stat-label">Workflow</div><div class="stat-sub dim" style="margin-top:2px;line-height:1.8;">Draft → Reviewed → Committed<br><span class="faint">Approved &amp; Closed are future-ready</span></div></div>
     </div>
     ${(()=>{ const cyc=payrollCycleStatus(monthKey); const committed=State.payrollPlans.filter(p=>p.monthKey===monthKey&&isPayrollCommitted(p)).length; const sect = cyc==='Not Generated'?'Missing':(committed?(State.payrollPlans.some(p=>p.monthKey===monthKey&&p.otChanged)?'Changed':'Committed'):(cyc==='In Review'?'Reviewed':'Generated'));
-      return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+      return `<div class="card" style="margin-bottom:var(--space-4);border-left:3px solid var(--accent);">
       <h3>Payroll Source <span class="tag">${escapeHtml(sect)}</span></h3>
       <p class="hint" style="margin:-6px 0 10px;">The Monthly Plan consumes payroll committed in Payroll Planning — it does not generate payroll here. ${committed?`${committed} committed payroll transaction(s) for ${escapeHtml(mo.month)}.`:'<b>Payroll has not been committed for this month.</b>'}</p>
       <button class="btn btn-accent" id="openPay">Open Payroll Planning</button>
     </div>`; })()}
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <div class="small-btn-row" style="flex-wrap:wrap;gap:8px;">
         <button class="btn" id="copyPrev">Copy Previous Month (manual items)</button>
         <button class="btn" id="addManual">+ Add Manual Item</button>
@@ -184,7 +184,7 @@ function renderPlanPreview(area, preview, main){
   const typeLabel = {payroll:'Payroll', recurring:'Recurring', manual:'Manual'};
   const warnPills = r=> (r.dup==='duplicate'?'<span class="pill pill-status-cancelled">duplicate</span> ':'') + (r.warn?`<span class="pill pill-status-partial">${r.warn}</span>`:'');
   area.innerHTML = `
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Plan Preview — ${escapeHtml(keyToMonthObj(preview.monthKey).month)} ${keyToMonthObj(preview.monthKey).year}</h3>
       <div class="grid grid-4" style="margin-bottom:12px;">
         <div class="chart-mini-stat"><div class="lbl">Payroll</div><div class="val">${fmtIDRShort(t.payroll)}</div></div>
@@ -215,7 +215,7 @@ function renderPlanPreview(area, preview, main){
           </tr>`).join('') || '<tr><td colspan="7" class="empty">Nothing to plan for this month.</td></tr>'}</tbody>
         </table>
       </div>
-      <div class="modal-actions" style="justify-content:flex-start;margin-top:14px;">
+      <div class="modal-actions" style="justify-content:flex-start;margin-top:var(--space-4);">
         <button class="btn btn-accent" id="commitPlan">Commit Selected Rows</button>
         <span class="hint" style="align-self:center;">Creates planned transactions (status: Planned). Existing rows are never duplicated; historical transactions are never deleted.</span>
       </div>

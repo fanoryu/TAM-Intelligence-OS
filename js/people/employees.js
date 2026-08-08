@@ -128,9 +128,9 @@ function renderEmployees(main){
         <button class="btn" id="expEmp">Export CSV</button>
       </div>
     </div>
-    ${(function(){const g=findEmployeeDuplicateGroups();return g.length?`<div class="card" style="border-left:3px solid var(--brick);margin-bottom:14px;"><b style="color:var(--brick);">${g.length} duplicate employee group(s) detected</b> — the same person exists under multiple records. <button class="linklike" id="dedupEmp2">Open Employee Duplicate Review</button> to consolidate them safely (nothing is deleted, no amounts change).</div>`:'';})()}
+    ${(function(){const g=findEmployeeDuplicateGroups();return g.length?`<div class="card" style="border-left:3px solid var(--brick);margin-bottom:var(--space-4);"><b style="color:var(--brick);">${g.length} duplicate employee group(s) detected</b> — the same person exists under multiple records. <button class="linklike" id="dedupEmp2">Open Employee Duplicate Review</button> to consolidate them safely (nothing is deleted, no amounts change).</div>`:'';})()}
     <div class="card">
-      <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1fr 1fr;margin-bottom:14px;">
+      <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1fr 1fr;margin-bottom:var(--space-4);">
         <div class="field"><label>Search (name, ID, title, contact)</label><input class="input" id="eSearch" placeholder="Search…" value="${escapeHtml(f.search)}"></div>
         <div class="field"><label>Employment Status</label>
           <select class="input" id="eStatus"><option value="all">All statuses</option>${EMPLOYMENT_STATUSES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select>
@@ -578,8 +578,8 @@ function renderEmployeeDetail(main){
         <button class="btn btn-accent" id="newCtForEmp">+ New Contract</button>
       </div>
     </div>
-    ${alerts.length?`<div class="insight-list" style="margin-bottom:14px;">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
-    <div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
+    ${alerts.length?`<div class="insight-list stack-section">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
+    <div class="grid grid-2" style="margin-bottom:var(--space-4);align-items:start;">
       <div class="card">
         <h3>Profile</h3>
         <div style="font-size:13px;line-height:1.75;">
@@ -606,7 +606,7 @@ function renderEmployeeDetail(main){
           </div>`:'<div class="empty">No active contract for the current month.</div>'}
       </div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Contract History</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Contract #</th><th>Start</th><th>End</th><th>Progress</th><th class="num">Monthly</th><th>Status</th><th></th></tr></thead>
@@ -619,7 +619,7 @@ function renderEmployeeDetail(main){
         </tr>`; }).join('') || '<tr><td colspan="7" class="empty">No contracts yet.</td></tr>'}</tbody>
       </table></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Payroll History</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Period</th><th>Contract</th><th class="num">Base Payroll</th><th class="num">Payroll OT</th><th class="num">Supplemental</th><th class="num">Total Compensation</th><th>Stage</th></tr></thead>
@@ -635,7 +635,7 @@ function renderEmployeeDetail(main){
       </table></div>
       <p class="hint" style="margin-top:8px;">Total Compensation includes committed (Posted/Executed) Supplemental Payments. Base Payroll always remains immutable.</p>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Overtime History</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Period</th><th>Date</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th></tr></thead>

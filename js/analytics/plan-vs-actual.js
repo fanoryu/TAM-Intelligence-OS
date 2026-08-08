@@ -15,12 +15,12 @@ function renderPlanVsActual(main){
       <div><h1>Planned vs. Actual</h1><p class="desc">Category and line-item level budget comparison.</p></div>
       <div class="head-controls">${monthSelectHTML('pvaMonth', key, false)}</div>
     </div>
-    <div class="grid grid-3" style="margin-bottom:14px;">
+    <div class="grid grid-3 stack-section">
       <div class="card stat-card"><div class="stat-label">Total Planned</div><div class="stat-value">${fmtIDRShort(tot.planned)}</div></div>
       <div class="card stat-card"><div class="stat-label">Total Actual</div><div class="stat-value">${fmtIDRShort(tot.actual)}</div></div>
       <div class="card stat-card"><div class="stat-label">Variance</div><div class="stat-value" style="color:${tot.variance>=0?'var(--green)':'var(--brick)'}">${fmtIDRShort(tot.variance)}</div></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>By Category</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Category</th><th class="num">Planned</th><th class="num">Actual</th><th class="num">Variance</th><th class="num">% of Plan Used</th></tr></thead>

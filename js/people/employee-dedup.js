@@ -89,7 +89,7 @@ function renderEmployeeDedup(main){
         }).filter(Boolean);
         const conflictHTML = conflicts.length ? `<div class="hint" style="margin:10px 0 6px;"><b>Profile differences</b> — choose which value the canonical record keeps (non-empty values are never overwritten silently):</div>
           <div class="grid grid-3" style="gap:8px;">${conflicts.map(cf=>`<div class="field"><label>${escapeHtml(cf.f)}</label><select class="input" data-prof="${escapeHtml(g.key)}|${cf.f}">${cf.vals.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')}</select></div>`).join('')}</div>` : '';
-        return `<div class="card" style="margin-bottom:14px;">
+        return `<div class="card stack-section">
           <h3 style="margin-top:0;">${escapeHtml(g.name)} <span class="tag">${g.employees.length} records</span></h3>
           <div class="table-wrap"><table><thead><tr><th style="width:34px;">Keep</th><th>Employee ID</th><th>Name</th><th class="num">Contracts</th><th class="num">Payroll</th><th class="num">Txns</th><th class="num">OT</th><th class="num">Adj</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
           ${conflictHTML}

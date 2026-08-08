@@ -17,7 +17,7 @@ function renderExecuteModal(){
     <div class="modal-overlay" id="execOverlay">
       <div class="modal" style="max-width:540px;">
         <h3>Execute Transaction</h3>
-        <p class="dim" style="font-size:12.5px;margin:0 0 14px;">${escapeHtml(t.uraian)} · ${escapeHtml(t.category)} · planned ${fmtIDR(t.planned)}</p>
+        <p class="dim" style="font-size:12.5px;margin:0 0 var(--space-4);">${escapeHtml(t.uraian)} · ${escapeHtml(t.category)} · planned ${fmtIDR(t.planned)}</p>
         <form id="execForm">
           <div class="form-grid" style="grid-template-columns:1fr 1fr;">
             <div class="field"><label>Execution Date</label><input class="input" type="date" name="executionDate" value="${escapeHtml(t.txnDate||today)}"></div>
@@ -137,7 +137,7 @@ function openDetailModal(id){
           </div>
         </div>`:''}
 
-        <div class="card" style="margin-top:14px;padding:14px 16px;">
+        <div class="card" style="margin-top:var(--space-4);padding:14px 16px;">
           <h4 style="margin:0 0 8px;font-size:12.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-faint);">History</h4>
           <div class="hist-list">
             ${(t.history||[]).map(h=>`<div class="hist-row">
@@ -174,7 +174,7 @@ function payrollLinkCardHTML(t){
     <div class="divider" style="margin:10px 0;"></div>
     <div style="font-size:12.5px;">Overtime component: <b class="mono" style="color:var(--accent);">${fmtIDR(t.overtimeAmount!=null?t.overtimeAmount:otSum)}</b> <span class="faint">(inside the planned payroll total, ${otRecs.length} record(s))</span></div>
     ${otRecs.length?`<div class="table-wrap" style="margin-top:6px;"><table><thead><tr><th>Date</th><th class="num">Hours</th><th class="num">Rate</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>${otRecs.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td class="num">${fmtIDRfull(o.hourlyRate)}</td><td class="num">${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}</td><td>${hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('')}</tbody></table></div>`:''}` : '';
-  return `<div class="card" style="margin:0 0 14px;padding:14px 16px;border-left:3px solid var(--accent);">
+  return `<div class="card" style="margin:0 0 var(--space-4);padding:14px 16px;border-left:3px solid var(--accent);">
     <h4 style="margin:0 0 8px;font-size:12.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-faint);">Payroll Link · Source: ${escapeHtml(t.source==='payroll'?'Payroll Planning':t.source||'—')}</h4>
     <div style="font-size:12.5px;line-height:1.9;">
       <div>Employee: <b>${escapeHtml(emp?emp.fullName:(meta.employeeName||'—'))}</b></div>

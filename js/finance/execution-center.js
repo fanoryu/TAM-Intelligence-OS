@@ -72,7 +72,7 @@ function renderExecutionCenter(main){
   // v2.7.1 — focus card: shown when a deep-linked transaction exists but is not in the active
   // tab (e.g. executed on a prior day, in no pending bucket), so it is always reachable.
   const focusInActive = focusTxn && activeRows.some(t=>t.id===focusId);
-  const focusCard = (focusTxn && !focusInActive) ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+  const focusCard = (focusTxn && !focusInActive) ? `<div class="card" style="margin-bottom:var(--space-4);border-left:3px solid var(--accent);">
       <h3>Linked transaction</h3>
       <div style="font-size:13px;line-height:1.8;">
         <div><button class="linklike" data-open-detail="${focusTxn.id}"><b>${escapeHtml(focusTxn.uraian)}</b></button> · ${statusBadge(statusOf(focusTxn))}</div>
@@ -80,18 +80,18 @@ function renderExecutionCenter(main){
       </div>
       <div class="small-btn-row" style="margin-top:8px;"><button class="btn btn-sm" data-open-detail="${focusTxn.id}">Open Detail</button><button class="btn btn-sm" id="execClearFocus">Clear</button></div>
     </div>` : '';
-  const focusMissing = (focusId && !focusTxn) ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--brick);"><h3 style="color:var(--brick);">Linked transaction not found</h3><p class="hint">It may have been removed. Showing the normal Execution Center.</p></div>` : '';
+  const focusMissing = (focusId && !focusTxn) ? `<div class="card" style="margin-bottom:var(--space-4);border-left:3px solid var(--brick);"><h3 style="color:var(--brick);">Linked transaction not found</h3><p class="hint">It may have been removed. Showing the normal Execution Center.</p></div>` : '';
 
   main.innerHTML = `
     <div class="page-head"><div><h1>Execution Center</h1><p class="desc">Process planned transactions and record real payments.</p></div></div>
     ${focusMissing}${focusCard}
-    <div class="grid grid-3" style="margin-bottom:14px;">
+    <div class="grid grid-3 stack-section">
       <div class="card stat-card"><div class="stat-label">Pending Execution</div><div class="stat-value">${b.pendingCount}</div><div class="stat-sub dim">unscheduled · today · upcoming · overdue · partial</div></div>
       <div class="card stat-card"><div class="stat-label">Overdue</div><div class="stat-value" style="color:${b.overdue.length?'var(--brick)':'inherit'}">${b.overdue.length}</div><div class="stat-sub dim">past planned date, not executed</div></div>
       <div class="card stat-card"><div class="stat-label">Completed Today</div><div class="stat-value" style="color:var(--green)">${b.completedToday.length}</div><div class="stat-sub dim">${fmtIDR(b.completedToday.reduce((s,t)=>s+(t.actual||0),0))}</div></div>
     </div>
     <div class="card">
-      <div class="chart-range-chips" role="group" aria-label="Execution views" style="margin-bottom:14px;">
+      <div class="chart-range-chips stack-section" role="group" aria-label="Execution views">
         ${views.map(([k,l,n])=>`<button type="button" class="btn btn-sm ${State.execFilter===k?'btn-accent':''}" data-execview="${k}">${l} (${n})</button>`).join('')}
       </div>
       <div class="table-wrap" style="max-height:560px;overflow-y:auto;">

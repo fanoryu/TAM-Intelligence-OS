@@ -33,25 +33,25 @@ function renderBudgetCenter(main){
       <div><h1>Budget Center</h1><p class="desc">Annual and monthly budget utilization for ${escapeHtml(State.settings.companyName||COMPANY_NAME_DEFAULT)}.</p></div>
       <div class="head-controls"><select id="budgetYear" class="input">${years.map(y=>`<option value="${y}" ${y===State.budgetYear?'selected':''}>${y}</option>`).join('')}</select></div>
     </div>
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       <div class="card stat-card"><div class="stat-label">Annual Planned Budget</div><div class="stat-value">${fmtIDRShort(annualPlanned)}</div></div>
       <div class="card stat-card"><div class="stat-label">Annual Actual Spend</div><div class="stat-value">${fmtIDRShort(annualActual)}</div><div class="stat-sub dim">${knownActualRows.length} of ${yearMonths.length} months recorded</div></div>
       <div class="card stat-card"><div class="stat-label">Remaining Budget</div><div class="stat-value" style="color:${remaining>=0?'var(--green)':'var(--brick)'}">${fmtIDRShort(remaining)}</div></div>
       <div class="card stat-card"><div class="stat-label">Budget Utilization</div><div class="stat-value">${utilization.toFixed(0)}%</div></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Monthly Planned vs. Actual — ${State.budgetYear}</h3>
       <p class="hint">Click a point to open that month's Finance Overview.</p>
       <div class="chart-wrap" id="budgetMonthlyChart"></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Category Utilization</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Category</th><th class="num">Planned</th><th class="num">Actual</th><th class="num">% Used</th></tr></thead>
         <tbody>${catUtil.map(c=>`<tr><td>${categoryPill(c.cat)}</td><td class="num">${fmtIDR(c.planned)}</td><td class="num">${c.hasAny?fmtIDR(c.actual):'<span class="faint">—</span>'}</td><td class="num">${c.hasAny?c.pctUsed.toFixed(0)+'%':'—'}</td></tr>`).join('')}</tbody>
       </table></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Months at Risk of Overspending<span class="tag">≥90% of plan used</span></h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Month</th><th class="num">Planned</th><th class="num">Actual</th><th class="num">% Used</th></tr></thead>
@@ -66,7 +66,7 @@ function renderBudgetCenter(main){
         <div class="field"><label>Payroll Increase %</label><input class="input" id="simPayroll" type="number" step="1" value="${sim.payrollPct}"></div>
         <div class="field"><label>Operational Cost Increase %</label><input class="input" id="simOps" type="number" step="1" value="${sim.opsPct}"></div>
       </div>
-      <div class="grid grid-2" style="margin-top:14px;">
+      <div class="grid grid-2" style="margin-top:var(--space-4);">
         <div class="card stat-card"><div class="stat-label">Projected Monthly Spending (Simulation)</div><div class="stat-value">${fmtIDRShort(projTotal)}</div></div>
         <div class="card stat-card"><div class="stat-label">Projected Variance vs. Current Average (Simulation)</div><div class="stat-value" style="color:${projVariance>=0?'var(--green)':'var(--brick)'}">${fmtIDRShort(projVariance)}</div></div>
       </div>

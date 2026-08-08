@@ -61,7 +61,7 @@ function renderTransactions(main){
       + `<div class="card"><div class="empty">
           <div class="big">≡</div>
           <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No transactions yet</div>
-          <div style="margin-bottom:14px;">Create a monthly plan from payroll and recurring expenses, or import a legacy Excel workbook.</div>
+          <div class="stack-section">Create a monthly plan from payroll and recurring expenses, or import a legacy Excel workbook.</div>
           <div class="small-btn-row" style="justify-content:center;flex-wrap:wrap;">
             <button class="btn btn-accent" data-empty-nav="monthlyplan">Create Monthly Plan</button>
             <button class="btn" data-empty-nav="payroll">Generate Payroll</button>

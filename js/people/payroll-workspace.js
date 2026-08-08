@@ -43,7 +43,7 @@ function renderPayrollWorkspace(main){
       + `<div class="card"><div class="empty">
         <div class="big">৳</div>
         <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No employees and contracts are available yet</div>
-        <div style="margin-bottom:14px;">Add employees and active contracts, then generate payroll — payroll is Base Salary + Approved Overtime.</div>
+        <div class="stack-section">Add employees and active contracts, then generate payroll — payroll is Base Salary + Approved Overtime.</div>
         <div class="small-btn-row" style="justify-content:center;flex-wrap:wrap;">
           <button class="btn btn-accent" data-empty-nav="employees">Add Employee</button>
           <button class="btn" data-empty-nav="contracts">Create Contract</button>
@@ -86,7 +86,7 @@ function renderPayrollWorkspace(main){
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:3px solid ${locked?'var(--brick)':'var(--accent)'};">
+    <div class="card" style="margin-bottom:var(--space-4);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:3px solid ${locked?'var(--brick)':'var(--accent)'};">
       <div>
         <div class="stat-label">Current Payroll Period</div>
         <div style="font-family:var(--serif);font-size:22px;font-weight:600;">${escapeHtml(mo.month)} ${mo.year} ${locked?'<span class="pill pill-status-cancelled">LOCKED</span>':''}</div>
@@ -105,21 +105,21 @@ function renderPayrollWorkspace(main){
       ${kpi('Review', counts.Review, 'in review')}
       ${kpi('Approved', counts.Approved, 'ready to post')}
     </div>
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       ${kpi('Posted', counts.Posted, 'planned in finance')}
       ${kpi('Executed', counts.Executed, 'paid via Execution Center')}
       ${kpi('Total Payroll', fmtIDRShort(summary.total), 'base + approved overtime')}
       ${kpi('Total Overtime', fmtIDRShort(summary.overtime), `${otHours} hrs`)}
     </div>
 
-    ${health.length?`<div class="card" style="margin-bottom:14px;">
+    ${health.length?`<div class="card stack-section">
       <h3>Payroll Health <span class="tag">${health.length}</span></h3>
       <div class="insight-list">${health.slice(0,24).map(h=>`<div class="insight-item ${h.sev==='warn'?'warn':''}"><b>${escapeHtml(h.title)}</b> — ${escapeHtml(h.detail)}</div>`).join('')}</div>
     </div>`:''}
 
     ${payrollDriftBannerHTML(plans)}
 
-    ${hasRows?`<div class="grid grid-4" style="margin-bottom:14px;">
+    ${hasRows?`<div class="grid grid-4 stack-section">
       <div class="chart-mini-stat"><div class="lbl">Employees</div><div class="val">${summary.count}</div></div>
       <div class="chart-mini-stat"><div class="lbl">Average Payroll</div><div class="val">${fmtIDRShort(summary.average)}</div></div>
       <div class="chart-mini-stat"><div class="lbl">Highest</div><div class="val">${fmtIDRShort(summary.highest)}</div></div>
@@ -128,11 +128,11 @@ function renderPayrollWorkspace(main){
 
     <div id="payArea"></div>
 
-    ${periodEvents.length?`<div class="card" style="margin-top:14px;"><h3>Period Activity <span class="tag">${periodEvents.length}</span></h3>
+    ${periodEvents.length?`<div class="card" style="margin-top:var(--space-4);"><h3>Period Activity <span class="tag">${periodEvents.length}</span></h3>
       <p class="hint" style="margin-top:-2px;margin-bottom:10px;">Recorded generate / post / lock / unlock events for ${escapeHtml(mo.month)} ${mo.year} — newest first. See the full cross-module trail in Management → Activity Log.</p>
       ${payrollTimelineHTML(periodEvents)}</div>`:''}
 
-    ${excludedNow.length?`<div class="card" style="margin-top:14px;"><h3>Excluded Employees <span class="tag">${excludedNow.length}</span></h3><div class="insight-list">${excludedNow.map(x=>`<div class="insight-item warn"><b>${escapeHtml(x.e.fullName)}</b> — ${escapeHtml(x.reason)}</div>`).join('')}</div></div>`:''}`;
+    ${excludedNow.length?`<div class="card" style="margin-top:var(--space-4);"><h3>Excluded Employees <span class="tag">${excludedNow.length}</span></h3><div class="insight-list">${excludedNow.map(x=>`<div class="insight-item warn"><b>${escapeHtml(x.e.fullName)}</b> — ${escapeHtml(x.reason)}</div>`).join('')}</div></div>`:''}`;
 
   document.getElementById('payMonth').addEventListener('change', e=>{ State.payrollMonth=e.target.value; renderPayrollWorkspace(main); });
   document.getElementById('lockBtn').addEventListener('click', async ()=>{
@@ -436,7 +436,7 @@ function renderPayrollDetail(main){
       `<button class="btn" id="pdBack">← Payroll Workspace</button>${emp?`<button class="btn" id="pdEmp">Employee</button>`:''}${ct?`<button class="btn" id="pdCt">Contract</button>`:''}${txn?`<button class="btn" id="pdTxn">Transaction</button>`:''}`)
     + payrollDriftBannerHTML([p])
     + payrollIntegrityNoticeHTML(p)                          // v2.7.1 mismatch notice (between/above the panels)
-    + `<div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
+    + `<div class="grid grid-2" style="margin-bottom:var(--space-4);align-items:start;">
       <div class="card"><h3>Base Payroll Snapshot <span class="tag">${committedStage?'committed':'read-only'}</span> ${payrollIntegrityBadge(p)}</h3><div style="font-size:13px;line-height:1.75;">
         <div>Employee: <b>${escapeHtml(p.employeeName||'—')}</b></div>
         <div>Contract: <b>${escapeHtml(p.contractNumber||'—')}</b></div>
@@ -459,7 +459,7 @@ function renderPayrollDetail(main){
       </div>`:'<div class="empty">Not posted to finance yet. Approve then Post to Finance to create a Planned transaction.</div>'}</div>
     </div>
     ${(typeof supplementalPlanSectionHTML==='function')?supplementalPlanSectionHTML(p):''}
-    <div class="card" style="margin-bottom:14px;"><h3>Payroll Timeline</h3>
+    <div class="card stack-section"><h3>Payroll Timeline</h3>
       <p class="hint" style="margin-top:-2px;margin-bottom:10px;">Generated → Reviewed → Approved → Posted → Executed, plus period lock/unlock. Only events that actually occurred are shown (real timestamps — nothing is fabricated).</p>
       ${payrollTimelineHTML(buildPayrollTimeline(p))}</div>
     <div class="card"><h3>Payroll History</h3><div class="hist-list">${(p.history||[]).map(h=>`<div class="hist-row"><span class="hist-event">${escapeHtml((h.event||'').charAt(0).toUpperCase()+(h.event||'').slice(1))}</span><span class="hist-note">${escapeHtml(h.note||'')}</span><span class="hist-ts faint">${h.ts?new Date(h.ts).toLocaleString('id-ID'):'—'}</span></div>`).join('')||'<div class="empty">No history.</div>'}</div></div>`;

@@ -220,16 +220,16 @@ function renderOvertime(main){
       `${State.overtimeRecords.length} record(s) · ${pending} pending review. ${escapeHtml(State.settings.overtimeMethodLabel||'TAM Internal Overtime Calculation Method')}.`,
       `<button class="btn btn-accent" id="addOt">+ Add Overtime</button><button class="btn" id="otSheet">Monthly Worksheet</button><button class="btn" id="otCsv">Export CSV</button>`)
     + `
-    <div class="insight-item" style="margin-bottom:14px;display:block;">This calculation follows the internal method configured in TAM OS. Verify separately when statutory payroll compliance calculations are required.</div>
+    <div class="insight-item" style="margin-bottom:var(--space-4);display:block;">This calculation follows the internal method configured in TAM OS. Verify separately when statutory payroll compliance calculations are required.</div>
     ${payrollDriftBannerHTML(State.payrollPlans)}
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       <div class="card stat-card"><div class="stat-label">Records Shown</div><div class="stat-value" id="otStatShown">${rows.length}</div></div>
       <div class="card stat-card"><div class="stat-label">Total Overtime Hours</div><div class="stat-value" id="otStatHours">${totalHours.toLocaleString('id-ID',{maximumFractionDigits:2})}</div></div>
       <div class="card stat-card"><div class="stat-label">Total Overtime Amount</div><div class="stat-value" id="otStatAmount">${fmtIDRShort(totalAmount)}</div></div>
       <div class="card stat-card"><div class="stat-label">Pending Review</div><div class="stat-value">${pending}</div></div>
     </div>
     <div class="card">
-      <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1fr;margin-bottom:14px;">
+      <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1fr;margin-bottom:var(--space-4);">
         <div class="field"><label>Search (employee, description, contract)</label><input class="input" id="otSearch" placeholder="Search…" value="${escapeHtml(f.search)}"></div>
         <div class="field"><label>Status</label><select class="input" id="otStatus"><option value="all">All statuses</option>${OVERTIME_STATUSES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
         <div class="field"><label>Month</label><select class="input" id="otMonth"><option value="all">All months</option>${months.map(k=>{const o=keyToMonthObj(k);return `<option value="${k}" ${f.month===k?'selected':''}>${o.month} ${o.year}</option>`;}).join('')}</select></div>
@@ -266,7 +266,7 @@ function openOvertimeModal(id){
         <div class="field"><label>Work Description</label><input class="input" name="workDescription" value="${escapeHtml(v.workDescription||'')}"></div>
         <div class="field" style="grid-column:span 2;"><label>Notes</label><textarea class="input" name="notes">${escapeHtml(v.notes||'')}</textarea></div>
       </div>
-      <div class="card" id="otPreview" style="margin-top:14px;padding:14px 16px;background:var(--surface-2);"></div>
+      <div class="card" id="otPreview" style="margin-top:var(--space-4);padding:14px 16px;background:var(--surface-2);"></div>
       <div class="modal-actions"><button type="button" class="btn" id="otCancel">Cancel</button><button type="submit" class="btn btn-accent">${isNew?'Create (Draft)':'Save Changes'}</button></div>
     </form>`, {width:600, onMount:(root)=>{
       const form = root.querySelector('#otForm');
@@ -398,7 +398,7 @@ function renderOvertimeWorksheet(main){
           <td class="num" id="wsamt-${i}"><b>${fmtIDR(r._calc.amount)}</b></td>
         </tr>`).join('')}</tbody>
       </table></div>
-      <div class="modal-actions" style="justify-content:flex-start;margin-top:14px;flex-wrap:wrap;gap:8px;">
+      <div class="modal-actions" style="justify-content:flex-start;margin-top:var(--space-4);flex-wrap:wrap;gap:8px;">
         <button class="btn btn-accent" id="wsSaveDraft">Save all as Draft</button>
         <button class="btn" id="wsApprove">Approve all with hours</button>
         <button class="btn" id="wsCommitInfo" disabled title="Commit happens from Payroll Planning">Commit via Payroll →</button>

@@ -394,7 +394,7 @@ function renderSupplementalPayments(main){
   main.innerHTML = pageHeader('Supplemental Payments',
       'Separate payroll documents that settle overtime approved after the base payroll became immutable. The base payroll is never modified. Source (v2.7.0): overtime only.',
       '', `Supplemental Payment is planned to expand to other adjustment types in a later release; v2.7.0 settles overtime drift only.`)
-    + `<div class="grid grid-4" style="margin-bottom:14px;">
+    + `<div class="grid grid-4 stack-section">
         <div class="card stat-card"><div class="stat-label">Total</div><div class="stat-value">${all.length}</div></div>
         <div class="card stat-card"><div class="stat-label">Open (Draft/Review)</div><div class="stat-value">${totalOpen}</div></div>
         <div class="card stat-card"><div class="stat-label">Posted — awaiting execution</div><div class="stat-value">${totalPosted}</div></div>
@@ -431,7 +431,7 @@ function renderSupplementalDetail(main){
   const acctDisplay = s.companyAccountSnapshotLabel ? `${escapeHtml(s.companyAccountSnapshotLabel)}${s.companyAccountSnapshotBank?' — '+escapeHtml(s.companyAccountSnapshotBank):''}` : '<span class="dim">not selected</span>';
   main.innerHTML = pageHeader(`Supplemental — ${escapeHtml(s.employeeName||'')}`, `${escapeHtml(s.periodLabel||'')} · ${escapeHtml(supplementalSourceLabel(s.sourceType))}`,
       `<button class="btn" id="spBack">← Supplemental Payments</button>${emp?`<button class="btn" id="spEmp">Employee</button>`:''}${pp?`<button class="btn" id="spPay">Base Payroll</button>`:''}${txn?`<button class="btn" id="spTxn">Transaction</button>`:''}`)
-    + `<div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
+    + `<div class="grid grid-2" style="margin-bottom:var(--space-4);align-items:start;">
       <div class="card"><h3>Supplemental ${supplementalStatusPill(s)}</h3><div style="font-size:13px;line-height:1.8;">
         <div>ID: <span class="mono faint">${escapeHtml(s.id)}</span></div>
         <div>Employee: <b>${escapeHtml(s.employeeName||'—')}</b></div>
@@ -451,12 +451,12 @@ function renderSupplementalDetail(main){
         <div style="margin-top:8px;"><button class="btn btn-sm" id="spExec">Open in Execution Center</button></div>
       </div>`:'<div class="empty">Not posted to finance yet. Approve, then Post to Finance to create a Planned transaction.</div>'}</div>
     </div>
-    <div class="card" style="margin-bottom:14px;"><h3>Source Overtime <span class="tag">${recs.length}</span>${frozenSnap?' <span class="pill pill-status-completed" title="Frozen at Approved — does not change if source overtime is later edited or deleted">frozen</span>':''}</h3>
+    <div class="card stack-section"><h3>Source Overtime <span class="tag">${recs.length}</span>${frozenSnap?' <span class="pill pill-status-completed" title="Frozen at Approved — does not change if source overtime is later edited or deleted">frozen</span>':''}</h3>
       ${frozenSnap?'<p class="hint" style="margin-top:-2px;margin-bottom:8px;">Frozen source snapshot — captured when this supplemental was approved.</p>':''}
       <div class="table-wrap"><table><thead><tr><th>Date</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th></tr></thead>
       <tbody>${recs.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td class="num">${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}</td><td>${frozenSnap?escapeHtml(o.statusAtCommit||'—'):hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">No linked overtime.</td></tr>'}</tbody></table></div></div>
     <div class="card"><h3>History</h3><div class="hist-list">${(s.history||[]).map(h=>`<div class="hist-row"><span class="hist-event">${escapeHtml((h.event||'').replace(/_/g,' '))}</span><span class="hist-note">${escapeHtml(h.note||'')}</span><span class="hist-ts faint">${h.ts?new Date(h.ts).toLocaleString('id-ID'):'—'}</span></div>`).join('')||'<div class="empty">No history.</div>'}</div></div>
-    <div class="small-btn-row" style="margin-top:14px;flex-wrap:wrap;gap:8px;">${supplementalDetailActionsHTML(s)}</div>`;
+    <div class="small-btn-row" style="margin-top:var(--space-4);flex-wrap:wrap;gap:8px;">${supplementalDetailActionsHTML(s)}</div>`;
   const on=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', fn); };
   on('spBack', ()=>hrNavTo('supplementals'));
   on('spEmp', ()=>hrNavTo('employeeDetail',{detailEmpId:emp.id}));
@@ -567,7 +567,7 @@ function supplementalPlanSectionHTML(pp){
   const subtotal = recs.reduce((s,x)=>s+num(x.amount),0);
   const rows = recs.map(s=>`<div class="hist-row"><span class="hist-event">${supplementalStatusPill(s)}</span><span class="hist-note"><button class="linklike" data-supp-open="${s.id}">${fmtIDR(s.amount)}</button> · ${escapeHtml(supplementalSourceLabel(s.sourceType))}</span><span class="hist-ts faint">${s.updatedAt?new Date(s.updatedAt).toLocaleDateString('id-ID'):''}</span></div>`).join('');
   const genBtn = st.needsGeneration ? `<button class="btn btn-sm btn-accent" data-supp-gen="${pp.id}" style="margin-top:8px;">Generate Supplemental (${fmtIDR(st.elig.amount)})</button>` : '';
-  return `<div class="card" style="margin-bottom:14px;"><h3>Supplemental Payments <span class="tag">${recs.length}</span></h3>
+  return `<div class="card stack-section"><h3>Supplemental Payments <span class="tag">${recs.length}</span></h3>
     <p class="hint" style="margin-top:-2px;margin-bottom:8px;">Separate documents for overtime approved after this payroll was posted. They do <b>not</b> change the base payroll total above.</p>
     ${recs.length?`<div class="hist-list">${rows}</div><div style="margin-top:8px;font-size:13px;">Supplemental subtotal: <b class="mono">${fmtIDR(subtotal)}</b> <span class="faint">(separate from base payroll)</span></div>`:'<div class="empty">None yet.</div>'}
     ${genBtn}</div>`;
@@ -576,5 +576,5 @@ function supplementalEmployeeSectionHTML(empId){
   const recs = supplementalsForEmployee(empId).filter(s=>s.status!=='Cancelled');
   if(!recs.length) return '';
   const rows = recs.map(s=>`<div class="hist-row"><span class="hist-event">${supplementalStatusPill(s)}</span><span class="hist-note"><button class="linklike" data-supp-open="${s.id}">${fmtIDR(s.amount)}</button> · ${escapeHtml(s.periodLabel||'')}</span><span class="hist-ts faint">${escapeHtml(supplementalSourceLabel(s.sourceType))}</span></div>`).join('');
-  return `<div class="card" style="margin-bottom:14px;"><h3>Supplemental Payments <span class="tag">${recs.length}</span></h3><div class="hist-list">${rows}</div></div>`;
+  return `<div class="card stack-section"><h3>Supplemental Payments <span class="tag">${recs.length}</span></h3><div class="hist-list">${rows}</div></div>`;
 }

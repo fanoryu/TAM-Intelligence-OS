@@ -112,7 +112,7 @@ function renderUpload(el, main){
       <h3>Upload File — Migration &amp; Historical Data</h3>
       <div class="insight-item" style="display:block;margin-bottom:12px;">Smart Import is intended for initial setup and historical migration. Monthly payroll operations should be performed through <b>Payroll Planning</b>.</div>
       <p class="hint" style="margin-bottom:10px;">Accepts TAM's standard "Rencana Penggunaan Dana" / "Realisasi" Excel workbook (auto-detected by sheet name), or a plain CSV/XLSX table with columns like Uraian, Kategori, Vol, Satuan, Harga Satuan, Jumlah, Realisasi.</p>
-      <div class="field" style="max-width:420px;margin-bottom:14px;"><label>Import Purpose</label>
+      <div class="field" style="max-width:420px;margin-bottom:var(--space-4);"><label>Import Purpose</label>
         <select class="input" id="importModeSel">
           <option value="setup" ${State.importPurpose==='setup'?'selected':''}>Initial Company Setup</option>
           <option value="historical" ${State.importPurpose==='historical'?'selected':''}>Historical Payroll Migration</option>

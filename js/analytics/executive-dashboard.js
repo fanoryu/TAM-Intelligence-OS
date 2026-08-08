@@ -153,7 +153,7 @@ function actionCenterCardHTML(items){
   const all = items || [];
   const hiddenCount = Math.max(0, all.length - EXEC_ALERT_VISIBLE);
   const rows = all.map((a,i)=>actionCenterRowHTML(a, i >= EXEC_ALERT_VISIBLE)).join('');
-  return `<div class="card" style="margin-bottom:14px;">
+  return `<div class="card stack-section">
     <h3>Action Center<span class="tag">${all.length} item${all.length===1?'':'s'}</span></h3>
     <div class="insight-list">${all.length ? rows : '<div class="empty">No items need attention this period.</div>'}</div>
     ${hiddenCount ? `<button class="btn btn-sm" id="actionCenterToggle" style="margin-top:var(--space-2);">Show all ${all.length} items</button>` : ''}
@@ -182,7 +182,7 @@ function renderExecutiveDashboard(main){
       + `<div class="card"><div class="empty">
           <div class="big">◆</div>
           <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No financial data yet</div>
-          <div style="margin-bottom:14px;">This is a clean install. Add employees and contracts, generate payroll, and create a monthly plan — or import a legacy Excel file. Financial figures appear here once real data exists (nothing is shown as a zero-based conclusion).</div>
+          <div class="stack-section">This is a clean install. Add employees and contracts, generate payroll, and create a monthly plan — or import a legacy Excel file. Financial figures appear here once real data exists (nothing is shown as a zero-based conclusion).</div>
           <div class="small-btn-row" style="justify-content:center;flex-wrap:wrap;">
             <button class="btn btn-accent" data-empty-nav="employees">Add Employees</button>
             <button class="btn" data-empty-nav="add">Import Legacy Excel</button>
@@ -228,7 +228,7 @@ function renderExecutiveDashboard(main){
     ${onboardingChecklistHTML()}
 
     <h2 class="section-title" style="margin-top:0;">Company Health</h2>
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       ${(()=>{
         // MERGED (Phase 3): Current Month Planned + Current Month Actual + Budget Used.
         // All three values, both prior-month deltas and the incomplete flag survive —
@@ -256,7 +256,7 @@ function renderExecutiveDashboard(main){
       ${payrollCycleTileHTML(key)}
     </div>
 
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       ${hrStatStripHTML(key)}
       ${payrollStripHTML(key)}
       ${overtimeStripHTML(key)}
