@@ -22,11 +22,37 @@ function txnsFiltered(){
   if(f.search.trim()){ const s = normStr(f.search); rows = rows.filter(t=>txnMatchesSearch(t, s)); }
   return rows.slice().sort((a,b)=> (b.year-a.year)||(b.monthNum-a.monthNum)|| (String(a.category).localeCompare(String(b.category))));
 }
+/* UX-005B — Transactions grid contract. Column definitions (R1) are the single
+   source of truth for label/sortability/comparator type/value extraction; Month
+   sorts on year*100+monthNum (not the display string) and Variance on its derived
+   numeric value, with null Actual/Variance sinking last via the shared policy.
+   Feature flags (R9) declare UI capability only — never authorization. */
+const TXN_COLUMNS = [
+  { id:'month',       label:'Month',       sortable:true,  type:'number',   dir:'desc', getter:t=>(t.year||0)*100+(t.monthNum||0) },
+  { id:'category',    label:'Category',    sortable:true,  type:'text',     dir:'asc',  getter:t=>t.category },
+  { id:'description', label:'Description', sortable:true,  type:'text',     dir:'asc',  getter:t=>t.uraian },
+  { id:'planned',     label:'Planned',     sortable:true,  type:'currency', dir:'desc', align:'num', getter:t=>t.planned },
+  { id:'actual',      label:'Actual',      sortable:true,  type:'currency', dir:'desc', align:'num', getter:t=>(t.actual==null?null:t.actual) },
+  { id:'variance',    label:'Variance',    sortable:true,  type:'currency', dir:'desc', align:'num', getter:t=>(t.actual==null?null:t.actual-(t.planned||0)) },
+  { id:'status',      label:'Status',      sortable:true,  type:'text',     dir:'asc',  getter:t=>statusOf(t) },
+  { id:'actions',     label:'',            sortable:false },
+];
+const TXN_FEATURES = { pagination:true, sorting:true, search:true, export:true, rowActions:true, resultCount:true };
 function applyTxnFilter(main){
-  const tb = document.getElementById('txnRows'); if(!tb) return;
-  const rows = txnsFiltered();
-  tb.innerHTML = rows.map(rowToTr).join('') || '<tr><td colspan="8" class="empty">No transactions match these filters</td></tr>';
-  const c = document.getElementById('txnCount'); if(c) c.textContent = rows.length;
+  const area = document.getElementById('txnGridArea'); if(!area) return;
+  const g = State.grid.transactions;
+  const rows = txnsFiltered();                                  // filtered+searched set (also the export set)
+  const paged = gridApply(rows, g, TXN_COLUMNS, TXN_FEATURES);  // sort+paginate a COPY; rows never mutated
+  const body = paged.pageRows.map(rowToTr).join('')
+    || '<tr><td colspan="8" class="empty">No transactions match your current filters. <button class="linklike" data-txn-clear>Clear filters</button></td></tr>';
+  area.innerHTML = `<div class="table-wrap" style="max-height:640px;overflow-y:auto;">
+      <table>${gridTheadHTML(TXN_COLUMNS, g.sort)}<tbody id="txnRows">${body}</tbody></table>
+    </div>${gridFeatureEnabled(TXN_FEATURES,'pagination')?gridPagerHTML(paged):''}`;
+  const c = document.getElementById('txnCount'); if(c) c.textContent = rows.length.toLocaleString('id-ID'); // "N of M", pre-pagination N
+  const tw = area.querySelector('.table-wrap'); if(tw) tw.scrollTop = 0;
+  bindGridControls(area, 'transactions', g, TXN_COLUMNS, ()=>applyTxnFilter(main));
+  const clr = area.querySelector('[data-txn-clear]');
+  if(clr) clr.addEventListener('click', ()=>{ State.txFilter={month:'all',category:'all',search:'',budget:'all',type:'all',status:'all',method:'all',bank:'all'}; g.page=1; render(); });
   bindActionMenus(main);
 }
 function renderTransactions(main){
@@ -45,6 +71,7 @@ function renderTransactions(main){
     bindActionEmptyState(main); return;
   }
   const f = State.txFilter;
+  if(!State.grid.transactions.sort) State.grid.transactions = gridInitState('transactions'); // UX-005B session-only grid state
   const rows = txnsFiltered();
   const allCats = [...new Set(State.txns.map(t=>t.category))];
 
@@ -105,34 +132,29 @@ function renderTransactions(main){
           </select>
         </div>
       </div>
-      <div class="table-wrap" style="max-height:640px;overflow-y:auto;">
-        <table>
-          <thead><tr>
-            <th>Month</th><th>Category</th><th>Description</th>
-            <th class="num">Planned</th><th class="num">Actual</th><th class="num">Variance</th><th>Status</th><th></th>
-          </tr></thead>
-          <tbody id="txnRows">
-            ${rows.map(rowToTr).join('') || '<tr><td colspan="8" class="empty">No transactions match these filters</td></tr>'}
-          </tbody>
-        </table>
-      </div>
+      <div id="txnGridArea"></div>
     </div>
   `;
   // renderTransactions binds its own menus below — filter handlers must NOT
   // call bindActionMenus again (same double-binding bug as the Execution Center).
-  document.getElementById('fSearch').addEventListener('input', e=>{ State.txFilter.search=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fMonth').addEventListener('change', e=>{ State.txFilter.month=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fCategory').addEventListener('change', e=>{ State.txFilter.category=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fStatus').addEventListener('change', e=>{ State.txFilter.status=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fType').addEventListener('change', e=>{ State.txFilter.type=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fMethod').addEventListener('change', e=>{ State.txFilter.method=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fBank').addEventListener('change', e=>{ State.txFilter.bank=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fBudget').addEventListener('change', e=>{ State.txFilter.budget=e.target.value; applyTxnFilter(main); });
+  // A filter/search change resets to page 1 (results shrink from the top).
+  const reapply = ()=>{ State.grid.transactions.page=1; applyTxnFilter(main); };
+  const debSearch = debounce(reapply, 250); // UX-005B — debounced search (Enter flushes)
+  const fSearch = document.getElementById('fSearch');
+  fSearch.addEventListener('input', e=>{ State.txFilter.search=e.target.value; debSearch(); });
+  fSearch.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); debSearch.flush(); } });
+  document.getElementById('fMonth').addEventListener('change', e=>{ State.txFilter.month=e.target.value; reapply(); });
+  document.getElementById('fCategory').addEventListener('change', e=>{ State.txFilter.category=e.target.value; reapply(); });
+  document.getElementById('fStatus').addEventListener('change', e=>{ State.txFilter.status=e.target.value; reapply(); });
+  document.getElementById('fType').addEventListener('change', e=>{ State.txFilter.type=e.target.value; reapply(); });
+  document.getElementById('fMethod').addEventListener('change', e=>{ State.txFilter.method=e.target.value; reapply(); });
+  document.getElementById('fBank').addEventListener('change', e=>{ State.txFilter.bank=e.target.value; reapply(); });
+  document.getElementById('fBudget').addEventListener('change', e=>{ State.txFilter.budget=e.target.value; reapply(); });
   // Full render() (not just a main swap) so the sidebar active state updates;
   // render() captures and restores the sidebar scroll position itself.
   document.getElementById('openExecCenter').addEventListener('click', ()=>{ State.view='executioncenter'; render(); });
-  document.getElementById('exportCsv').addEventListener('click', ()=>exportCsv(txnsFiltered()));
-  bindActionMenus(main);
+  document.getElementById('exportCsv').addEventListener('click', ()=>exportCsv(txnsFiltered())); // export = full FILTERED set (not page slice)
+  applyTxnFilter(main); // populate the grid area (thead + page rows + pager) and bind grid controls + action menus
 }
 function rowToTr(t){
   const st = statusOf(t);

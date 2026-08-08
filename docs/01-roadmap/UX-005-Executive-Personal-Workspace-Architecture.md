@@ -314,7 +314,7 @@ present.
 | Phase | Title | Focus |
 |---|---|---|
 | **UX-005A** *(implementation candidate — unmerged, branch `feature/ux-005a-executive-dashboard`)* | Executive Dashboard & Information Architecture | Canonical home; resolve Exec↔Finance overlap per §12; KPI ownership; hierarchy; drill-through; Action Center (resolver-based navigation, Option A); removal of duplicate Finance Overview Net Cash Flow tile; **all computations preserved** |
-| **UX-005B** | Data Grid Foundation | Reusable pagination + single-column sort + debounced search + result count + filtered-empty state (pagination over virtualization) |
+| **UX-005B** *(implementation candidate — unmerged, branch `feature/ux-005b-data-grid-foundation`)* | Data Grid Foundation | Reusable `js/core/data-grid.js` (R1–R9): column-definition contract, comparator registry, centralized `State.grid`, default-sort registry, data-source/role/storage-agnostic helpers, deterministic fixtures, page sizes 20/50/100 (default 20), declarative feature flags. Rolled out to Transactions + Employees only; single-column sort, debounced search, result count, filtered-empty; pagination over virtualization. Presentation/query-state only |
 | **UX-005C** | Workspace Productivity | Global search / `Cmd+K` (read-oriented), recent/pinned, Action Center integration |
 | **UX-005D** | Workspace Memory & Personalization | Classify session/preference/business state; governed persistence only |
 | **UX-005E** | Design System Consolidation | Token drift, inline styling, duplicate icons, spacing, button hierarchy — **after** structures stable; golden-master pin process |

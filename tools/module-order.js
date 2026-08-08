@@ -12,6 +12,7 @@ module.exports = [
   // --- core leaves + data ---
   'core/constants.js',
   'core/utils.js',
+  'core/data-grid.js',
   'core/storage-adapter.js',
   'ui/charts.js',
   'core/state.js',

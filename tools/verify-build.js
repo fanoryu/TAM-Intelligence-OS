@@ -68,12 +68,14 @@ const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
 //     desktop hover-expand.
 //   UX-004F              26bf828688dd2bbe280608e28c3abb583ab18032a3089f1cf5f991af5fe79fe6
 //     Navigation-simplification + rebrand presentation only (css/shell.css).
-//   UX-005A (current) — AUTHORIZED golden-master revision. Executive Dashboard
-//     consolidation, presentation only (css/components.css): the Action Center
-//     navigable row (.action-item + .ac-ic), added additively beside the existing
-//     .insight-item styles. Every value resolves from an existing token; no color/
-//     radius/type scale changed and no layout outside this surface was touched.
-const CSS_GOLDEN_SHA256 = 'fff716cb0c32719530ef2dc397064d4299d45de308101ad754d0dac11ce5c793';
+//   UX-005A              fff716cb0c32719530ef2dc397064d4299d45de308101ad754d0dac11ce5c793
+//     Executive Dashboard consolidation: Action Center navigable row (.action-item).
+//   UX-005B (current) — AUTHORIZED golden-master revision. Data Grid Foundation,
+//     presentation only (css/components.css): sortable-header control (.grid-sort),
+//     pager (.grid-pager/.grid-page-ind/.grid-page-size) and result count
+//     (.grid-count), added additively. Every value resolves from an existing token;
+//     no color/radius/type scale changed and no layout outside these surfaces touched.
+const CSS_GOLDEN_SHA256 = '1b0452532108c8b35b8aaee8c6eb33f4d5680939b57dad952adfd2dd5453d3d6';
 console.log('== CSS GOLDEN MASTER (pinned digest of concat(css/*.css)) ==');
 const cssDigest = crypto.createHash('sha256').update(trimLF(srcCss), 'utf8').digest('hex');
 check(cssDigest === CSS_GOLDEN_SHA256,
@@ -158,10 +160,14 @@ check(!dist.includes('type="module"'), 'no type=module (still classic scripts)')
 console.log('== SEARCH FOCUS / INCREMENTAL RENDER FIX ==');
 ['function applyEmployeeFilter','function applyContractFilter','function applyTxnFilter','function applyOvertimeFilter','function applyPayrollFilter']
   .forEach((fn)=>check(dist.includes(fn), 'incremental refresh defined: '+fn.replace('function ','')));
+// UX-005B: Transactions & Employees search is now DEBOUNCED (still incremental and
+// focus-preserving — the input node is never re-rendered; the debounced callback runs
+// applyTxnFilter/applyEmployeeFilter, an incremental grid-area swap). The two handler
+// strings were updated to the debounced shape; Contracts/Overtime/Payroll are unchanged.
 const newHandlers = [
-  "getElementById('eSearch').addEventListener('input', e=>{ State.empFilter.search=e.target.value; applyEmployeeFilter(main); })",
+  "eSearch.addEventListener('input', e=>{ State.empFilter.search=e.target.value; debSearch(); });",
   "getElementById('cSearch').addEventListener('input', e=>{ State.contractFilter.search=e.target.value; applyContractFilter(main); })",
-  "getElementById('fSearch').addEventListener('input', e=>{ State.txFilter.search=e.target.value; applyTxnFilter(main); })",
+  "fSearch.addEventListener('input', e=>{ State.txFilter.search=e.target.value; debSearch(); });",
   "getElementById('otSearch').addEventListener('input', e=>{ State.overtimeFilter.search=e.target.value; applyOvertimeFilter(main); })",
   "getElementById('pfSearch').addEventListener('input', e=>{ f.search=e.target.value; applyPayrollFilter(area, monthKey, main); })",
 ];
@@ -3383,6 +3389,123 @@ check(!/\b(currentUser|isEmployee|userRole|requireAuth|authenticate)\b/.test(ux5
   'UX-005A: no role/auth/identity implementation introduced');
 check(!/UX-006/.test(ux5aExec + ux5aDash),
   'UX-005A: no UX-006 implementation introduced in the dashboard sources');
+
+// ============================================================
+// UX-005B — DATA GRID FOUNDATION (R1–R9)
+// Presentation/query-state only. Guards: the reusable module is data-source/role/
+// storage agnostic; sorting is single-column over a copy (never mutates source);
+// pagination defaults are frozen; feature flags gate UI capability only; export
+// semantics are preserved; no schema/storage/virtualization/UX-006.
+// ============================================================
+console.log('== UX-005B: Data Grid Foundation ==');
+const ux5bDG    = read(path.join(root,'js','core','data-grid.js'));
+const ux5bTxn   = read(path.join(root,'js','finance','transactions.js'));
+const ux5bEmp   = read(path.join(root,'js','people','employees.js'));
+const ux5bState = read(path.join(root,'js','core','state.js'));
+const ux5bUtils = read(path.join(root,'js','core','utils.js'));
+
+// 1. canonical shared module + registered in load order
+check(/function gridApply\(/.test(ux5bDG) && /function gridSort\(/.test(ux5bDG) && /function gridPage\(/.test(ux5bDG),
+  'UX-005B: js/core/data-grid.js defines the canonical grid helpers (gridApply/gridSort/gridPage)');
+check(require(path.join(root,'tools','module-order.js')).includes('core/data-grid.js'),
+  'UX-005B: data-grid.js is registered in the load-order manifest');
+// 2. column-definition contract (R1)
+check(/const TXN_COLUMNS = \[/.test(ux5bTxn) && /getter:/.test(ux5bTxn) && /sortable:/.test(ux5bTxn),
+  'UX-005B: Transactions declares a column-definition contract (R1)');
+check(/const EMP_COLUMNS = \[/.test(ux5bEmp) && /getter:/.test(ux5bEmp) && /sortable:/.test(ux5bEmp),
+  'UX-005B: Employees declares a column-definition contract (R1)');
+// 3. comparator registry (R2)
+check(/const GRID_COMPARATORS = \{/.test(ux5bDG) && /text\(/.test(ux5bDG) && /number\(/.test(ux5bDG) && /currency\(/.test(ux5bDG) && /date\(/.test(ux5bDG),
+  'UX-005B: comparator registry defines text/number/currency/date (R2)');
+// 4. no page-specific comparator registry; pages delegate sorting to the grid
+check((ux5bTxn.match(/GRID_COMPARATORS/g)||[]).length===0 && (ux5bEmp.match(/GRID_COMPARATORS/g)||[]).length===0,
+  'UX-005B: page modules do not redefine/duplicate the comparator registry');
+check(/gridApply\(/.test(ux5bTxn) && /gridApply\(/.test(ux5bEmp),
+  'UX-005B: Transactions and Employees delegate sort/paginate to gridApply');
+// 5. centralized State.grid (R3); no per-table grid globals
+check(/grid: \{ transactions:\{\}, employees:\{\}/.test(ux5bState),
+  'UX-005B: centralized State.grid container exists (R3)');
+check(!/State\.txGrid|State\.empGrid/.test(ux5bTxn+ux5bEmp+ux5bState),
+  'UX-005B: no per-table txGrid/empGrid globals (R3)');
+// 6. default-sort registry (R4)
+check(/const GRID_DEFAULT_SORT = \{/.test(ux5bDG) && /transactions:/.test(ux5bDG) && /employees:/.test(ux5bDG),
+  'UX-005B: default-sort registry defines transactions & employees (R4)');
+check(!/const GRID_DEFAULT_SORT/.test(ux5bTxn) && !/GRID_DEFAULT_SORT *=/.test(ux5bEmp),
+  'UX-005B: default sort is not hardcoded in page modules (R4)');
+// 7-8. data-source agnostic (R5): the shared module reads no business arrays / seam.
+//      Inspect CODE ONLY — the module's own doc comments legitimately name these
+//      tokens to state what it must NOT do; strip comments before asserting.
+const ux5bDGCode = ux5bDG.replace(/\/\*[\s\S]*?\*\//g,'').replace(/(^|[^:])\/\/[^\n]*/g,'$1');
+check(!/State\.txns|State\.employees/.test(ux5bDGCode),
+  'UX-005B: data-grid.js references no business arrays (State.txns/State.employees) (R5)');
+check(!/uiExecute|StorageAdapter|localStorage/.test(ux5bDGCode),
+  'UX-005B: data-grid.js references no data seam or storage (R5)');
+// 9-10. pagination frozen (R7)
+check(/const GRID_DEFAULT_PAGE_SIZE = 20;/.test(ux5bDG),
+  'UX-005B: default page size is 20 (R7)');
+check(/const GRID_PAGE_SIZES = \[20, 50, 100\];/.test(ux5bDG),
+  'UX-005B: allowed page sizes are 20/50/100 (R7)');
+// 11. single-column sort only
+check(/state && state\.sort/.test(ux5bDG) && !/multiSort|sortColumns|sorts\.forEach/.test(ux5bDG),
+  'UX-005B: sorting is single-column only (no multi-column sort)');
+// 12-16. feature flags (R9)
+check(/const TXN_FEATURES = \{/.test(ux5bTxn) && /const EMP_FEATURES = \{/.test(ux5bEmp),
+  'UX-005B: Transactions and Employees each declare an explicit features block (R9)');
+['pagination','sorting','search','export','rowActions','resultCount'].forEach(fl=>{
+  check(new RegExp(fl+':true').test(ux5bTxn) && new RegExp(fl+':true').test(ux5bEmp),
+    'UX-005B: v1 feature "'+fl+'" declared on both grids');
+});
+const ux5bTxnFeat = (ux5bTxn.match(/const TXN_FEATURES = \{([^}]*)\}/)||['',''])[1];
+const ux5bEmpFeat = (ux5bEmp.match(/const EMP_FEATURES = \{([^}]*)\}/)||['',''])[1];
+const ux5bAllowedFlags = new Set(['pagination','sorting','search','export','rowActions','resultCount']);
+const ux5bFlagKeys = (s)=> (s.match(/([a-zA-Z]+):/g)||[]).map(x=>x.replace(':',''));
+check(ux5bFlagKeys(ux5bTxnFeat).every(k=>ux5bAllowedFlags.has(k)) && ux5bFlagKeys(ux5bEmpFeat).every(k=>ux5bAllowedFlags.has(k)),
+  'UX-005B: feature flags are limited to the frozen v1 set (no selection/bulkActions/etc.)');
+check(/return !!\(features && features\[name\] === true\);/.test(ux5bDG),
+  'UX-005B: a missing feature flag evaluates to disabled (safe default) (R9)');
+// 17. capability != authorization; no view-specific branching / role in the shared layer (R8)
+check(!/=== ?'transactions'|=== ?'employees'|State\.view/.test(ux5bDGCode),
+  'UX-005B: shared grid contains no view-specific branching');
+check(!/currentUser|isEmployee|userRole|permission|authenticate|PersonalWorkspace|ExecutiveWorkspace/.test(ux5bDGCode),
+  'UX-005B: shared grid contains no role/auth/workspace/currentUser concepts (R8)');
+// 18. source arrays never sorted in place
+check(/\(rows \|\| \[\]\)\.slice\(\)/.test(ux5bDG),
+  'UX-005B: gridSort operates on a copy (source array never sorted in place)');
+check(!/State\.txns\.sort\(|State\.employees\.sort\(/.test(ux5bTxn+ux5bEmp),
+  'UX-005B: page modules never sort authoritative arrays in place');
+// 19. result count before pagination
+check(/paged\.total = src\.length;/.test(ux5bDG),
+  'UX-005B: result count is the filtered total, captured before pagination');
+// 20. export semantics preserved
+check(/exportCsv\(txnsFiltered\(\)\)/.test(ux5bTxn) && !/exportCsv\(paged|exportCsv\(pageRows/.test(ux5bTxn),
+  'UX-005B: Transactions export uses the full FILTERED set (not the page slice)');
+check(/function exportEmployeesCsv\(\)\{[\s\S]*State\.employees\.forEach/.test(ux5bEmp),
+  'UX-005B: Employees export remains ALL employees (not filtered/paged)');
+// 21. true-empty vs filtered-empty distinct
+check(/match your current filters/.test(ux5bEmp) && /Add Employee/.test(ux5bEmp),
+  'UX-005B: Employees distinguishes filtered-empty from true-empty onboarding');
+check(/match your current filters/.test(ux5bTxn) && /No transactions yet/.test(ux5bTxn),
+  'UX-005B: Transactions distinguishes filtered-empty from true-empty onboarding');
+// 22-24. session-only, no persistence / schema
+check(!/tam_grid|StorageAdapter[\s\S]{0,40}grid/.test(ux5bState+ux5bTxn+ux5bEmp),
+  'UX-005B: grid state introduces no storage key (session-only)');
+check(!/grid:/.test((ux5bState.match(/const DEFAULT_SETTINGS = \{[\s\S]*?\n\};/)||[''])[0]),
+  'UX-005B: grid state is not part of persisted DEFAULT_SETTINGS');
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))),
+  'UX-005B: SCHEMA_VERSION remains 6');
+// 25. debounce helper (search)
+check(/function debounce\(fn, wait\)\{/.test(ux5bUtils),
+  'UX-005B: a generic debounce helper exists for search');
+// 26. no virtualization / no UX-005C+ / no UX-006
+check(!/virtual|windowing|react-window|clusterize/i.test(ux5bDG),
+  'UX-005B: no virtualization is introduced');
+check(!/commandPalette|globalSearch|Ctrl\+K|Cmd\+K/i.test(ux5bDG+ux5bTxn+ux5bEmp),
+  'UX-005B: no Global Search / command palette introduced (UX-005C+ not begun)');
+check(!/PersonalWorkspace|role-based|requireAuth/i.test(ux5bDG+ux5bTxn+ux5bEmp),
+  'UX-005B: no UX-006 / auth implementation introduced');
+// 27. deterministic runtime harness present
+check(fs.existsSync(path.join(root,'tools','verify-data-grid-runtime.js')),
+  'UX-005B: deterministic runtime harness tools/verify-data-grid-runtime.js exists');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
