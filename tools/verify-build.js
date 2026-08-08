@@ -3783,6 +3783,45 @@ check(!/currentUser|userRole|requireAuth|PersonalWorkspace|ExecutiveWorkspace/.t
 check(!/localStorage|StorageAdapter|tam_[a-z_]+_v[0-9]|migration/.test(ux5fShellCss),
   'UX-005F: a11y CSS introduces no storage/persistence/migration');
 
+// ===== MAINT-001 Follow-Up — branding integration (favicon + repository assets) =====
+// Presentation/repository only. The favicon is an inline PNG data URI (derived by
+// resize from the official assets/branding/tam-os-logo-secondary.png), so the portable
+// artifact stays self-contained; the whole-file fidelity check above already proves the
+// favicon carries into dist. These checks pin that contract and the repo-asset paths.
+console.log('== MAINT-001 — BRANDING INTEGRATION ==');
+const m1Favicon = (indexHtml.match(/<link rel="icon"[^>]*>/) || [''])[0];
+// 1-2. favicon exists and is an inline PNG data URI (no external dependency)
+check(/<link rel="icon"[^>]*type="image\/png"[^>]*href="data:image\/png;base64,/.test(indexHtml),
+  'MAINT-001: favicon is an inline PNG data URI in index.html');
+check(m1Favicon !== '' && !/href="https?:\/\//.test(m1Favicon),
+  'MAINT-001: favicon introduces no external URL dependency');
+// 3. built artifact carries the same inline favicon (self-contained)
+check(/<link rel="icon"[^>]*href="data:image\/png;base64,/.test(dist),
+  'MAINT-001: portable artifact contains the inline favicon (self-contained)');
+check(!/<link rel="icon"[^>]*href="https?:\/\//.test(dist),
+  'MAINT-001: portable artifact has no external favicon URL');
+// 4. APP_VERSION / SCHEMA_VERSION unchanged by branding work
+check(indexHtml.includes('<title>TAM OS v' + meta.version + '</title>') && meta.version === '2.8.6',
+  'MAINT-001: APP_VERSION/title unchanged (v2.8.6)');
+// 5. repository asset paths referenced by README actually resolve
+['assets/branding/tam-os-logo-full-color.png',
+ 'assets/screenshots/dashboard-dark.png',
+ 'assets/screenshots/data-grid-transactions.png',
+ 'assets/screenshots/global-search.png',
+ 'assets/screenshots/payroll-workspace.png',
+ 'assets/social/tam-os-social.png'].forEach((p) => {
+  check(fs.existsSync(path.join(root, p)), 'MAINT-001: repository asset exists — ' + p);
+});
+// 6. every relative README image path resolves to a real file (no broken images)
+const readmeMd = read(path.join(root, 'README.md'));
+const imgPaths = [];
+let mm; const imgRe = /!\[[^\]]*\]\((assets\/[^)]+)\)|<img[^>]*src="(assets\/[^"]+)"/g;
+while ((mm = imgRe.exec(readmeMd)) !== null) { imgPaths.push(mm[1] || mm[2]); }
+check(imgPaths.length > 0 && imgPaths.every((p) => fs.existsSync(path.join(root, p))),
+  'MAINT-001: every relative README image path resolves (' + imgPaths.length + ' images)');
+// 7. no stale verifier count left in README current-state prose
+check(!/1931/.test(readmeMd), 'MAINT-001: README no longer cites the stale 1931 verifier count');
+
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }
 console.log('VERIFICATION FAILED -- ' + passes + ' passed, ' + fails.length + ' failed:');
