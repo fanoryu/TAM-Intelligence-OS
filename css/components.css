@@ -135,6 +135,17 @@ td.num, th.num{text-align:right;font-family:var(--sans);font-variant-numeric:tab
 .action-item:hover{background:var(--surface-3);}
 .action-item .ac-ic{flex:none;}
 
+/* UX-005B — data grid controls (sortable headers, pager, result count). Additive;
+   every value resolves from an existing token. */
+.grid-sort{background:none;border:none;color:var(--text-faint);font:inherit;font-size:var(--fs-1);text-transform:uppercase;letter-spacing:.4px;font-weight:600;cursor:pointer;padding:0;display:inline-flex;align-items:center;gap:2px;}
+.grid-sort:hover{color:var(--text-dim);}
+.grid-sort.active{color:var(--text);}
+.grid-sort-ind{font-size:var(--fs-1);}
+.grid-pager{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3);}
+.grid-page-ind{font-size:var(--fs-2);color:var(--text-dim);}
+.grid-page-size{width:auto;}
+.grid-count{font-variant-numeric:tabular-nums;}
+
 .badge-count{background:var(--brick);color:#fff;font-size:var(--fs-1);font-weight:700;border-radius:var(--radius-full);padding:1px var(--space-1);margin-left:auto;}
 
 .empty{padding:var(--space-6) var(--space-5);text-align:center;color:var(--text-faint);font-size:var(--fs-3);}

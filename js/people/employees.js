@@ -72,14 +72,42 @@ function employeeRowsHTMLFrom(list){
     </tr>`;
   }).join('') || `<tr><td colspan="7" class="empty">No employees match. Click “+ Add Employee” to create the first record.</td></tr>`;
 }
+/* UX-005B — Employees grid contract. Column definitions (R1) drive sortability and
+   comparator selection; "Active Contract" stays non-sortable in v1 (derived per-row,
+   no cheap stable key). Feature flags (R9) are UI capability only. Export semantics
+   are UNCHANGED (exportEmployeesCsv exports ALL employees, masked). */
+const EMP_COLUMNS = [
+  { id:'name',       label:'Employee',        sortable:true,  type:'text',     dir:'asc',  getter:e=>e.fullName },
+  { id:'jobTitle',   label:'Job Title',       sortable:true,  type:'text',     dir:'asc',  getter:e=>e.jobTitle },
+  { id:'department', label:'Department',      sortable:true,  type:'text',     dir:'asc',  getter:e=>e.department },
+  { id:'status',     label:'Status',          sortable:true,  type:'text',     dir:'asc',  getter:e=>e.employmentStatus },
+  { id:'contract',   label:'Active Contract', sortable:false },
+  { id:'salary',     label:'Base Salary',     sortable:true,  type:'currency', dir:'desc', align:'num', getter:e=>e.monthlyBaseSalary },
+  { id:'actions',    label:'',                sortable:false },
+];
+const EMP_FEATURES = { pagination:true, sorting:true, search:true, export:true, rowActions:true, resultCount:true };
 async function fillEmployeeRows(main){
-  const tb = document.getElementById('empRows'); if(!tb) return;
+  const area = document.getElementById('empGridArea'); if(!area) return;
+  const g = State.grid.employees;
   // PR-7B "The Conduit" — the employee list read flows through the canonical path
-  // (seam -> Transport -> Gateway -> the employee.filtered query). The async
-  // fill preserves the rendered result and re-binds row actions after injection.
+  // (seam -> Transport -> Gateway -> the employee.filtered query). UX-005B wraps the
+  // RETURNED array with the shared grid pipeline; the seam is not bypassed.
   const result = await uiExecute('query', 'employee.filtered', []);
   const rows = Array.isArray(result) ? result : [];
-  tb.innerHTML = employeeRowsHTMLFrom(rows);
+  const paged = gridApply(rows, g, EMP_COLUMNS, EMP_FEATURES); // sort+paginate a COPY
+  const body = paged.pageRows.length
+    ? employeeRowsHTMLFrom(paged.pageRows)
+    : (State.employees.length
+        ? '<tr><td colspan="7" class="empty">No employees match your current filters. <button class="linklike" data-emp-clear>Clear filters</button></td></tr>'
+        : '<tr><td colspan="7" class="empty">No employees match. Click “+ Add Employee” to create the first record.</td></tr>');
+  area.innerHTML = `<div class="table-wrap" style="max-height:620px;overflow-y:auto;">
+      <table>${gridTheadHTML(EMP_COLUMNS, g.sort)}<tbody id="empRows">${body}</tbody></table>
+    </div>${gridFeatureEnabled(EMP_FEATURES,'pagination')?gridPagerHTML(paged):''}`;
+  const c = document.getElementById('empCount'); if(c) c.textContent = rows.length.toLocaleString('id-ID'); // filtered N, pre-pagination
+  const tw = area.querySelector('.table-wrap'); if(tw) tw.scrollTop = 0;
+  bindGridControls(area, 'employees', g, EMP_COLUMNS, ()=>fillEmployeeRows(main));
+  const clr = area.querySelector('[data-emp-clear]');
+  if(clr) clr.addEventListener('click', ()=>{ State.empFilter={search:'', status:'all', department:'all', active:'all'}; g.page=1; render(); });
   bindHRActions(main);
 }
 function applyEmployeeFilter(main){
@@ -87,12 +115,13 @@ function applyEmployeeFilter(main){
 }
 function renderEmployees(main){
   const f = State.empFilter;
+  if(!State.grid.employees.sort) State.grid.employees = gridInitState('employees'); // UX-005B session-only grid state
   const depts = [...new Set(State.employees.map(e=>e.department).filter(Boolean))].sort();
   const activeCount = State.employees.filter(empEligible).length;
 
   main.innerHTML = `
     <div class="page-head">
-      <div><h1>Employees</h1><p class="desc">Master data — ${State.employees.length} employee${State.employees.length===1?'':'s'}, ${activeCount} active. This is the source of truth for payroll planning.</p></div>
+      <div><h1>Employees</h1><p class="desc">Master data — <span id="empCount">${State.employees.length}</span> of ${State.employees.length} employee${State.employees.length===1?'':'s'} shown, ${activeCount} active. This is the source of truth for payroll planning.</p></div>
       <div class="head-controls">
         <button class="btn btn-accent" id="addEmp">+ Add Employee</button>
         <button class="btn" id="dedupEmp">Duplicate Review${(function(){const g=findEmployeeDuplicateGroups();return g.length?` (${g.length})`:'';})()}</button>
@@ -117,17 +146,17 @@ function renderEmployees(main){
           </select>
         </div>
       </div>
-      <div class="table-wrap" style="max-height:620px;overflow-y:auto;">
-        <table>
-          <thead><tr><th>Employee</th><th>Job Title</th><th>Department</th><th>Status</th><th>Active Contract</th><th class="num">Base Salary</th><th></th></tr></thead>
-          <tbody id="empRows"></tbody>
-        </table>
-      </div>
+      <div id="empGridArea"></div>
     </div>`;
-  document.getElementById('eSearch').addEventListener('input', e=>{ State.empFilter.search=e.target.value; applyEmployeeFilter(main); });
-  document.getElementById('eStatus').addEventListener('change', e=>{ State.empFilter.status=e.target.value; applyEmployeeFilter(main); });
-  document.getElementById('eDept').addEventListener('change', e=>{ State.empFilter.department=e.target.value; applyEmployeeFilter(main); });
-  document.getElementById('eActive').addEventListener('change', e=>{ State.empFilter.active=e.target.value; applyEmployeeFilter(main); });
+  // UX-005B — a filter/search change resets to page 1; search is debounced (Enter flushes).
+  const reapply = ()=>{ State.grid.employees.page=1; applyEmployeeFilter(main); };
+  const debSearch = debounce(reapply, 250);
+  const eSearch = document.getElementById('eSearch');
+  eSearch.addEventListener('input', e=>{ State.empFilter.search=e.target.value; debSearch(); });
+  eSearch.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); debSearch.flush(); } });
+  document.getElementById('eStatus').addEventListener('change', e=>{ State.empFilter.status=e.target.value; reapply(); });
+  document.getElementById('eDept').addEventListener('change', e=>{ State.empFilter.department=e.target.value; reapply(); });
+  document.getElementById('eActive').addEventListener('change', e=>{ State.empFilter.active=e.target.value; reapply(); });
   document.getElementById('addEmp').addEventListener('click', ()=>openEmployeeModal(null));
   document.getElementById('expEmp').addEventListener('click', exportEmployeesCsv);
   const goDedup=()=>{ State.view='employeeDedup'; render(); };

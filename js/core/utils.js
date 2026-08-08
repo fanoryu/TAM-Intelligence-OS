@@ -70,3 +70,13 @@ function similarText(a,b){
   const dist = levenshtein(a,b);
   return 1 - dist/Math.max(a.length,b.length);
 }
+/* UX-005B — generic trailing debounce. Returns a wrapper that delays fn until `wait`
+   ms after the last call; `flush()` invokes immediately with the latest args (used so
+   pressing Enter in a debounced search bypasses the delay). Presentation-only. */
+function debounce(fn, wait){
+  let t = null, lastArgs = null;
+  const wrapped = function(){ lastArgs = arguments; clearTimeout(t); t = setTimeout(()=>{ t=null; fn.apply(this, lastArgs); }, wait); };
+  wrapped.flush = function(){ if(t){ clearTimeout(t); t=null; fn.apply(this, lastArgs||[]); } };
+  wrapped.cancel = function(){ clearTimeout(t); t=null; };
+  return wrapped;
+}

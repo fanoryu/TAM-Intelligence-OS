@@ -10,11 +10,14 @@ there rather than duplicating it.
 **v2.8.6 is tagged and published, and is the latest published release** — annotated tag `v2.8.6` peels to
 the release commit `7ac0092d8f60a00118c86e26a7dce429660017c9` on `main`, and the GitHub Release is published
 (not draft, not prerelease) and marked Latest. UX-004 is complete. **UX-005A (Executive Dashboard &
-Information Architecture) is an unmerged implementation candidate** on branch
-`feature/ux-005a-executive-dashboard` (Executive Dashboard as canonical home, Action Center recast of
-the executive alerts, KPI drill-through, and removal of the duplicate Finance Overview Net Cash Flow
-tile — presentation/navigation only, no calculation/schema/storage change); it is not yet merged and
-does not change the published v2.8.6 release. Later UX-005 phases (B–F) have not begun. v2.8.5 remains
+Information Architecture) is merged to `main`** (Executive Dashboard as canonical home, Action Center
+recast of the executive alerts, KPI drill-through, and removal of the duplicate Finance Overview Net
+Cash Flow tile — presentation/navigation only). **UX-005B (Data Grid Foundation) is an unmerged
+implementation candidate** on branch `feature/ux-005b-data-grid-foundation`: a reusable, data-source/
+role/storage-agnostic grid layer (`js/core/data-grid.js`) with single-column sort, pagination
+(20/50/100, default 20), debounced search, result count, filtered-empty states, and declarative feature
+flags, rolled out to Transactions and Employees only — presentation/query-state only, no
+calculation/schema/storage change. Later UX-005 phases (C–F) have not begun. v2.8.5 remains
 published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
 only — it changed no source commit, runtime behavior, schema, or storage key.
 
@@ -301,8 +304,8 @@ labels so exported terminology matches the screen.
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1889** on the UX-005A
-  branch; 1864 on published `main`), joined by **sixteen** runtime harnesses (**1490** checks).
+  the portable single file, and a verifier runs a suite of invariant checks (**1931** on the UX-005B
+  branch; 1889 on `main`), joined by **seventeen** runtime harnesses (**1526** checks).
   PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
@@ -449,13 +452,14 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1889** checks on the
-  UX-005A branch; 1864 on published `main`) plus **sixteen**
-  Node runtime harnesses (**1490** checks total: contract timeline 349, integrity warning rules 146,
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1931** checks on the
+  UX-005B branch; 1889 on `main`) plus **seventeen**
+  Node runtime harnesses (**1526** checks total: contract timeline 349, integrity warning rules 146,
   integrity payroll rules 144, Contract Core 129, monthly plan 118, payroll posting 106,
   contract persistence 74, payroll committed state 72, contract renewal 67, integrity rules 67,
-  breadcrumb & quick actions 64, `saveAllData` 61, sidebar interaction 34, nav simplification 25,
-  executive dashboard & Action Center 23, sidebar click regression 11) plus manual browser validation. The runtime harnesses drive real
+  breadcrumb & quick actions 64, `saveAllData` 61, data grid foundation 36, sidebar interaction 34,
+  nav simplification 25, executive dashboard & Action Center 23, sidebar click regression 11) plus
+  manual browser validation. The runtime harnesses drive real
   behaviour against the live engine and UI seams, but they are not a general test suite.
 - **One theme-blind colour path remains.** UX-002B tokenized every chart series colour, but the shared
   `STATUS_META` / `CATEGORY_COLOR` palette in `js/core/constants.js` is still hardcoded hex. It is

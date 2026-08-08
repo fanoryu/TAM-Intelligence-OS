@@ -463,6 +463,17 @@ td.num, th.num{text-align:right;font-family:var(--sans);font-variant-numeric:tab
 .action-item:hover{background:var(--surface-3);}
 .action-item .ac-ic{flex:none;}
 
+/* UX-005B — data grid controls (sortable headers, pager, result count). Additive;
+   every value resolves from an existing token. */
+.grid-sort{background:none;border:none;color:var(--text-faint);font:inherit;font-size:var(--fs-1);text-transform:uppercase;letter-spacing:.4px;font-weight:600;cursor:pointer;padding:0;display:inline-flex;align-items:center;gap:2px;}
+.grid-sort:hover{color:var(--text-dim);}
+.grid-sort.active{color:var(--text);}
+.grid-sort-ind{font-size:var(--fs-1);}
+.grid-pager{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3);}
+.grid-page-ind{font-size:var(--fs-2);color:var(--text-dim);}
+.grid-page-size{width:auto;}
+.grid-count{font-variant-numeric:tabular-nums;}
+
 .badge-count{background:var(--brick);color:#fff;font-size:var(--fs-1);font-weight:700;border-radius:var(--radius-full);padding:1px var(--space-1);margin-left:auto;}
 
 .empty{padding:var(--space-6) var(--space-5);text-align:center;color:var(--text-faint);font-size:var(--fs-3);}
@@ -849,6 +860,216 @@ function similarText(a,b){
   const dist = levenshtein(a,b);
   return 1 - dist/Math.max(a.length,b.length);
 }
+/* UX-005B — generic trailing debounce. Returns a wrapper that delays fn until `wait`
+   ms after the last call; `flush()` invokes immediately with the latest args (used so
+   pressing Enter in a debounced search bypasses the delay). Presentation-only. */
+function debounce(fn, wait){
+  let t = null, lastArgs = null;
+  const wrapped = function(){ lastArgs = arguments; clearTimeout(t); t = setTimeout(()=>{ t=null; fn.apply(this, lastArgs); }, wait); };
+  wrapped.flush = function(){ if(t){ clearTimeout(t); t=null; fn.apply(this, lastArgs||[]); } };
+  wrapped.cancel = function(){ clearTimeout(t); t=null; };
+  return wrapped;
+}
+/* ============================================================
+   DATA GRID FOUNDATION (UX-005B)  —  SHARED PLATFORM FOUNDATION (FROZEN)
+   ------------------------------------------------------------
+   FOUNDATION FREEZE (UX-005B finalization): this module is a shared PLATFORM
+   foundation consumed by multiple pages. Keep it small and generic:
+     - New GENERIC grid capabilities (e.g. selection, column visibility, saved
+       views, server pagination, virtualization) require EXPLICIT roadmap approval
+       before they are added here — do not add them casually.
+     - PAGE-SPECIFIC behaviour belongs in the owning page module, never here. This
+       module must stay data-source / role / storage / business agnostic.
+     - Resist turning data-grid.js into a "god object": prefer small composable
+       helpers plus per-page column/feature configuration.
+   See docs/01-roadmap/UX-005-Executive-Personal-Workspace-Architecture.md.
+   ------------------------------------------------------------
+   A reusable, DECLARATIVE grid layer for TAM OS tables. It is deliberately:
+     - data-source agnostic  — it receives an array of ROWS and nothing else. It
+       never reads State.txns / State.employees, never calls uiExecute, never
+       touches storage. The owning page produces the rows (from a State array, a
+       Domain query, or any future source) and passes them in.
+     - role agnostic         — it knows nothing about CEO/Employee, Executive or
+       Personal Workspace, permissions, currentUser or authentication. Feature
+       flags gate UI CAPABILITY only; authorization lives upstream (UX-006).
+     - storage agnostic      — it persists nothing; all grid state is session-only,
+       owned by the page under State.grid[<key>].
+     - business agnostic     — it never mutates the rows it is given; every sort
+       runs on a COPY.
+
+   Frozen contracts (see docs/01-roadmap/UX-005-Executive-Personal-Workspace-Architecture.md):
+     R1 column definitions · R2 comparator registry · R4 default-sort registry ·
+     R5 rows-only pipeline · R7 page sizes 20/50/100 (default 20) · R9 feature flags.
+   ============================================================ */
+
+/* R7 — pagination sizes (frozen). */
+const GRID_PAGE_SIZES = [20, 50, 100];
+const GRID_DEFAULT_PAGE_SIZE = 20;
+
+/* R9 — the exact set of feature flags supported in UX-005B v1. A grid config MUST
+   declare a features block; a MISSING flag evaluates to DISABLED (never guessed on).
+   These gate UI capability only — never authorization. */
+const GRID_FEATURE_FLAGS = ['pagination', 'sorting', 'search', 'export', 'rowActions', 'resultCount'];
+function gridFeatureEnabled(features, name){ return !!(features && features[name] === true); }
+
+/* R4 — canonical default sort per grid. Only transactions & employees are wired in
+   UX-005B; the rest are pre-registered so future adoption inherits consistent
+   defaults without new logic. */
+const GRID_DEFAULT_SORT = {
+  transactions: { col: 'month',   dir: 'desc' },
+  employees:    { col: 'name',    dir: 'asc'  },
+  contracts:    { col: 'endDate', dir: 'asc'  },
+  overtime:     { col: 'date',    dir: 'desc' },
+  execution:    { col: 'date',    dir: 'desc' },
+};
+
+/* R2 — comparator registry. Chosen via columnDef.type. Each returns a<b => <0.
+   Numeric/currency compare NUMERICALLY (never lexically); date expects the getter
+   to yield a comparable sortable value (epoch/number), never display text; text
+   uses locale-aware, normalized comparison. Null/blank handling and stable
+   tie-breaking are applied uniformly by gridSort (not per comparator). */
+const GRID_COMPARATORS = {
+  text(a, b){ return normStr(String(a)).localeCompare(normStr(String(b))); },
+  number(a, b){ return Number(a) - Number(b); },
+  currency(a, b){ return Number(a) - Number(b); },
+  date(a, b){ return Number(a) - Number(b); },
+};
+// A value counts as "blank" (sorted last, in BOTH directions) when it is null,
+// undefined, an empty/whitespace string, or a non-finite number.
+function gridIsBlank(v){
+  if(v === null || v === undefined) return true;
+  if(typeof v === 'number') return !isFinite(v);
+  if(typeof v === 'string') return v.trim() === '';
+  return false;
+}
+
+/* R1/R2 — sort a COPY of rows by a column definition. Never mutates the input.
+   Blanks always sink to the bottom; equal values keep their original relative order
+   (stable) via an original-index tie-break that is NOT reversed by direction. */
+function gridSort(rows, sort, columnDefs){
+  const list = (rows || []).slice();
+  if(!sort || !sort.col) return list;
+  const def = (columnDefs || []).find(c => c.id === sort.col);
+  if(!def || !def.sortable || typeof def.getter !== 'function') return list;
+  const cmp = GRID_COMPARATORS[def.type] || GRID_COMPARATORS.text;
+  const desc = sort.dir === 'desc';
+  return list
+    .map((row, i) => ({ row, i }))
+    .sort((x, y) => {
+      const va = def.getter(x.row), vb = def.getter(y.row);
+      const ba = gridIsBlank(va), bb = gridIsBlank(vb);
+      if(ba && bb) return x.i - y.i;      // both blank -> stable
+      if(ba) return 1;                    // blanks last, regardless of direction
+      if(bb) return -1;
+      let base = cmp(va, vb);
+      if(desc) base = -base;
+      return base !== 0 ? base : x.i - y.i; // stable tie-break (never flipped)
+    })
+    .map(o => o.row);
+}
+
+/* Pagination helper. Clamps page into [1, pageCount]; never yields a page beyond
+   the data. An empty set is one page (page 1 of 1), so no "Page 1 of 0" ever shows. */
+function gridPage(rows, page, pageSize){
+  const size = GRID_PAGE_SIZES.indexOf(pageSize) >= 0 ? pageSize : GRID_DEFAULT_PAGE_SIZE;
+  const total = (rows || []).length;
+  const pageCount = Math.max(1, Math.ceil(total / size));
+  const cur = Math.min(Math.max(1, page || 1), pageCount);
+  const start = (cur - 1) * size;
+  return { pageRows: (rows || []).slice(start, start + size), page: cur, pageCount: pageCount, total: total, pageSize: size };
+}
+
+/* The whole pipeline over a FILTERED row set: sort (if enabled) then paginate (if
+   enabled). `total` is the filtered count captured BEFORE pagination. Rows are never
+   mutated. When pagination is disabled the full (sorted) set is returned as one page. */
+function gridApply(rows, state, columnDefs, features){
+  const src = rows || [];
+  const sorted = gridFeatureEnabled(features, 'sorting') ? gridSort(src, state && state.sort, columnDefs) : src.slice();
+  if(!gridFeatureEnabled(features, 'pagination')){
+    return { pageRows: sorted, page: 1, pageCount: 1, total: src.length, pageSize: sorted.length || GRID_DEFAULT_PAGE_SIZE };
+  }
+  const paged = gridPage(sorted, state ? state.page : 1, state ? state.pageSize : GRID_DEFAULT_PAGE_SIZE);
+  paged.total = src.length; // count is the FILTERED total, independent of the current page
+  return paged;
+}
+
+/* R4 — three-click cycle: none/other-column -> the column's configured direction;
+   same column at configured direction -> reversed; same column reversed -> the
+   grid's canonical default sort. Returns a new {col,dir}; pure. */
+function gridCycleSort(current, colId, columnDefs, gridKey){
+  const def = (columnDefs || []).find(c => c.id === colId);
+  if(!def || !def.sortable) return current;
+  const configured = def.dir || 'asc';
+  if(current && current.col === colId){
+    if(current.dir === configured) return { col: colId, dir: configured === 'asc' ? 'desc' : 'asc' };
+    return Object.assign({}, GRID_DEFAULT_SORT[gridKey]); // third click -> canonical default
+  }
+  return { col: colId, dir: configured };
+}
+
+/* ---- shared HTML builders (presentation only) ---- */
+// One <thead><tr> of <th>s from column defs. Sortable columns render an accessible
+// button carrying aria-sort and a direction glyph; non-sortable columns are plain.
+function gridTheadHTML(columnDefs, state){
+  const cells = (columnDefs || []).map(c => {
+    const cls = c.align === 'num' ? ' class="num"' : '';
+    if(!c.sortable){ return `<th${cls}>${escapeHtml(c.label || '')}</th>`; }
+    const active = state && state.col === c.id;
+    const ariaSort = active ? (state.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+    const glyph = active ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '';
+    return `<th${cls}><button type="button" class="grid-sort${active ? ' active' : ''}" data-grid-sort="${escapeHtml(c.id)}" aria-sort="${ariaSort}" aria-label="Sort by ${escapeHtml(c.label || c.id)}">${escapeHtml(c.label || '')}<span class="grid-sort-ind" aria-hidden="true">${glyph}</span></button></th>`;
+  }).join('');
+  return `<thead><tr>${cells}</tr></thead>`;
+}
+// "N of M" — filtered (pre-pagination) N over the unfiltered source total M.
+function gridResultCountHTML(filteredTotal, sourceTotal){
+  return `<span class="grid-count" aria-live="polite">${Number(filteredTotal).toLocaleString('id-ID')} of ${Number(sourceTotal).toLocaleString('id-ID')}</span>`;
+}
+// Pager: page-size select + Prev/Next + "Page X of Y". Bounds disable Prev/Next.
+function gridPagerHTML(paged){
+  const opts = GRID_PAGE_SIZES.map(s => `<option value="${s}" ${s === paged.pageSize ? 'selected' : ''}>${s} / page</option>`).join('');
+  const prevDis = paged.page <= 1 ? ' disabled' : '';
+  const nextDis = paged.page >= paged.pageCount ? ' disabled' : '';
+  return `<div class="grid-pager">
+    <select class="input btn-sm grid-page-size" data-grid-page-size aria-label="Rows per page">${opts}</select>
+    <button type="button" class="btn btn-sm" data-grid-page-prev aria-label="Previous page"${prevDis}>‹ Prev</button>
+    <span class="grid-page-ind">Page ${paged.page} of ${paged.pageCount}</span>
+    <button type="button" class="btn btn-sm" data-grid-page-next aria-label="Next page"${nextDis}>Next ›</button>
+  </div>`;
+}
+
+/* Bind the shared grid controls (sort headers + pager) inside `container`. The page
+   supplies `state` (State.grid[key]), the grid key, its columnDefs, and a `refresh`
+   callback that re-runs the page's own filter->render. Navigation/query state only;
+   never mutates data, never persists. */
+function bindGridControls(container, gridKey, state, columnDefs, refresh){
+  container.querySelectorAll('[data-grid-sort]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.sort = gridCycleSort(state.sort, btn.dataset.gridSort, columnDefs, gridKey);
+      state.page = 1;
+      refresh();
+    });
+  });
+  const prev = container.querySelector('[data-grid-page-prev]');
+  if(prev) prev.addEventListener('click', () => { if(state.page > 1){ state.page--; refresh(); } });
+  const next = container.querySelector('[data-grid-page-next]');
+  if(next) next.addEventListener('click', () => { state.page++; refresh(); }); // gridApply clamps
+  const size = container.querySelector('[data-grid-page-size]');
+  if(size) size.addEventListener('change', (e) => {
+    const v = parseInt(e.target.value, 10);
+    state.pageSize = GRID_PAGE_SIZES.indexOf(v) >= 0 ? v : GRID_DEFAULT_PAGE_SIZE;
+    state.page = 1;
+    refresh();
+  });
+}
+
+/* Initialize a session-only grid state object for a key, applying the canonical
+   default sort and default page size. Session-only: lives on State.grid, never in
+   State.settings, never persisted. */
+function gridInitState(gridKey){
+  return { sort: Object.assign({}, GRID_DEFAULT_SORT[gridKey] || null), page: 1, pageSize: GRID_DEFAULT_PAGE_SIZE };
+}
+
 
 /* ============================================================
    STORAGE ADAPTER (v2.1.1) — single persistence gateway.
@@ -1376,6 +1597,11 @@ const State = {
   settings: {...DEFAULT_SETTINGS},
   navCollapsed: {}, // group id -> collapsed bool, session-only
   navMore: {}, // UX-004F — group id -> "More" disclosure expanded bool, session-only (progressive disclosure)
+  // UX-005B — data-grid session state (sort/page/pageSize per table). SESSION-ONLY:
+  // lives here on State, never in State.settings, never persisted, no storage key,
+  // no schema. Each grid owns only its own sub-object; only transactions & employees
+  // are actively wired in UX-005B (others reserved for later adoption).
+  grid: { transactions:{}, employees:{}, contracts:{}, overtime:{}, execution:{} },
   sidebarScrollTop: 0, // preserved across full re-renders so nav doesn't jump to top on navigation
   // UX-004E — sidebar interaction, SESSION-ONLY (never persisted, no storage key, no schema):
   sidebarCollapsed: false,   // desktop collapsed rail (labels hidden, icons only)
@@ -3544,11 +3770,37 @@ function txnsFiltered(){
   if(f.search.trim()){ const s = normStr(f.search); rows = rows.filter(t=>txnMatchesSearch(t, s)); }
   return rows.slice().sort((a,b)=> (b.year-a.year)||(b.monthNum-a.monthNum)|| (String(a.category).localeCompare(String(b.category))));
 }
+/* UX-005B — Transactions grid contract. Column definitions (R1) are the single
+   source of truth for label/sortability/comparator type/value extraction; Month
+   sorts on year*100+monthNum (not the display string) and Variance on its derived
+   numeric value, with null Actual/Variance sinking last via the shared policy.
+   Feature flags (R9) declare UI capability only — never authorization. */
+const TXN_COLUMNS = [
+  { id:'month',       label:'Month',       sortable:true,  type:'number',   dir:'desc', getter:t=>(t.year||0)*100+(t.monthNum||0) },
+  { id:'category',    label:'Category',    sortable:true,  type:'text',     dir:'asc',  getter:t=>t.category },
+  { id:'description', label:'Description', sortable:true,  type:'text',     dir:'asc',  getter:t=>t.uraian },
+  { id:'planned',     label:'Planned',     sortable:true,  type:'currency', dir:'desc', align:'num', getter:t=>t.planned },
+  { id:'actual',      label:'Actual',      sortable:true,  type:'currency', dir:'desc', align:'num', getter:t=>(t.actual==null?null:t.actual) },
+  { id:'variance',    label:'Variance',    sortable:true,  type:'currency', dir:'desc', align:'num', getter:t=>(t.actual==null?null:t.actual-(t.planned||0)) },
+  { id:'status',      label:'Status',      sortable:true,  type:'text',     dir:'asc',  getter:t=>statusOf(t) },
+  { id:'actions',     label:'',            sortable:false },
+];
+const TXN_FEATURES = { pagination:true, sorting:true, search:true, export:true, rowActions:true, resultCount:true };
 function applyTxnFilter(main){
-  const tb = document.getElementById('txnRows'); if(!tb) return;
-  const rows = txnsFiltered();
-  tb.innerHTML = rows.map(rowToTr).join('') || '<tr><td colspan="8" class="empty">No transactions match these filters</td></tr>';
-  const c = document.getElementById('txnCount'); if(c) c.textContent = rows.length;
+  const area = document.getElementById('txnGridArea'); if(!area) return;
+  const g = State.grid.transactions;
+  const rows = txnsFiltered();                                  // filtered+searched set (also the export set)
+  const paged = gridApply(rows, g, TXN_COLUMNS, TXN_FEATURES);  // sort+paginate a COPY; rows never mutated
+  const body = paged.pageRows.map(rowToTr).join('')
+    || '<tr><td colspan="8" class="empty">No transactions match your current filters. <button class="linklike" data-txn-clear>Clear filters</button></td></tr>';
+  area.innerHTML = `<div class="table-wrap" style="max-height:640px;overflow-y:auto;">
+      <table>${gridTheadHTML(TXN_COLUMNS, g.sort)}<tbody id="txnRows">${body}</tbody></table>
+    </div>${gridFeatureEnabled(TXN_FEATURES,'pagination')?gridPagerHTML(paged):''}`;
+  const c = document.getElementById('txnCount'); if(c) c.textContent = rows.length.toLocaleString('id-ID'); // "N of M", pre-pagination N
+  const tw = area.querySelector('.table-wrap'); if(tw) tw.scrollTop = 0;
+  bindGridControls(area, 'transactions', g, TXN_COLUMNS, ()=>applyTxnFilter(main));
+  const clr = area.querySelector('[data-txn-clear]');
+  if(clr) clr.addEventListener('click', ()=>{ State.txFilter={month:'all',category:'all',search:'',budget:'all',type:'all',status:'all',method:'all',bank:'all'}; g.page=1; render(); });
   bindActionMenus(main);
 }
 function renderTransactions(main){
@@ -3567,6 +3819,7 @@ function renderTransactions(main){
     bindActionEmptyState(main); return;
   }
   const f = State.txFilter;
+  if(!State.grid.transactions.sort) State.grid.transactions = gridInitState('transactions'); // UX-005B session-only grid state
   const rows = txnsFiltered();
   const allCats = [...new Set(State.txns.map(t=>t.category))];
 
@@ -3627,34 +3880,29 @@ function renderTransactions(main){
           </select>
         </div>
       </div>
-      <div class="table-wrap" style="max-height:640px;overflow-y:auto;">
-        <table>
-          <thead><tr>
-            <th>Month</th><th>Category</th><th>Description</th>
-            <th class="num">Planned</th><th class="num">Actual</th><th class="num">Variance</th><th>Status</th><th></th>
-          </tr></thead>
-          <tbody id="txnRows">
-            ${rows.map(rowToTr).join('') || '<tr><td colspan="8" class="empty">No transactions match these filters</td></tr>'}
-          </tbody>
-        </table>
-      </div>
+      <div id="txnGridArea"></div>
     </div>
   `;
   // renderTransactions binds its own menus below — filter handlers must NOT
   // call bindActionMenus again (same double-binding bug as the Execution Center).
-  document.getElementById('fSearch').addEventListener('input', e=>{ State.txFilter.search=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fMonth').addEventListener('change', e=>{ State.txFilter.month=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fCategory').addEventListener('change', e=>{ State.txFilter.category=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fStatus').addEventListener('change', e=>{ State.txFilter.status=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fType').addEventListener('change', e=>{ State.txFilter.type=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fMethod').addEventListener('change', e=>{ State.txFilter.method=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fBank').addEventListener('change', e=>{ State.txFilter.bank=e.target.value; applyTxnFilter(main); });
-  document.getElementById('fBudget').addEventListener('change', e=>{ State.txFilter.budget=e.target.value; applyTxnFilter(main); });
+  // A filter/search change resets to page 1 (results shrink from the top).
+  const reapply = ()=>{ State.grid.transactions.page=1; applyTxnFilter(main); };
+  const debSearch = debounce(reapply, 250); // UX-005B — debounced search (Enter flushes)
+  const fSearch = document.getElementById('fSearch');
+  fSearch.addEventListener('input', e=>{ State.txFilter.search=e.target.value; debSearch(); });
+  fSearch.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); debSearch.flush(); } });
+  document.getElementById('fMonth').addEventListener('change', e=>{ State.txFilter.month=e.target.value; reapply(); });
+  document.getElementById('fCategory').addEventListener('change', e=>{ State.txFilter.category=e.target.value; reapply(); });
+  document.getElementById('fStatus').addEventListener('change', e=>{ State.txFilter.status=e.target.value; reapply(); });
+  document.getElementById('fType').addEventListener('change', e=>{ State.txFilter.type=e.target.value; reapply(); });
+  document.getElementById('fMethod').addEventListener('change', e=>{ State.txFilter.method=e.target.value; reapply(); });
+  document.getElementById('fBank').addEventListener('change', e=>{ State.txFilter.bank=e.target.value; reapply(); });
+  document.getElementById('fBudget').addEventListener('change', e=>{ State.txFilter.budget=e.target.value; reapply(); });
   // Full render() (not just a main swap) so the sidebar active state updates;
   // render() captures and restores the sidebar scroll position itself.
   document.getElementById('openExecCenter').addEventListener('click', ()=>{ State.view='executioncenter'; render(); });
-  document.getElementById('exportCsv').addEventListener('click', ()=>exportCsv(txnsFiltered()));
-  bindActionMenus(main);
+  document.getElementById('exportCsv').addEventListener('click', ()=>exportCsv(txnsFiltered())); // export = full FILTERED set (not page slice)
+  applyTxnFilter(main); // populate the grid area (thead + page rows + pager) and bind grid controls + action menus
 }
 function rowToTr(t){
   const st = statusOf(t);
@@ -6850,14 +7098,42 @@ function employeeRowsHTMLFrom(list){
     </tr>`;
   }).join('') || `<tr><td colspan="7" class="empty">No employees match. Click “+ Add Employee” to create the first record.</td></tr>`;
 }
+/* UX-005B — Employees grid contract. Column definitions (R1) drive sortability and
+   comparator selection; "Active Contract" stays non-sortable in v1 (derived per-row,
+   no cheap stable key). Feature flags (R9) are UI capability only. Export semantics
+   are UNCHANGED (exportEmployeesCsv exports ALL employees, masked). */
+const EMP_COLUMNS = [
+  { id:'name',       label:'Employee',        sortable:true,  type:'text',     dir:'asc',  getter:e=>e.fullName },
+  { id:'jobTitle',   label:'Job Title',       sortable:true,  type:'text',     dir:'asc',  getter:e=>e.jobTitle },
+  { id:'department', label:'Department',      sortable:true,  type:'text',     dir:'asc',  getter:e=>e.department },
+  { id:'status',     label:'Status',          sortable:true,  type:'text',     dir:'asc',  getter:e=>e.employmentStatus },
+  { id:'contract',   label:'Active Contract', sortable:false },
+  { id:'salary',     label:'Base Salary',     sortable:true,  type:'currency', dir:'desc', align:'num', getter:e=>e.monthlyBaseSalary },
+  { id:'actions',    label:'',                sortable:false },
+];
+const EMP_FEATURES = { pagination:true, sorting:true, search:true, export:true, rowActions:true, resultCount:true };
 async function fillEmployeeRows(main){
-  const tb = document.getElementById('empRows'); if(!tb) return;
+  const area = document.getElementById('empGridArea'); if(!area) return;
+  const g = State.grid.employees;
   // PR-7B "The Conduit" — the employee list read flows through the canonical path
-  // (seam -> Transport -> Gateway -> the employee.filtered query). The async
-  // fill preserves the rendered result and re-binds row actions after injection.
+  // (seam -> Transport -> Gateway -> the employee.filtered query). UX-005B wraps the
+  // RETURNED array with the shared grid pipeline; the seam is not bypassed.
   const result = await uiExecute('query', 'employee.filtered', []);
   const rows = Array.isArray(result) ? result : [];
-  tb.innerHTML = employeeRowsHTMLFrom(rows);
+  const paged = gridApply(rows, g, EMP_COLUMNS, EMP_FEATURES); // sort+paginate a COPY
+  const body = paged.pageRows.length
+    ? employeeRowsHTMLFrom(paged.pageRows)
+    : (State.employees.length
+        ? '<tr><td colspan="7" class="empty">No employees match your current filters. <button class="linklike" data-emp-clear>Clear filters</button></td></tr>'
+        : '<tr><td colspan="7" class="empty">No employees match. Click “+ Add Employee” to create the first record.</td></tr>');
+  area.innerHTML = `<div class="table-wrap" style="max-height:620px;overflow-y:auto;">
+      <table>${gridTheadHTML(EMP_COLUMNS, g.sort)}<tbody id="empRows">${body}</tbody></table>
+    </div>${gridFeatureEnabled(EMP_FEATURES,'pagination')?gridPagerHTML(paged):''}`;
+  const c = document.getElementById('empCount'); if(c) c.textContent = rows.length.toLocaleString('id-ID'); // filtered N, pre-pagination
+  const tw = area.querySelector('.table-wrap'); if(tw) tw.scrollTop = 0;
+  bindGridControls(area, 'employees', g, EMP_COLUMNS, ()=>fillEmployeeRows(main));
+  const clr = area.querySelector('[data-emp-clear]');
+  if(clr) clr.addEventListener('click', ()=>{ State.empFilter={search:'', status:'all', department:'all', active:'all'}; g.page=1; render(); });
   bindHRActions(main);
 }
 function applyEmployeeFilter(main){
@@ -6865,12 +7141,13 @@ function applyEmployeeFilter(main){
 }
 function renderEmployees(main){
   const f = State.empFilter;
+  if(!State.grid.employees.sort) State.grid.employees = gridInitState('employees'); // UX-005B session-only grid state
   const depts = [...new Set(State.employees.map(e=>e.department).filter(Boolean))].sort();
   const activeCount = State.employees.filter(empEligible).length;
 
   main.innerHTML = `
     <div class="page-head">
-      <div><h1>Employees</h1><p class="desc">Master data — ${State.employees.length} employee${State.employees.length===1?'':'s'}, ${activeCount} active. This is the source of truth for payroll planning.</p></div>
+      <div><h1>Employees</h1><p class="desc">Master data — <span id="empCount">${State.employees.length}</span> of ${State.employees.length} employee${State.employees.length===1?'':'s'} shown, ${activeCount} active. This is the source of truth for payroll planning.</p></div>
       <div class="head-controls">
         <button class="btn btn-accent" id="addEmp">+ Add Employee</button>
         <button class="btn" id="dedupEmp">Duplicate Review${(function(){const g=findEmployeeDuplicateGroups();return g.length?` (${g.length})`:'';})()}</button>
@@ -6895,17 +7172,17 @@ function renderEmployees(main){
           </select>
         </div>
       </div>
-      <div class="table-wrap" style="max-height:620px;overflow-y:auto;">
-        <table>
-          <thead><tr><th>Employee</th><th>Job Title</th><th>Department</th><th>Status</th><th>Active Contract</th><th class="num">Base Salary</th><th></th></tr></thead>
-          <tbody id="empRows"></tbody>
-        </table>
-      </div>
+      <div id="empGridArea"></div>
     </div>`;
-  document.getElementById('eSearch').addEventListener('input', e=>{ State.empFilter.search=e.target.value; applyEmployeeFilter(main); });
-  document.getElementById('eStatus').addEventListener('change', e=>{ State.empFilter.status=e.target.value; applyEmployeeFilter(main); });
-  document.getElementById('eDept').addEventListener('change', e=>{ State.empFilter.department=e.target.value; applyEmployeeFilter(main); });
-  document.getElementById('eActive').addEventListener('change', e=>{ State.empFilter.active=e.target.value; applyEmployeeFilter(main); });
+  // UX-005B — a filter/search change resets to page 1; search is debounced (Enter flushes).
+  const reapply = ()=>{ State.grid.employees.page=1; applyEmployeeFilter(main); };
+  const debSearch = debounce(reapply, 250);
+  const eSearch = document.getElementById('eSearch');
+  eSearch.addEventListener('input', e=>{ State.empFilter.search=e.target.value; debSearch(); });
+  eSearch.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); debSearch.flush(); } });
+  document.getElementById('eStatus').addEventListener('change', e=>{ State.empFilter.status=e.target.value; reapply(); });
+  document.getElementById('eDept').addEventListener('change', e=>{ State.empFilter.department=e.target.value; reapply(); });
+  document.getElementById('eActive').addEventListener('change', e=>{ State.empFilter.active=e.target.value; reapply(); });
   document.getElementById('addEmp').addEventListener('click', ()=>openEmployeeModal(null));
   document.getElementById('expEmp').addEventListener('click', exportEmployeesCsv);
   const goDedup=()=>{ State.view='employeeDedup'; render(); };

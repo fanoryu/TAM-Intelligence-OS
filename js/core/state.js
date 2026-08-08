@@ -52,6 +52,11 @@ const State = {
   settings: {...DEFAULT_SETTINGS},
   navCollapsed: {}, // group id -> collapsed bool, session-only
   navMore: {}, // UX-004F — group id -> "More" disclosure expanded bool, session-only (progressive disclosure)
+  // UX-005B — data-grid session state (sort/page/pageSize per table). SESSION-ONLY:
+  // lives here on State, never in State.settings, never persisted, no storage key,
+  // no schema. Each grid owns only its own sub-object; only transactions & employees
+  // are actively wired in UX-005B (others reserved for later adoption).
+  grid: { transactions:{}, employees:{}, contracts:{}, overtime:{}, execution:{} },
   sidebarScrollTop: 0, // preserved across full re-renders so nav doesn't jump to top on navigation
   // UX-004E — sidebar interaction, SESSION-ONLY (never persisted, no storage key, no schema):
   sidebarCollapsed: false,   // desktop collapsed rail (labels hidden, icons only)
