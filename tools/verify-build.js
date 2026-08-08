@@ -84,14 +84,16 @@ const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
 //   UX-005D              6a5a31987ad546c5afc16b5cf30dae093017ecdfa03294e5d8bebf57ab1679ad
 //     Global Search palette, presentation only (css/components.css): additive
 //     .gsearch-* classes for the Ctrl/Cmd+K dialog.
-//   UX-005E (current) — AUTHORIZED golden-master revision. Modal viewport containment,
-//     presentation only (css/components.css): the shared .modal primitive gains
-//     max-height:88vh; overflow-y:auto so it stays inside the viewport and scrolls
-//     internally on short/mobile screens — normalizing the proven people-helper
-//     pattern onto the shared class (fixes the raw-.modal finance Transaction
-//     Execute/Edit/Detail dialogs). No token, color, radius or type scale changed;
-//     tokens.css byte-unchanged (pinned below); no layout outside .modal touched.
-const CSS_GOLDEN_SHA256 = 'be8958b31c56424dc2ec93df4778b694de9b3f244ab37b720eb6753ad27d6f08';
+//   UX-005E              be8958b31c56424dc2ec93df4778b694de9b3f244ab37b720eb6753ad27d6f08
+//     Modal viewport containment (css/components.css): shared .modal gains
+//     max-height:88vh; overflow-y:auto.
+//   UX-005F (current) — AUTHORIZED golden-master revision. Accessibility hardening,
+//     presentation only (css/shell.css): additive .skip-link + .skip-link:focus
+//     (A1 skip-to-content) and an extended focus-visible selector list covering
+//     .grid-sort/.nav-group-head/.sidebar-collapse-btn/.nav-hamburger (A5) — the same
+//     single outline treatment, no new visual language. No token, color, radius or type
+//     scale changed; tokens.css byte-unchanged (pinned below); components.css untouched.
+const CSS_GOLDEN_SHA256 = '5528908b942f7b85a1148d12f0852a4e21a5f3fa93c7b2e80e62ed920fcf87ba';
 // UX-005C — tokens.css anti-drift pin. The design tokens are the single source of truth
 // for spacing/type/radius/color; this pin fails loudly if any token VALUE is changed,
 // so a "consistency" edit can never silently move the scale it normalizes onto.
@@ -3703,12 +3705,83 @@ const ux5eBpFound = new Set();
 check([...ux5eBpFound].every(b=>ux5eAllowedBp.has(b)),
   'UX-005E: no arbitrary new breakpoint introduced (all @media px in {480,640,768,769,900,1050})'
   + ([...ux5eBpFound].every(b=>ux5eAllowedBp.has(b)) ? '' : ' >> found ' + [...ux5eBpFound].join(',')));
-// 12. CSS golden-master enforcement remains active and green (the modal change is pinned).
-check(cssDigest === CSS_GOLDEN_SHA256 && CSS_GOLDEN_SHA256 === 'be8958b31c56424dc2ec93df4778b694de9b3f244ab37b720eb6753ad27d6f08',
-  'UX-005E: CSS golden-master active and repinned to the modal-containment revision');
+// 12. CSS golden-master enforcement remains active and green. NOTE: this check
+// previously also asserted CSS_GOLDEN_SHA256 === the UX-005E literal; UX-005F is an
+// authorized golden-master revision (shell.css a11y additions), so that phase-pinned
+// literal is legitimately superseded and removed. The durable invariant — the live
+// digest equals the current pin — is unchanged and strictly what the golden master is.
+check(cssDigest === CSS_GOLDEN_SHA256,
+  'UX-005E: CSS golden-master enforcement active (live digest == current pin)');
 // 13. artifact fidelity enforcement remains active (source -> dist equality asserted above).
 check(trimLF(srcCss) === distCss,
   'UX-005E: portable artifact CSS fidelity remains enforced (concat(css/*.css) == dist CSS)');
+
+// ===== UX-005F — Final Workspace Polish & Accessibility Hardening =====
+// A1 skip-link + main landmark, A2 modal Tab-trap, A3 finance dialog semantics,
+// A4 decorative-glyph hiding, A5 focus-visible coverage, A6 aria-sort on <th>.
+console.log('== UX-005F — ACCESSIBILITY HARDENING ==');
+const ux5fShell = read(path.join(root,'js','ui','shell-render.js'));
+const ux5fShellCss = read(path.join(root,'css','shell.css'));
+const ux5fStab = read(path.join(root,'js','core','stabilization.js'));
+const ux5fTxn = read(path.join(root,'js','finance','transaction-modals.js'));
+const ux5fGrid = read(path.join(root,'js','core','data-grid.js'));
+// A1 — skip link + single main landmark
+check(/class="skip-link"[^>]*href="#main"/.test(ux5fShell),
+  'UX-005F A1: skip link exists and targets #main');
+check(/<main class="main" id="main" tabindex="-1">/.test(ux5fShell),
+  'UX-005F A1: real <main> landmark with tabindex="-1" focus target');
+check((ux5fShell.match(/<main class="main" id="main"/g) || []).length === 1,
+  'UX-005F A1: exactly one <main> landmark');
+check(/#skipLink[\s\S]{0,400}?getElementById\('main'\)[\s\S]{0,80}?\.focus\(\)/.test(ux5fShell),
+  'UX-005F A1: skip link moves focus into #main on activation');
+check(/\.skip-link\{/.test(ux5fShellCss) && /\.skip-link:focus\{/.test(ux5fShellCss),
+  'UX-005F A1: skip-link is visually hidden until focused (.skip-link + :focus rules)');
+// A2 — modal Tab focus trap scoped to modal-root, single install
+check(/A2[\s\S]{0,600}?getElementById\('modal-root'\)[\s\S]{0,400}?e\.key==='Tab'/.test(ux5fStab),
+  'UX-005F A2: modal Tab focus-trap is scoped to an open #modal-root dialog');
+check(/e\.shiftKey[\s\S]{0,120}?\.focus\(\)[\s\S]{0,160}?\.focus\(\)/.test(ux5fStab)
+  && /if\(!f\.length\)\{[^}]*preventDefault/.test(ux5fStab),
+  'UX-005F A2: Tab/Shift+Tab wrap both ends and zero-focusables is handled safely');
+check((ux5fStab.match(/__installedGlobalUI/g) || []).length >= 2,
+  'UX-005F A2: modal handlers install exactly once (single-install guard)');
+// A3 — finance dialog semantics (three dialogs) with existing heading ids
+[['exec','execModalTitle'],['edit','editModalTitle'],['detail','detailModalTitle']].forEach(([k,id])=>{
+  const rx = new RegExp('role="dialog" aria-modal="true" aria-labelledby="'+id+'"');
+  check(rx.test(ux5fTxn) && new RegExp('id="'+id+'"').test(ux5fTxn),
+    'UX-005F A3: Transaction '+k+' dialog has role/aria-modal/labelledby and the heading id exists');
+});
+// A4 — decorative glyphs hidden
+check(/<span class="ic" aria-hidden="true">/.test(ux5fShell),
+  'UX-005F A4: decorative nav icon spans are aria-hidden');
+check(/<span class="chev" aria-hidden="true">/.test(ux5fShell),
+  'UX-005F A4: decorative chevron/More glyphs are aria-hidden');
+// A5 — focus-visible coverage for the audited borderless controls
+check(/\.grid-sort:focus-visible/.test(ux5fShellCss) && /\.nav-group-head:focus-visible/.test(ux5fShellCss)
+  && /\.sidebar-collapse-btn:focus-visible/.test(ux5fShellCss) && /\.nav-hamburger:focus-visible/.test(ux5fShellCss),
+  'UX-005F A5: focus-visible coverage includes grid-sort/nav-group-head/collapse/hamburger');
+// A6 — aria-sort on <th>, not the grid-sort button
+check(/<th\$\{cls\} aria-sort="\$\{ariaSort\}">/.test(ux5fGrid),
+  'UX-005F A6: aria-sort is on the <th> column header');
+check(!/class="grid-sort[\s\S]{0,80}?aria-sort=/.test(ux5fGrid),
+  'UX-005F A6: aria-sort is not placed on the grid-sort button');
+// Preservation guards
+check(/\.modal\{[^}]*max-height:88vh[^}]*overflow-y:auto/.test(read(path.join(root,'css','components.css'))),
+  'UX-005F: UX-005E modal containment (88vh/overflow-y) preserved');
+check(/td\{padding:9px 10px;/.test(read(path.join(root,'css','components.css')))
+  && /\.stat-value\{[^}]*tabular-nums/.test(read(path.join(root,'css','components.css'))),
+  'UX-005F: table density + numeric tabular typography preserved');
+check(crypto.createHash('sha256').update(trimLF(read(path.join(root,'css','tokens.css'))),'utf8').digest('hex') === TOKENS_CSS_SHA256,
+  'UX-005F: css/tokens.css remains byte-identical');
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))),
+  'UX-005F: SCHEMA_VERSION remains 6');
+// Scan the modules that gained new behavioral code (shell/stabilization/finance modals).
+// data-grid.js is excluded intentionally: its only change is markup (aria-sort moved to
+// <th>), and it carries a pre-existing scope-safety COMMENT that names currentUser/
+// PersonalWorkspace precisely to state the grid depends on none of them (UX-005B/D).
+check(!/currentUser|userRole|requireAuth|PersonalWorkspace|ExecutiveWorkspace/.test(ux5fShell+ux5fStab+ux5fTxn),
+  'UX-005F: no UX-006 role/auth/workspace symbol in the modules with new behavioral code');
+check(!/localStorage|StorageAdapter|tam_[a-z_]+_v[0-9]|migration/.test(ux5fShellCss),
+  'UX-005F: a11y CSS introduces no storage/persistence/migration');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

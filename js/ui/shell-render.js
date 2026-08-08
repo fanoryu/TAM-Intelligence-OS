@@ -211,7 +211,7 @@ function shellIsMounted(){
 function navItemHTML(n, activeItem){
   const on = n.id===activeItem;
   return `<button class="nav-item ${on?'active':''}" data-nav="${n.id}"${on?' aria-current="page"':''} title="${escapeHtml(n.label)}">
-                <span class="ic">${n.ic}</span><span class="nav-label">${escapeHtml(n.label)}</span>${featureBadgeHTML(n.id)}
+                <span class="ic" aria-hidden="true">${n.ic}</span><span class="nav-label">${escapeHtml(n.label)}</span>${featureBadgeHTML(n.id)}
               </button>`;
 }
 // UX-004F — the "More" disclosure is open when the user opened it OR the active view
@@ -234,14 +234,14 @@ function navGroupHTML(g){
   const moreOpen = navMoreOpen(g, active.item);
   const moreHTML = moreItems.length ? `
               <button class="nav-item nav-more-head" data-more="${g.id}" aria-expanded="${moreOpen}" title="More">
-                <span class="ic">⋯</span><span class="nav-label">More</span><span class="chev">${moreOpen?'▾':'▸'}</span>
+                <span class="ic" aria-hidden="true">⋯</span><span class="nav-label">More</span><span class="chev" aria-hidden="true">${moreOpen?'▾':'▸'}</span>
               </button>
               <div class="nav-more-items" style="${moreOpen?'':'display:none;'}">
                 ${moreItems.map(n=>navItemHTML(n, active.item)).join('')}
               </div>` : '';
   return `<div class="nav-group">
             <button class="nav-group-head" data-group="${g.id}" aria-expanded="${!collapsed}">
-              <span>${escapeHtml(g.label)}</span><span class="chev">${collapsed?'▸':'▾'}</span>
+              <span>${escapeHtml(g.label)}</span><span class="chev" aria-hidden="true">${collapsed?'▸':'▾'}</span>
             </button>
             <div class="nav-group-items" style="${collapsed?'display:none;':''}">
               ${primary.map(n=>navItemHTML(n, active.item)).join('')}${moreHTML}
@@ -253,6 +253,7 @@ function navGroupHTML(g){
 function renderShell(){
   const app = document.getElementById('app');
   app.innerHTML = `
+    <a class="skip-link" href="#main" id="skipLink">Skip to main content</a>
     <button class="nav-hamburger" id="navHamburger" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span class="hbars" aria-hidden="true">☰</span></button>
     <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
     <div class="sidebar" id="sidebar">
@@ -266,13 +267,24 @@ function renderShell(){
       </nav>
       <div class="sidebar-foot">${escapeHtml(APP_NAME)} v${APP_VERSION}<br>${escapeHtml(APP_TAGLINE)}<br>Data stored privately in your browser.</div>
     </div>
-    <div class="main" id="main"></div>
+    <main class="main" id="main" tabindex="-1"></main>
   `;
   bindShell(app);
   sidebarApplyState(); // apply session collapse/drawer state to the freshly mounted shell
 }
 // Shell listeners are bound once, against nodes that now outlive navigation.
 function bindShell(app){
+  // UX-005F (A1) — skip-to-content. The link is the first focusable shell node; on
+  // activation it moves keyboard focus into the <main> landmark (tabindex="-1"), so
+  // keyboard users bypass the persistent nav. The shell is never remounted.
+  const skip = app.querySelector('#skipLink');
+  if(skip){
+    skip.addEventListener('click', (e)=>{
+      e.preventDefault();
+      const main = document.getElementById('main');
+      if(main && typeof main.focus === 'function'){ try{ main.focus(); }catch(err){} }
+    });
+  }
   app.querySelectorAll('[data-nav]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{
       e.preventDefault();

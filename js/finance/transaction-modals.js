@@ -15,8 +15,8 @@ function renderExecuteModal(){
   const today = new Date().toISOString().slice(0,10);
   root.innerHTML = `
     <div class="modal-overlay" id="execOverlay">
-      <div class="modal" style="max-width:540px;">
-        <h3>Execute Transaction</h3>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="execModalTitle" style="max-width:540px;">
+        <h3 id="execModalTitle">Execute Transaction</h3>
         <p class="dim" style="font-size:12.5px;margin:0 0 var(--space-4);">${escapeHtml(t.uraian)} · ${escapeHtml(t.category)} · planned ${fmtIDR(t.planned)}</p>
         <form id="execForm">
           <div class="form-grid" style="grid-template-columns:1fr 1fr;">
@@ -65,8 +65,8 @@ function openEditModal(id){
   State._modalOpener = document.activeElement;
   root.innerHTML = `
     <div class="modal-overlay" id="editOverlay">
-      <div class="modal" style="max-width:520px;">
-        <h3>Edit Transaction</h3>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" style="max-width:520px;">
+        <h3 id="editModalTitle">Edit Transaction</h3>
         <form id="editForm">
           <div class="form-grid" style="grid-template-columns:1fr 1fr;">
             <div class="field" style="grid-column:span 2;"><label>Description</label><input class="input" name="uraian" value="${escapeHtml(t.uraian)}"></div>
@@ -110,9 +110,9 @@ function openDetailModal(id){
   const ex = t.execution;
   root.innerHTML = `
     <div class="modal-overlay" id="detailOverlay">
-      <div class="modal" style="max-width:560px;">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle" style="max-width:560px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
-          <h3 style="margin:0;">${escapeHtml(t.uraian)}</h3>
+          <h3 id="detailModalTitle" style="margin:0;">${escapeHtml(t.uraian)}</h3>
           ${statusBadge(st)}
         </div>
         <p class="dim" style="font-size:12.5px;margin:6px 0 16px;">${escapeHtml(t.category)} · ${escapeHtml(t.month)} ${t.year} · planned ${fmtIDR(t.planned)}${t.actual!=null?' · actual '+fmtIDR(t.actual):''}</p>

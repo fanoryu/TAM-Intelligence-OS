@@ -156,6 +156,14 @@ select:focus, .input:focus{border-color:var(--interactive);}
 }
 .btn:hover{border-color:var(--text-faint);}
 .btn:focus-visible, .nav-item:focus-visible, .tab:focus-visible, .linklike:focus-visible, .actions-item:focus-visible, .month-chip:focus-visible{outline:2px solid var(--interactive);outline-offset:2px;}
+/* UX-005F (A5) — extend the single focus treatment to borderless/custom controls
+   that reset border+background and so had no visible keyboard focus indicator. Same
+   outline as every other control; no new visual language, no token change. */
+.grid-sort:focus-visible, .nav-group-head:focus-visible, .sidebar-collapse-btn:focus-visible, .nav-hamburger:focus-visible{outline:2px solid var(--interactive);outline-offset:2px;}
+/* UX-005F (A1) — skip-to-content link. Kept in the a11y/focusable tree but visually
+   off-canvas until focused; the first Tab reveals it at the top-left. Token-driven. */
+.skip-link{position:fixed;top:var(--space-2);left:var(--space-2);z-index:1000;background:var(--interactive);color:var(--interactive-ink);padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);font-size:var(--fs-3);font-weight:600;text-decoration:none;transform:translateY(-200%);transition:transform .15s ease;}
+.skip-link:focus{transform:translateY(0);outline:2px solid var(--interactive);outline-offset:2px;}
 .btn-accent{background:var(--interactive);border-color:var(--interactive);color:var(--interactive-ink);font-weight:600;}
 .btn-accent:hover{filter:brightness(1.08);}
 .btn-danger{color:var(--brick);}
