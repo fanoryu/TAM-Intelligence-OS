@@ -47,14 +47,15 @@ screenshots under `assets/screenshots/` in a README **Product Preview** section,
 `assets/social/tam-os-social.png` (the GitHub social-preview **Settings upload remains a manual step**).
 Repository/presentation only — no application CSS/JS change; `css/*` golden master and `tokens.css`
 byte-identical.
-**v2.9.0 Release Preparation is an unmerged implementation candidate** on branch
-`release/v2.9.0-preparation`: it carries the version identity forward (`APP_VERSION` `2.8.6` → `2.9.0`,
-`APP_RELEASE_NAME` "Workspace Experience", `<title>`, in-app release notes, and the release-identity
-verifier guardrails reconciled to the v2.9.0 candidate state), authors the v2.9.0 `CHANGELOG`/`RELEASE_NOTES`
-entries, and swaps the dev artifact to `dist/tam-os-v2.9.0.html` (deterministic; the superseded
-`tam-os-v2.8.6.html` dev artifact is removed per the release dist-swap). `SCHEMA_VERSION` stays **6** (no
-migration); no application CSS/JS/business change (`css/*` and `tokens.css` byte-identical); verifier
-2014 → 2013. **No tag/Release is published — v2.8.6 stays the immutable last-published release.**
+**v2.9.0 Release Preparation is merged to `main` (PR #93) and verified — approved and ready for controlled
+publication.** It carried the version identity forward (`APP_VERSION` `2.8.6` → `2.9.0`, `APP_RELEASE_NAME`
+"Workspace Experience", `<title>`, in-app release notes, and the release-identity verifier guardrails
+reconciled to the v2.9.0 candidate state), authored the v2.9.0 `CHANGELOG`/`RELEASE_NOTES` entries, and
+swapped the dev artifact to `dist/tam-os-v2.9.0.html` (deterministic, SHA `e7470ff5…`, 1,049,018 bytes; the
+superseded `tam-os-v2.8.6.html` dev artifact was removed per the release dist-swap). `SCHEMA_VERSION` stays
+**6** (no migration); no application CSS/JS/business change (`css/*` and `tokens.css` byte-identical);
+verifier 2014 → 2013. **The `v2.9.0` tag and GitHub Release are NOT yet published** (a separate controlled
+publication step) — until then v2.8.6 stays the immutable last-published release marked Latest.
 **UX-006 has not begun.** v2.8.5 remains
 published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
 only — it changed no source commit, runtime behavior, schema, or storage key.
