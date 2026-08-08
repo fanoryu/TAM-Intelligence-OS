@@ -79,17 +79,16 @@ The operational payroll worksheet — period KPIs and the Draft → Review → A
 
 ## Current release
 
-**v2.9.0 — Workspace Experience** · `SCHEMA_VERSION` 6 · **release candidate — prepared, not yet published**
+**v2.9.0 — Workspace Experience** · `SCHEMA_VERSION` 6 · **published, marked Latest**
 
-> **Release state.** v2.9.0 is a **prepared release candidate** on `main`; the source `APP_VERSION` is
-> `2.9.0` and the portable artifact is `dist/tam-os-v2.9.0.html`. Publication (annotated tag `v2.9.0`,
-> GitHub Release, and asset upload) is a **separate controlled step** and has not happened yet — until it
-> does, **v2.8.6 remains the last published release, marked Latest** (annotated tag `v2.8.6` on commit
-> `7ac0092d`; asset `tam-os-v2.8.6.html`, 998,413 bytes, SHA-256
-> `8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`, immutable). **v2.8.5** (asset
-> `tam-intelligence-os-v2.8.5.html`, 965,767 bytes) and **v2.8.4 — Monthly Plan Result Integrity** also
-> remain published and unchanged. See [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a
-> release is cut.
+> **Release state.** v2.9.0 is **published and marked Latest**, from annotated tag `v2.9.0` on commit
+> `598edef0`. Its published asset `tam-os-v2.9.0.html` (1,049,018 bytes, SHA-256
+> `e7470ff5261896b8d7d1f8645294d2abd6a72e9820df94b799973627ddcaf3ea`) is byte-identical to the repository
+> artifact. **v2.8.6** (annotated tag `v2.8.6` on commit `7ac0092d`; asset `tam-os-v2.8.6.html`, 998,413
+> bytes, SHA-256 `8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`) remains published and
+> immutable, and is simply no longer the Latest release; **v2.8.5** (asset `tam-intelligence-os-v2.8.5.html`,
+> 965,767 bytes) and **v2.8.4 — Monthly Plan Result Integrity** also remain published and unchanged. See
+> [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md) for how a release is cut.
 
 A feature/minor release completing the **UX-005** workspace line (Executive Dashboard & Action Center,
 Data Grid Foundation, Design-System Consistency, Global Search, responsive polish, accessibility

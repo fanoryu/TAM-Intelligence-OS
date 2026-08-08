@@ -1,9 +1,11 @@
 # TAM OS v2.9.0 — Workspace Experience
 
 **Release Name:** Workspace Experience
-**Status:** **Release candidate — prepared, not yet published.** `SCHEMA_VERSION` 6. Publication (tag
-`v2.9.0` + GitHub Release + asset `tam-os-v2.9.0.html`) is a separate controlled step. Until then,
-**v2.8.6 remains the last published release** (its tag/Release/asset stay immutable).
+**Status:** v2.9.0 is **published and marked Latest** — annotated tag `v2.9.0` on commit `598edef0`; asset
+`tam-os-v2.9.0.html` (1,049,018 bytes, SHA-256
+`e7470ff5261896b8d7d1f8645294d2abd6a72e9820df94b799973627ddcaf3ea`), byte-identical to the repository
+artifact. `SCHEMA_VERSION` 6. **v2.8.6** remains published and immutable (asset `tam-os-v2.8.6.html`,
+998,413 bytes), and is simply no longer the Latest release.
 
 ## Summary
 A feature/minor release completing the **UX-005** workspace line and the **MAINT-001** repository/branding
