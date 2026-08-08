@@ -81,12 +81,17 @@ const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
 //     Data Grid Foundation controls (.grid-sort/.grid-pager/.grid-count).
 //   UX-005C              539328bf4f3ab26c1bc3ea42b660b7324152b0dc6829129e51b3b19544090752
 //     Design-system consistency: additive .stack-section rhythm helper.
-//   UX-005D (current) — AUTHORIZED golden-master revision. Global Search palette,
-//     presentation only (css/components.css): additive .gsearch-* classes for the
-//     Ctrl/Cmd+K dialog (overlay/box/input/results/group/item/empty). Every value
-//     resolves from an existing token; tokens.css byte-unchanged (pinned below); no
-//     color/radius/type scale changed and no layout outside the palette touched.
-const CSS_GOLDEN_SHA256 = '6a5a31987ad546c5afc16b5cf30dae093017ecdfa03294e5d8bebf57ab1679ad';
+//   UX-005D              6a5a31987ad546c5afc16b5cf30dae093017ecdfa03294e5d8bebf57ab1679ad
+//     Global Search palette, presentation only (css/components.css): additive
+//     .gsearch-* classes for the Ctrl/Cmd+K dialog.
+//   UX-005E (current) — AUTHORIZED golden-master revision. Modal viewport containment,
+//     presentation only (css/components.css): the shared .modal primitive gains
+//     max-height:88vh; overflow-y:auto so it stays inside the viewport and scrolls
+//     internally on short/mobile screens — normalizing the proven people-helper
+//     pattern onto the shared class (fixes the raw-.modal finance Transaction
+//     Execute/Edit/Detail dialogs). No token, color, radius or type scale changed;
+//     tokens.css byte-unchanged (pinned below); no layout outside .modal touched.
+const CSS_GOLDEN_SHA256 = 'be8958b31c56424dc2ec93df4778b694de9b3f244ab37b720eb6753ad27d6f08';
 // UX-005C — tokens.css anti-drift pin. The design tokens are the single source of truth
 // for spacing/type/radius/color; this pin fails loudly if any token VALUE is changed,
 // so a "consistency" edit can never silently move the scale it normalizes onto.
@@ -3652,6 +3657,58 @@ check(crypto.createHash('sha256').update(trimLF(read(path.join(root,'css','token
 // 20. deterministic runtime harness present
 check(fs.existsSync(path.join(root,'tools','verify-global-search-runtime.js')),
   'UX-005D: deterministic runtime harness tools/verify-global-search-runtime.js exists');
+
+// ===== UX-005E — Responsive & Density Polish (modal viewport containment) =====
+// Presentation-only sprint: the single authorized change is that the shared .modal
+// primitive gains viewport containment. These checks pin that outcome, re-assert the
+// frozen density/token/schema invariants around it, and guard against scope creep
+// (arbitrary breakpoints, storage/schema/UX-006 leakage, grid/search coupling).
+console.log('== UX-005E — RESPONSIVE & DENSITY POLISH ==');
+const ux5eComponentsCss = read(path.join(root,'css','components.css'));
+const ux5eModalRule = (ux5eComponentsCss.match(/\.modal\{[^}]*\}/) || [''])[0];
+// 1-2. shared .modal is viewport-contained and internally scrollable.
+check(/max-height:\s*88vh/.test(ux5eModalRule),
+  'UX-005E: shared .modal declares a viewport max-height (88vh)');
+check(/overflow-y:\s*auto/.test(ux5eModalRule),
+  'UX-005E: shared .modal scrolls internally (overflow-y:auto)');
+// 3-4. table density invariant preserved exactly (frozen; UX-005B / UX-002B).
+check(/td\{padding:9px 10px;/.test(ux5eComponentsCss),
+  'UX-005E: td density unchanged (padding:9px 10px)');
+check(/padding:8px 10px;border-bottom:1px solid var\(--border\);/.test(ux5eComponentsCss),
+  'UX-005E: th density unchanged (padding:8px 10px)');
+// 5. tokens.css byte-identical (no density system, no new spacing/type token).
+check(crypto.createHash('sha256').update(trimLF(read(path.join(root,'css','tokens.css'))),'utf8').digest('hex') === TOKENS_CSS_SHA256,
+  'UX-005E: css/tokens.css remains byte-identical (no token drift, no density token)');
+// 6. schema version frozen.
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))),
+  'UX-005E: SCHEMA_VERSION remains 6');
+// 7. no storage/migration introduced by the CSS change (no density preference/persistence).
+check(!/localStorage|tam_[a-z_]+_v[0-9]|migration|density/i.test(ux5eModalRule),
+  'UX-005E: modal containment introduces no storage/migration/density-preference');
+// 8. no UX-006 auth/role/workspace leakage in the touched stylesheet.
+check(!/currentUser|userRole|requireAuth|PersonalWorkspace|ExecutiveWorkspace/.test(ux5eComponentsCss),
+  'UX-005E: no UX-006 role/auth/workspace symbol in components.css');
+// 9. Data Grid architecture untouched — presentation controls still present, State.grid intact.
+check(/\.grid-sort\{/.test(ux5eComponentsCss) && /\.grid-pager\{/.test(ux5eComponentsCss)
+  && /State\.grid/.test(read(path.join(root,'js','finance','transactions.js'))),
+  'UX-005E: Data Grid architecture unchanged (.grid-sort/.grid-pager present; State.grid intact)');
+// 10. Global Search architecture untouched — engine present, palette classes intact.
+check(/\.gsearch-box\{/.test(ux5eComponentsCss) && fs.existsSync(path.join(root,'js','core','global-search.js')),
+  'UX-005E: Global Search architecture unchanged (palette classes + engine present)');
+// 11. no arbitrary new breakpoint — every @media px value is in the accepted UX-005E set.
+const ux5eAllowedBp = new Set([480,640,768,769,900,1050]);
+const ux5eBpFound = new Set();
+[read(path.join(root,'css','shell.css')),ux5eComponentsCss,read(path.join(root,'css','charts.css')),read(path.join(root,'css','base.css')),read(path.join(root,'css','tokens.css'))]
+  .join('\n').replace(/@media[^{]*/g, (m)=>{ const nums=m.match(/(\d+)px/g)||[]; nums.forEach(n=>ux5eBpFound.add(parseInt(n,10))); return m; });
+check([...ux5eBpFound].every(b=>ux5eAllowedBp.has(b)),
+  'UX-005E: no arbitrary new breakpoint introduced (all @media px in {480,640,768,769,900,1050})'
+  + ([...ux5eBpFound].every(b=>ux5eAllowedBp.has(b)) ? '' : ' >> found ' + [...ux5eBpFound].join(',')));
+// 12. CSS golden-master enforcement remains active and green (the modal change is pinned).
+check(cssDigest === CSS_GOLDEN_SHA256 && CSS_GOLDEN_SHA256 === 'be8958b31c56424dc2ec93df4778b694de9b3f244ab37b720eb6753ad27d6f08',
+  'UX-005E: CSS golden-master active and repinned to the modal-containment revision');
+// 13. artifact fidelity enforcement remains active (source -> dist equality asserted above).
+check(trimLF(srcCss) === distCss,
+  'UX-005E: portable artifact CSS fidelity remains enforced (concat(css/*.css) == dist CSS)');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

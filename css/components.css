@@ -181,7 +181,13 @@ td.num, th.num{text-align:right;font-family:var(--sans);font-variant-numeric:tab
 .checkbox-row{display:flex;align-items:center;gap:var(--space-2);}
 
 .modal-overlay{position:fixed;inset:0;background:rgba(6,9,16,.6);display:flex;align-items:center;justify-content:center;z-index:998;padding:var(--space-5);}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-5);max-width:480px;width:100%;}
+/* UX-005E — modal viewport containment. The shared modal primitive stays inside
+   the viewport and scrolls internally when its content is taller than the space
+   available (short/mobile viewports). Normalizes the proven people-helper pattern
+   (max-height:88vh; overflow-y:auto) onto the shared class, so the finance
+   Transaction Execute / Edit / Detail modals — which render the raw .modal — inherit
+   containment instead of each carrying a view-specific workaround. Presentation only. */
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-5);max-width:480px;width:100%;max-height:88vh;overflow-y:auto;}
 .modal h3{font-family:var(--sans);font-weight:650;letter-spacing:-.1px;margin:0 0 var(--space-2) 0;}
 .modal p{color:var(--text-dim);font-size:var(--fs-3);line-height:1.6;}
 .modal-actions{display:flex;gap:var(--space-2);justify-content:flex-end;margin-top:var(--space-4);}
