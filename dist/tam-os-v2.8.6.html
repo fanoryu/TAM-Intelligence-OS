@@ -871,7 +871,18 @@ function debounce(fn, wait){
   return wrapped;
 }
 /* ============================================================
-   DATA GRID FOUNDATION (UX-005B)
+   DATA GRID FOUNDATION (UX-005B)  —  SHARED PLATFORM FOUNDATION (FROZEN)
+   ------------------------------------------------------------
+   FOUNDATION FREEZE (UX-005B finalization): this module is a shared PLATFORM
+   foundation consumed by multiple pages. Keep it small and generic:
+     - New GENERIC grid capabilities (e.g. selection, column visibility, saved
+       views, server pagination, virtualization) require EXPLICIT roadmap approval
+       before they are added here — do not add them casually.
+     - PAGE-SPECIFIC behaviour belongs in the owning page module, never here. This
+       module must stay data-source / role / storage / business agnostic.
+     - Resist turning data-grid.js into a "god object": prefer small composable
+       helpers plus per-page column/feature configuration.
+   See docs/01-roadmap/UX-005-Executive-Personal-Workspace-Architecture.md.
    ------------------------------------------------------------
    A reusable, DECLARATIVE grid layer for TAM OS tables. It is deliberately:
      - data-source agnostic  — it receives an array of ROWS and nothing else. It

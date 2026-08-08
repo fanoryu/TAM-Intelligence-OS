@@ -250,6 +250,20 @@ auditability, and easier deterministic testing — all of which matter for finan
 
 ---
 
+## 15a. Data Grid is a Shared Platform Foundation (FROZEN, UX-005B finalization)
+
+`js/core/data-grid.js` is a **shared platform foundation** consumed by multiple pages,
+not a per-page utility. To keep it durable and reusable:
+
+- **New generic grid capabilities** (selection, bulk actions, column visibility, saved
+  views, density, server pagination, virtualization) require **explicit roadmap
+  approval** before being added — never added casually.
+- **Page-specific behaviour** (row markup, business filtering, action binding, export
+  semantics) belongs in the owning page module, never inside the shared grid.
+- The module stays **data-source / role / storage / business agnostic** and must not
+  grow into a "god object": prefer small composable helpers + per-page column/feature
+  configuration.
+
 ## 16. Data Grid Foundation — Contract
 
 A reusable, presentation-only query layer. **Critical invariant: sorting, pagination, and filtering

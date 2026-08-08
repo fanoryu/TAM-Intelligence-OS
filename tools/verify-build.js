@@ -16,6 +16,13 @@
  *   - Payroll lifecycle + floating menu + module decomposition (as in prior releases).
  *   - v2.6.4 Activity Log + payroll audit timeline + post-blocker feedback present.
  * Usage:  node tools/verify-build.js
+ *
+ * MAINTENANCE NOTE (UX-005B finalization): the current single-file verifier size is
+ * ACCEPTABLE and is not to be refactored now. If verification complexity grows
+ * substantially (roughly ~2500-3000+ checks), evaluate splitting it into
+ * domain-specific verifiers (e.g. finance, HR, grid, security) sharing a common
+ * check() harness. This is a forward-looking guideline only — no split is authorized
+ * by this note. See docs/01-roadmap/MAINT-001-repository-maintenance.md.
  */
 'use strict';
 const fs = require('fs');
@@ -3497,7 +3504,7 @@ check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constant
 check(/function debounce\(fn, wait\)\{/.test(ux5bUtils),
   'UX-005B: a generic debounce helper exists for search');
 // 26. no virtualization / no UX-005C+ / no UX-006
-check(!/virtual|windowing|react-window|clusterize/i.test(ux5bDG),
+check(!/virtual|windowing|react-window|clusterize/i.test(ux5bDGCode),
   'UX-005B: no virtualization is introduced');
 check(!/commandPalette|globalSearch|Ctrl\+K|Cmd\+K/i.test(ux5bDG+ux5bTxn+ux5bEmp),
   'UX-005B: no Global Search / command palette introduced (UX-005C+ not begun)');
