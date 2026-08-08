@@ -46,8 +46,34 @@ Design principles:
   app. The only external network references are the XLSX parser and web fonts (CDN).
 - **Two shippable forms.** A modular development source and a single portable HTML file that behaves
   identically.
-- **Data-safety first.** A 1931-check verifier guards the persisted-data schema, storage keys,
+- **Data-safety first.** A 2001-check verifier guards the persisted-data schema, storage keys,
   migration flags, and build fidelity on every change.
+
+---
+
+## Product Preview
+
+Captured from the frozen UX-005 interface (dark theme) using clearly-labelled fabricated demo data.
+
+### Executive Overview
+The Executive Dashboard — Company Health KPIs, the navigation-only Action Center, and executive trends.
+
+![Executive Dashboard and Action Center](assets/screenshots/dashboard-dark.png)
+
+### Financial Operations
+The Transactions ledger on the shared Data Grid — search, filters, sortable columns, planned vs. actual with variance, status pills, pagination, and CSV export.
+
+![Transactions Data Grid](assets/screenshots/data-grid-transactions.png)
+
+### Global Search
+The `Ctrl/Cmd+K` command palette — navigation-only results grouped across Navigation, Employees, Contracts, and Payroll.
+
+![Global Search command palette](assets/screenshots/global-search.png)
+
+### Payroll Workspace
+The operational payroll worksheet — period KPIs and the Draft → Review → Approve → Post → Execute lifecycle over a read-only worksheet.
+
+![Payroll Workspace](assets/screenshots/payroll-workspace.png)
 
 ---
 
@@ -201,7 +227,7 @@ flowchart LR
   subgraph Build["Build & verify tooling (Node)"]
     ORDER["tools/module-order.js<br/>(load-order source of truth)"]
     BUILD["tools/build-single-file.js"]
-    VERIFY["tools/verify-build.js<br/>(1931 checks)"]
+    VERIFY["tools/verify-build.js<br/>(2001 checks)"]
   end
   DIST["dist/tam-os-v2.8.6.html<br/>(portable single file)"]
 
@@ -317,7 +343,7 @@ Build the portable single file from the modular source:
 node tools/build-single-file.js
 ```
 
-Verify (1931 checks):
+Verify (2001 checks):
 
 ```bash
 node tools/verify-build.js
@@ -360,7 +386,7 @@ Releases are tag-driven and guarded end-to-end (see [`docs/RELEASE-PROCESS.md`](
 
 ```mermaid
 flowchart LR
-  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (1931)"]
+  DEV["Edit modular source"] --> B["build-single-file.js"] --> V["verify-build.js (2001)"]
   V --> C["commit source + dist"] --> T["push tag vX.Y.Z"]
   T --> GA["GitHub Actions: Release"]
   GA --> GATE{"tag matches<br/>v-APP_VERSION?"}

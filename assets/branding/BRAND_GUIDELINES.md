@@ -17,6 +17,7 @@ Markdown file is a convenience summary for engineers and tooling; where the two 
 | `tam-os-logo-dark-navy.png` | Wordmark, white | dark navy backgrounds |
 | `tam-os-logo-black-background.png` | Wordmark, white | black backgrounds |
 | `tam-os-logo-secondary.png` | **Secondary** monogram (TAM mark) | favicon, app icon, avatar, watermark, compact navigation |
+| `tam-os-favicon-64.png` | Browser-tab favicon, **resized-only** from the secondary monogram (64×64) | inline `data:` URI in `index.html` (portable-safe); provenance copy |
 
 Default signature for websites, presentations, reports, GitHub, and formal
 communication is the **primary** wordmark. Where space is limited, switch to the

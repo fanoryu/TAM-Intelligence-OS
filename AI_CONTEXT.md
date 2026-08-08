@@ -38,7 +38,17 @@ change, no new breakpoint, no UX-006.
 `main @ fd6cf536`; verifier 2001; 18 runtime harnesses / 1552 checks; artifact SHA `0026af50…`; CSS pin
 `5528908b…`; tokens `60dde600…`). The review found the platform coherent and stable — no freeze-blocking
 defect — with residual work (MAINT-001 follow-up, the four pre-existing CodeQL alerts, and UX-006 scope)
-correctly deferred. **UX-006 has not begun.** v2.8.5 remains
+correctly deferred.
+**MAINT-001 Follow-Up (branding integration) is an unmerged implementation candidate** on branch
+`chore/maint-001-branding-integration`: a browser-tab favicon (inline PNG `data:` URI derived by resize
+from the official `assets/branding/tam-os-logo-secondary.png`, keeping the portable artifact
+self-contained), four true 1920×1080 dark-theme UI screenshots under `assets/screenshots/` wired into a
+README **Product Preview** section, and a 1280×640 `assets/social/tam-os-social.png` for the GitHub
+repository social preview (Settings upload is a separate manual post-merge step). Repository/presentation
+only — no `APP_VERSION` bump (stays 2.8.6), no `SCHEMA_VERSION`/storage change, no application CSS/JS
+change (favicon is an `index.html` `<link>` only; `css/*` golden master and `tokens.css` byte-identical);
+verifier 2001 → 2014 (additive branding checks). The dev artifact regenerates to embed the favicon
+(SHA `2f07c84e…`, 1,047,057 bytes); published v2.8.6 asset stays immutable. **UX-006 has not begun.** v2.8.5 remains
 published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
 only — it changed no source commit, runtime behavior, schema, or storage key.
 

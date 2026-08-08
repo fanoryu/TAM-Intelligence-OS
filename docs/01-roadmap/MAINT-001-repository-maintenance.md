@@ -139,6 +139,23 @@ or substitute the logo — and introduces **no backend work**. Any runtime wirin
 favicon `<link>`) is deferred to its own authorized task, with the portable single-file
 build's standalone behaviour considered at that time.
 
+### Follow-up status (implementation candidate — PR open, not yet merged)
+The three follow-ups above are implemented on branch `chore/maint-001-branding-integration`
+(after the UX-005 Platform Freeze):
+- **Favicon** — derived by resize only from the official `assets/branding/tam-os-logo-secondary.png`
+  (64×64), embedded in `index.html` as an inline PNG `data:` URI so the portable artifact stays
+  self-contained (no external request); a provenance copy is `assets/branding/tam-os-favicon-64.png`.
+- **Screenshots** — four true 1920×1080 dark-theme captures of the frozen UI (Executive Dashboard,
+  Transactions Data Grid, Global Search, Payroll Workspace) under `assets/screenshots/`, using a
+  clearly-fabricated demo dataset; added to a README **Product Preview** section.
+- **Social preview** — `assets/social/tam-os-social.png` (1280×640), composed from the official
+  on-navy wordmark; the GitHub repository Social-Preview **Settings** upload is a separate manual step
+  after merge (committing the file does not configure it).
+
+No `APP_VERSION` bump, no `SCHEMA_VERSION`/storage change, no application CSS/JS change (favicon is an
+`index.html` `<link>` only); `css/*` golden master and `tokens.css` are byte-identical. Mark **complete**
+only after the controlled merge.
+
 ### Branding principle (persisted)
 The approved **TAM OS Brand Guidelines** and the supplied official assets are the canonical
 visual identity. **Primary:** Full-Color logo. **Secondary / variants:** Flat Blue, White,
