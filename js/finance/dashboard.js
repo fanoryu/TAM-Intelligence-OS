@@ -44,7 +44,7 @@ function renderDashboard(main){
       </div>
     </div>
 
-    ${(()=>{ const es=execStats(key); return `<div class="grid grid-4" style="margin-top:14px;">
+    ${(()=>{ const es=execStats(key); return `<div class="grid grid-4" style="margin-top:var(--space-4);">
       <div class="card stat-card"><div class="stat-label">Executed</div><div class="stat-value">${fmtIDRShort(es.executed)}</div><div class="stat-sub dim">of ${fmtIDR(es.planned)} planned</div></div>
       <div class="card stat-card"><div class="stat-label">Remaining</div><div class="stat-value" style="color:${es.remaining>=0?'var(--green)':'var(--brick)'}">${fmtIDRShort(es.remaining)}</div><div class="stat-sub dim">planned − executed</div></div>
       <div class="card stat-card"><div class="stat-label">Execution Rate</div><div class="stat-value">${es.rate.toFixed(0)}%</div><div class="bar-track" style="margin-top:8px;"><div class="bar-fill" style="width:${Math.min(100,es.rate)}%;background:var(--accent);"></div></div></div>
@@ -58,7 +58,7 @@ function renderDashboard(main){
       </div>
     </div>`; })()}
 
-    <div class="grid grid-2" style="margin-top:14px;">
+    <div class="grid grid-2" style="margin-top:var(--space-4);">
       <div class="card">
         <h3>Planned vs. Actual by Category</h3>
         <div class="chart-wrap" id="catChart"></div>
@@ -71,7 +71,7 @@ function renderDashboard(main){
       </div>
     </div>
 
-    <div class="grid grid-2" style="margin-top:14px;">
+    <div class="grid grid-2" style="margin-top:var(--space-4);">
       <div class="card">
         <h3>Largest Expense Categories</h3>
         <div style="display:flex;flex-direction:column;gap:12px;">
@@ -100,7 +100,7 @@ function renderDashboard(main){
       </div>
     </div>
 
-    <div class="grid grid-2" style="margin-top:14px;">
+    <div class="grid grid-2" style="margin-top:var(--space-4);">
       <div class="card">
         <h3>Unplanned Expenses<span class="tag">no matching plan line</span></h3>
         <div class="table-wrap">

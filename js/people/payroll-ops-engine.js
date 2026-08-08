@@ -210,7 +210,7 @@ function payrollIntegrityNoticeHTML(pp){
   const s = payrollHistoricalSnapshot(pp);
   if(!s || !(s.integrityStatus==='mismatch' || s.integrityStatus==='no-transaction')) return '';
   const rows = (s.differences||[]).map(d=>`<div>${escapeHtml(d.label)}: <b class="mono">${fmtIDR(d.a)}</b>${d.b!=null?` vs <b class="mono">${fmtIDR(d.b)}</b> <span class="faint">(difference ${fmtIDR(Math.abs(num(d.a)-num(d.b)))})</span>`:''}</div>`).join('');
-  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--brick);">
+  return `<div class="card" style="margin-bottom:var(--space-4);border-left:3px solid var(--brick);">
     <h3 style="color:var(--brick);">Payroll snapshot mismatch</h3>
     <div style="font-size:13px;line-height:1.8;">${rows}</div>
     <p class="hint" style="margin-top:8px;">The posted transaction is the committed record and remains unchanged. The historical figures shown above are read from the strongest available committed evidence (${escapeHtml(s.sourceLabel)}); the payroll plan's current figures differ. Nothing was altered.</p>
@@ -760,7 +760,7 @@ function payrollDriftBannerHTML(plans){
   const item = x=>`<div class="insight-item warn"><b>${escapeHtml(x.pp.employeeName||'—')}</b> — ${escapeHtml(x.pp.month)} ${x.pp.year}${x.drift.addedAmount?`: +${fmtIDR(x.drift.addedAmount)} approved overtime`:''} <span class="faint">(${escapeHtml(payrollStage(x.pp))})</span></div>`;
   let html='';
   if(uncommitted.length){
-    html += `<div class="card ot-drift-banner" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+    html += `<div class="card ot-drift-banner" style="margin-bottom:var(--space-4);border-left:3px solid var(--accent);">
       <h3>Overtime approved — payroll not yet updated <span class="tag">${uncommitted.length}</span></h3>
       <p style="margin:4px 0 8px;">${OT_DRIFT_MSG_UNCOMMITTED}</p>
       <div class="insight-list">${uncommitted.map(item).join('')}</div>
@@ -781,7 +781,7 @@ function payrollDriftBannerHTML(plans){
           : `<button class="btn btn-sm btn-accent" data-supp-gen="${x.pp.id}">Generate Supplemental (${fmtIDR(amt)})</button>`;
         return `<div class="insight-item warn"><b>${escapeHtml(x.pp.employeeName||'—')}</b> — ${escapeHtml(x.pp.month)} ${x.pp.year}: +${fmtIDR(amt)} unpaid overtime <span style="margin-left:8px;">${action}</span></div>`;
       }).join('');
-      html += `<div class="card ot-drift-banner" style="margin-bottom:14px;border-left:3px solid var(--brick);">
+      html += `<div class="card ot-drift-banner" style="margin-bottom:var(--space-4);border-left:3px solid var(--brick);">
         <h3>Approved overtime added after payroll was posted <span class="tag">${actionable.length}</span></h3>
         <p style="margin:4px 0 2px;">Approved overtime was added after payroll was posted. The original payroll remains unchanged.</p>
         <p style="margin:0 0 8px;"><b>Settle it with a supplemental payment — the base payroll is never modified.</b></p>

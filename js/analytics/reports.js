@@ -11,7 +11,7 @@ function renderReports(main){
       <div class="head-controls">${monthSelectHTML('repMonth', key, false)}<button class="btn btn-accent" id="dlReport">Download Report (.md)</button></div>
     </div>
     <div class="card" id="reportBody"></div>
-    <div class="card" style="margin-top:14px;">
+    <div class="card" style="margin-top:var(--space-4);">
       <h3>People &amp; Contracts Reports</h3>
       <div class="head-controls" style="margin-bottom:12px;">
         <select class="input" id="hrRepSel">${hrReportDefs().map(d=>`<option value="${d.id}" ${State.hrReportSel===d.id?'selected':''}>${d.label}</option>`).join('')}</select>
@@ -19,7 +19,7 @@ function renderReports(main){
       </div>
       <div id="hrRepBody"></div>
     </div>
-    <div class="card" style="margin-top:14px;">
+    <div class="card" style="margin-top:var(--space-4);">
       <h3>Monthly Plan Summary — ${escapeHtml(monthLabel(m))}</h3>
       <div id="planSummaryBody"></div>
     </div>

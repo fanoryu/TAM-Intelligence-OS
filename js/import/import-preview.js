@@ -81,7 +81,7 @@ function renderImportPreview(el, main){
 
   el.innerHTML = `
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:var(--space-4);">
         <h3 style="margin:0;">Review Import <span class="tag">${escapeHtml(imp.fileName)}</span></h3>
         <div class="tabs" style="border:none;margin:0;">
           <button class="tab ${imp.mode==='add'?'active':''}" data-mode="add">Add New Data Only</button>
@@ -98,7 +98,7 @@ function renderImportPreview(el, main){
         <div class="card stat-card"><div class="stat-label">New Rows Ready</div><div class="stat-value" style="color:var(--green)">${counts.selectedRows}</div></div>
       </div>
 
-      ${imp.mode==='add' ? `<div class="small-btn-row" style="margin-bottom:14px;">
+      ${imp.mode==='add' ? `<div class="small-btn-row stack-section">
         <button class="btn btn-sm" id="selAllNew">Select All New Rows</button>
         <button class="btn btn-sm" id="selNone">Unselect All</button>
         <button class="btn btn-sm" id="selSkipExisting">Skip Existing Months</button>
@@ -200,7 +200,7 @@ function renderUpdateDiff(tabBody, imp, active, el, main){
   const added = diff.rows.filter(r=>r.status==='new').length;
   const unchanged = diff.rows.filter(r=>r.status==='unchanged').length;
   tabBody.innerHTML = `
-    <div class="insight-item" style="margin-bottom:14px;">
+    <div class="insight-item stack-section">
       Comparing uploaded data to the version currently stored for ${escapeHtml(active.batch.monthName)} ${active.batch.year}:
       <b>${changed}</b> changed, <b>${added}</b> new, <b>${unchanged}</b> unchanged, <b>${diff.removed.length}</b> would be removed.
     </div>

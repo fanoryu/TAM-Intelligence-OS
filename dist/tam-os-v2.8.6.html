@@ -345,6 +345,10 @@ select:focus, .input:focus{border-color:var(--interactive);}
    the track already blew out. Letting grid children shrink restores containment
    and hands scrolling back to the inner .table-wrap where it belongs. */
 .grid > *, .two-col > *{min-width:0;}
+/* UX-005C — canonical vertical section rhythm. Replaces the off-grid inline
+   `margin-bottom:14px` drift (was between --space-3 and --space-4) with one tokened
+   separator for stacked sections/cards/blocks. Presentation only. */
+.stack-section{margin-bottom:var(--space-4);}
 
 .card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:var(--space-4);}
 .card h3{font-family:var(--sans);font-weight:650;font-size:var(--fs-4);letter-spacing:-.1px;margin:0 0 var(--space-3) 0;color:var(--text);}
@@ -2496,9 +2500,9 @@ const NAV_GROUPS = [
   ]},
   {id:'system', label:'System', items:[
     {id:'settings', label:'Settings', ic:'⚙'},
-    {id:'activity', label:'Activity Log', ic:'▤'},
+    {id:'activity', label:'Activity Log', ic:'☰'},
     {id:'about', label:'About', ic:'ℹ'},
-    {id:'releasenotes', label:'Release Notes', ic:'▤'},
+    {id:'releasenotes', label:'Release Notes', ic:'✎'},
   ]},
 ];
 const PAGE_TITLES = Object.fromEntries(NAV_GROUPS.flatMap(g=>g.items).map(i=>[i.id,i.label]));
@@ -3108,7 +3112,7 @@ function renderDashboard(main){
       </div>
     </div>
 
-    ${(()=>{ const es=execStats(key); return `<div class="grid grid-4" style="margin-top:14px;">
+    ${(()=>{ const es=execStats(key); return `<div class="grid grid-4" style="margin-top:var(--space-4);">
       <div class="card stat-card"><div class="stat-label">Executed</div><div class="stat-value">${fmtIDRShort(es.executed)}</div><div class="stat-sub dim">of ${fmtIDR(es.planned)} planned</div></div>
       <div class="card stat-card"><div class="stat-label">Remaining</div><div class="stat-value" style="color:${es.remaining>=0?'var(--green)':'var(--brick)'}">${fmtIDRShort(es.remaining)}</div><div class="stat-sub dim">planned − executed</div></div>
       <div class="card stat-card"><div class="stat-label">Execution Rate</div><div class="stat-value">${es.rate.toFixed(0)}%</div><div class="bar-track" style="margin-top:8px;"><div class="bar-fill" style="width:${Math.min(100,es.rate)}%;background:var(--accent);"></div></div></div>
@@ -3122,7 +3126,7 @@ function renderDashboard(main){
       </div>
     </div>`; })()}
 
-    <div class="grid grid-2" style="margin-top:14px;">
+    <div class="grid grid-2" style="margin-top:var(--space-4);">
       <div class="card">
         <h3>Planned vs. Actual by Category</h3>
         <div class="chart-wrap" id="catChart"></div>
@@ -3135,7 +3139,7 @@ function renderDashboard(main){
       </div>
     </div>
 
-    <div class="grid grid-2" style="margin-top:14px;">
+    <div class="grid grid-2" style="margin-top:var(--space-4);">
       <div class="card">
         <h3>Largest Expense Categories</h3>
         <div style="display:flex;flex-direction:column;gap:12px;">
@@ -3164,7 +3168,7 @@ function renderDashboard(main){
       </div>
     </div>
 
-    <div class="grid grid-2" style="margin-top:14px;">
+    <div class="grid grid-2" style="margin-top:var(--space-4);">
       <div class="card">
         <h3>Unplanned Expenses<span class="tag">no matching plan line</span></h3>
         <div class="table-wrap">
@@ -3302,7 +3306,7 @@ function renderExecutionCenter(main){
   // v2.7.1 — focus card: shown when a deep-linked transaction exists but is not in the active
   // tab (e.g. executed on a prior day, in no pending bucket), so it is always reachable.
   const focusInActive = focusTxn && activeRows.some(t=>t.id===focusId);
-  const focusCard = (focusTxn && !focusInActive) ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+  const focusCard = (focusTxn && !focusInActive) ? `<div class="card" style="margin-bottom:var(--space-4);border-left:3px solid var(--accent);">
       <h3>Linked transaction</h3>
       <div style="font-size:13px;line-height:1.8;">
         <div><button class="linklike" data-open-detail="${focusTxn.id}"><b>${escapeHtml(focusTxn.uraian)}</b></button> · ${statusBadge(statusOf(focusTxn))}</div>
@@ -3310,18 +3314,18 @@ function renderExecutionCenter(main){
       </div>
       <div class="small-btn-row" style="margin-top:8px;"><button class="btn btn-sm" data-open-detail="${focusTxn.id}">Open Detail</button><button class="btn btn-sm" id="execClearFocus">Clear</button></div>
     </div>` : '';
-  const focusMissing = (focusId && !focusTxn) ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--brick);"><h3 style="color:var(--brick);">Linked transaction not found</h3><p class="hint">It may have been removed. Showing the normal Execution Center.</p></div>` : '';
+  const focusMissing = (focusId && !focusTxn) ? `<div class="card" style="margin-bottom:var(--space-4);border-left:3px solid var(--brick);"><h3 style="color:var(--brick);">Linked transaction not found</h3><p class="hint">It may have been removed. Showing the normal Execution Center.</p></div>` : '';
 
   main.innerHTML = `
     <div class="page-head"><div><h1>Execution Center</h1><p class="desc">Process planned transactions and record real payments.</p></div></div>
     ${focusMissing}${focusCard}
-    <div class="grid grid-3" style="margin-bottom:14px;">
+    <div class="grid grid-3 stack-section">
       <div class="card stat-card"><div class="stat-label">Pending Execution</div><div class="stat-value">${b.pendingCount}</div><div class="stat-sub dim">unscheduled · today · upcoming · overdue · partial</div></div>
       <div class="card stat-card"><div class="stat-label">Overdue</div><div class="stat-value" style="color:${b.overdue.length?'var(--brick)':'inherit'}">${b.overdue.length}</div><div class="stat-sub dim">past planned date, not executed</div></div>
       <div class="card stat-card"><div class="stat-label">Completed Today</div><div class="stat-value" style="color:var(--green)">${b.completedToday.length}</div><div class="stat-sub dim">${fmtIDR(b.completedToday.reduce((s,t)=>s+(t.actual||0),0))}</div></div>
     </div>
     <div class="card">
-      <div class="chart-range-chips" role="group" aria-label="Execution views" style="margin-bottom:14px;">
+      <div class="chart-range-chips stack-section" role="group" aria-label="Execution views">
         ${views.map(([k,l,n])=>`<button type="button" class="btn btn-sm ${State.execFilter===k?'btn-accent':''}" data-execview="${k}">${l} (${n})</button>`).join('')}
       </div>
       <div class="table-wrap" style="max-height:560px;overflow-y:auto;">
@@ -3516,7 +3520,7 @@ function renderExecuteModal(){
     <div class="modal-overlay" id="execOverlay">
       <div class="modal" style="max-width:540px;">
         <h3>Execute Transaction</h3>
-        <p class="dim" style="font-size:12.5px;margin:0 0 14px;">${escapeHtml(t.uraian)} · ${escapeHtml(t.category)} · planned ${fmtIDR(t.planned)}</p>
+        <p class="dim" style="font-size:12.5px;margin:0 0 var(--space-4);">${escapeHtml(t.uraian)} · ${escapeHtml(t.category)} · planned ${fmtIDR(t.planned)}</p>
         <form id="execForm">
           <div class="form-grid" style="grid-template-columns:1fr 1fr;">
             <div class="field"><label>Execution Date</label><input class="input" type="date" name="executionDate" value="${escapeHtml(t.txnDate||today)}"></div>
@@ -3636,7 +3640,7 @@ function openDetailModal(id){
           </div>
         </div>`:''}
 
-        <div class="card" style="margin-top:14px;padding:14px 16px;">
+        <div class="card" style="margin-top:var(--space-4);padding:14px 16px;">
           <h4 style="margin:0 0 8px;font-size:12.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-faint);">History</h4>
           <div class="hist-list">
             ${(t.history||[]).map(h=>`<div class="hist-row">
@@ -3673,7 +3677,7 @@ function payrollLinkCardHTML(t){
     <div class="divider" style="margin:10px 0;"></div>
     <div style="font-size:12.5px;">Overtime component: <b class="mono" style="color:var(--accent);">${fmtIDR(t.overtimeAmount!=null?t.overtimeAmount:otSum)}</b> <span class="faint">(inside the planned payroll total, ${otRecs.length} record(s))</span></div>
     ${otRecs.length?`<div class="table-wrap" style="margin-top:6px;"><table><thead><tr><th>Date</th><th class="num">Hours</th><th class="num">Rate</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>${otRecs.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td class="num">${fmtIDRfull(o.hourlyRate)}</td><td class="num">${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}</td><td>${hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('')}</tbody></table></div>`:''}` : '';
-  return `<div class="card" style="margin:0 0 14px;padding:14px 16px;border-left:3px solid var(--accent);">
+  return `<div class="card" style="margin:0 0 var(--space-4);padding:14px 16px;border-left:3px solid var(--accent);">
     <h4 style="margin:0 0 8px;font-size:12.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-faint);">Payroll Link · Source: ${escapeHtml(t.source==='payroll'?'Payroll Planning':t.source||'—')}</h4>
     <div style="font-size:12.5px;line-height:1.9;">
       <div>Employee: <b>${escapeHtml(emp?emp.fullName:(meta.employeeName||'—'))}</b></div>
@@ -3809,7 +3813,7 @@ function renderTransactions(main){
       + `<div class="card"><div class="empty">
           <div class="big">≡</div>
           <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No transactions yet</div>
-          <div style="margin-bottom:14px;">Create a monthly plan from payroll and recurring expenses, or import a legacy Excel workbook.</div>
+          <div class="stack-section">Create a monthly plan from payroll and recurring expenses, or import a legacy Excel workbook.</div>
           <div class="small-btn-row" style="justify-content:center;flex-wrap:wrap;">
             <button class="btn btn-accent" data-empty-nav="monthlyplan">Create Monthly Plan</button>
             <button class="btn" data-empty-nav="payroll">Generate Payroll</button>
@@ -4060,7 +4064,7 @@ function renderUpload(el, main){
       <h3>Upload File — Migration &amp; Historical Data</h3>
       <div class="insight-item" style="display:block;margin-bottom:12px;">Smart Import is intended for initial setup and historical migration. Monthly payroll operations should be performed through <b>Payroll Planning</b>.</div>
       <p class="hint" style="margin-bottom:10px;">Accepts TAM's standard "Rencana Penggunaan Dana" / "Realisasi" Excel workbook (auto-detected by sheet name), or a plain CSV/XLSX table with columns like Uraian, Kategori, Vol, Satuan, Harga Satuan, Jumlah, Realisasi.</p>
-      <div class="field" style="max-width:420px;margin-bottom:14px;"><label>Import Purpose</label>
+      <div class="field" style="max-width:420px;margin-bottom:var(--space-4);"><label>Import Purpose</label>
         <select class="input" id="importModeSel">
           <option value="setup" ${State.importPurpose==='setup'?'selected':''}>Initial Company Setup</option>
           <option value="historical" ${State.importPurpose==='historical'?'selected':''}>Historical Payroll Migration</option>
@@ -4726,7 +4730,7 @@ function renderImportPreview(el, main){
 
   el.innerHTML = `
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:var(--space-4);">
         <h3 style="margin:0;">Review Import <span class="tag">${escapeHtml(imp.fileName)}</span></h3>
         <div class="tabs" style="border:none;margin:0;">
           <button class="tab ${imp.mode==='add'?'active':''}" data-mode="add">Add New Data Only</button>
@@ -4743,7 +4747,7 @@ function renderImportPreview(el, main){
         <div class="card stat-card"><div class="stat-label">New Rows Ready</div><div class="stat-value" style="color:var(--green)">${counts.selectedRows}</div></div>
       </div>
 
-      ${imp.mode==='add' ? `<div class="small-btn-row" style="margin-bottom:14px;">
+      ${imp.mode==='add' ? `<div class="small-btn-row stack-section">
         <button class="btn btn-sm" id="selAllNew">Select All New Rows</button>
         <button class="btn btn-sm" id="selNone">Unselect All</button>
         <button class="btn btn-sm" id="selSkipExisting">Skip Existing Months</button>
@@ -4845,7 +4849,7 @@ function renderUpdateDiff(tabBody, imp, active, el, main){
   const added = diff.rows.filter(r=>r.status==='new').length;
   const unchanged = diff.rows.filter(r=>r.status==='unchanged').length;
   tabBody.innerHTML = `
-    <div class="insight-item" style="margin-bottom:14px;">
+    <div class="insight-item stack-section">
       Comparing uploaded data to the version currently stored for ${escapeHtml(active.batch.monthName)} ${active.batch.year}:
       <b>${changed}</b> changed, <b>${added}</b> new, <b>${unchanged}</b> unchanged, <b>${diff.removed.length}</b> would be removed.
     </div>
@@ -4917,12 +4921,12 @@ function renderPlanVsActual(main){
       <div><h1>Planned vs. Actual</h1><p class="desc">Category and line-item level budget comparison.</p></div>
       <div class="head-controls">${monthSelectHTML('pvaMonth', key, false)}</div>
     </div>
-    <div class="grid grid-3" style="margin-bottom:14px;">
+    <div class="grid grid-3 stack-section">
       <div class="card stat-card"><div class="stat-label">Total Planned</div><div class="stat-value">${fmtIDRShort(tot.planned)}</div></div>
       <div class="card stat-card"><div class="stat-label">Total Actual</div><div class="stat-value">${fmtIDRShort(tot.actual)}</div></div>
       <div class="card stat-card"><div class="stat-label">Variance</div><div class="stat-value" style="color:${tot.variance>=0?'var(--green)':'var(--brick)'}">${fmtIDRShort(tot.variance)}</div></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>By Category</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Category</th><th class="num">Planned</th><th class="num">Actual</th><th class="num">Variance</th><th class="num">% of Plan Used</th></tr></thead>
@@ -4974,13 +4978,13 @@ function renderCompare(main){
 
   main.innerHTML = `
     <div class="page-head"><div><h1>Compare Months</h1><p class="desc">Select months to compare totals, categories, and trend.</p></div></div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Select Months</h3>
       <div class="month-strip">
         ${months.map(m=>`<div class="month-chip ${State.compareMonths.includes(m.key)?'active':''}" data-m="${m.key}">${monthLabel(m)}</div>`).join('')}
       </div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
         <h3 style="margin:0;">Total Spend Trend</h3>
         <div class="chart-range-chips" style="margin-bottom:0;" role="group" aria-label="Trend date range">
@@ -5197,7 +5201,7 @@ function renderTrends(main){
   main.innerHTML = `
     <div class="page-head"><div><h1>Monthly Trends</h1><p class="desc">Chronological view from ${escapeHtml(monthLabel(allMonths[0]))} to ${escapeHtml(monthLabel(allMonths[allMonths.length-1]))}.</p></div></div>
 
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr 1fr;align-items:end;">
         <div class="field"><label>Date Range</label>
           <select class="input" id="trRange">
@@ -5219,25 +5223,25 @@ function renderTrends(main){
       </div>
     </div>
 
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       <div class="card stat-card"><div class="stat-label">Avg Monthly Planned</div><div class="stat-value">${fmtIDRShort(avgPlanned)}</div></div>
       <div class="card stat-card"><div class="stat-label">Avg Monthly Actual</div><div class="stat-value">${avgActual!==null?fmtIDRShort(avgActual):'<span class="faint">no data</span>'}</div></div>
       <div class="card stat-card"><div class="stat-label">Highest-Spending Month</div><div class="stat-value" style="font-size:15px;">${highest?escapeHtml(monthLabel(highest.m)):'—'}</div><div class="stat-sub dim">${highest?fmtIDR(highest.tot.actual):''}</div></div>
       <div class="card stat-card"><div class="stat-label">Lowest-Spending Month</div><div class="stat-value" style="font-size:15px;">${lowest?escapeHtml(monthLabel(lowest.m)):'—'}</div><div class="stat-sub dim">${lowest?fmtIDR(lowest.tot.actual):''}</div></div>
     </div>
-    <div class="grid grid-3" style="margin-bottom:14px;">
+    <div class="grid grid-3 stack-section">
       <div class="card stat-card"><div class="stat-label">Largest Over-Budget Month</div><div class="stat-value" style="font-size:15px;color:var(--brick);">${largestOver&&largestOver.tot.variance<0?escapeHtml(monthLabel(largestOver.m)):'—'}</div><div class="stat-sub dim">${largestOver&&largestOver.tot.variance<0?fmtIDR(largestOver.tot.variance):'none over budget'}</div></div>
       <div class="card stat-card"><div class="stat-label">Largest Saving Month</div><div class="stat-value" style="font-size:15px;color:var(--green);">${largestSaving&&largestSaving.tot.variance>0?escapeHtml(monthLabel(largestSaving.m)):'—'}</div><div class="stat-sub dim">${largestSaving&&largestSaving.tot.variance>0?fmtIDR(largestSaving.tot.variance):'none under budget'}</div></div>
       <div class="card stat-card"><div class="stat-label">Total Actual Spending (recorded)</div><div class="stat-value">${fmtIDRShort(totalSpending)}</div><div class="stat-sub dim">${withData.length} of ${months.length} months have recorded actuals</div></div>
     </div>
 
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">Planned vs. Actual Trend</h3><button class="btn btn-sm" id="exportTrendCsv">Export Summary CSV</button></div>
       <p class="hint">Gaps in the actual line mean no actual data was recorded for that month — not zero spending. Click a point to open that month in Finance Overview.</p>
       <div class="chart-wrap tall" id="trPlanActual"></div>
     </div>
 
-    <div class="grid grid-2" style="margin-bottom:14px;">
+    <div class="grid grid-2 stack-section">
       <div class="card">
         <h3>Budget Variance Trend</h3>
         <p class="hint">Positive = under budget. Negative = over budget.</p>
@@ -5258,7 +5262,7 @@ function renderTrends(main){
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">Category Trend — ${escapeHtml(f.category)}</h3><button class="btn btn-sm" id="exportCatCsv">Export Category CSV</button></div>
       <div class="chart-wrap" id="trCategoryChart"></div>
       <div id="catTrendStats"></div>
@@ -5378,7 +5382,7 @@ function renderTrends(main){
           <div class="chart-mini-stat"><div class="lbl">Latest Change</div><div class="val" style="color:${latestChange==null?'inherit':latestChange>0?'var(--brick)':'var(--green)'}">${latestChange==null?'—':(latestChange>0?'+':'')+fmtIDRShort(latestChange)}</div></div>
         </div>`;
       } else {
-        catStatsEl.innerHTML = `<div class="empty" style="padding:14px 0;">No recorded actuals for ${escapeHtml(f.category)} in this range.</div>`;
+        catStatsEl.innerHTML = `<div class="empty" style="padding:var(--space-4) 0;">No recorded actuals for ${escapeHtml(f.category)} in this range.</div>`;
       }
     }
   }
@@ -5539,7 +5543,7 @@ function actionCenterCardHTML(items){
   const all = items || [];
   const hiddenCount = Math.max(0, all.length - EXEC_ALERT_VISIBLE);
   const rows = all.map((a,i)=>actionCenterRowHTML(a, i >= EXEC_ALERT_VISIBLE)).join('');
-  return `<div class="card" style="margin-bottom:14px;">
+  return `<div class="card stack-section">
     <h3>Action Center<span class="tag">${all.length} item${all.length===1?'':'s'}</span></h3>
     <div class="insight-list">${all.length ? rows : '<div class="empty">No items need attention this period.</div>'}</div>
     ${hiddenCount ? `<button class="btn btn-sm" id="actionCenterToggle" style="margin-top:var(--space-2);">Show all ${all.length} items</button>` : ''}
@@ -5568,7 +5572,7 @@ function renderExecutiveDashboard(main){
       + `<div class="card"><div class="empty">
           <div class="big">◆</div>
           <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No financial data yet</div>
-          <div style="margin-bottom:14px;">This is a clean install. Add employees and contracts, generate payroll, and create a monthly plan — or import a legacy Excel file. Financial figures appear here once real data exists (nothing is shown as a zero-based conclusion).</div>
+          <div class="stack-section">This is a clean install. Add employees and contracts, generate payroll, and create a monthly plan — or import a legacy Excel file. Financial figures appear here once real data exists (nothing is shown as a zero-based conclusion).</div>
           <div class="small-btn-row" style="justify-content:center;flex-wrap:wrap;">
             <button class="btn btn-accent" data-empty-nav="employees">Add Employees</button>
             <button class="btn" data-empty-nav="add">Import Legacy Excel</button>
@@ -5614,7 +5618,7 @@ function renderExecutiveDashboard(main){
     ${onboardingChecklistHTML()}
 
     <h2 class="section-title" style="margin-top:0;">Company Health</h2>
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       ${(()=>{
         // MERGED (Phase 3): Current Month Planned + Current Month Actual + Budget Used.
         // All three values, both prior-month deltas and the incomplete flag survive —
@@ -5642,7 +5646,7 @@ function renderExecutiveDashboard(main){
       ${payrollCycleTileHTML(key)}
     </div>
 
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       ${hrStatStripHTML(key)}
       ${payrollStripHTML(key)}
       ${overtimeStripHTML(key)}
@@ -5708,8 +5712,8 @@ function renderCashFlow(main){
   });
   main.innerHTML = `
     <div class="page-head"><div><h1>Cash Flow</h1><p class="desc">Recorded income versus actual expenses, month by month.</p></div></div>
-    ${!hasAnyIncome ? `<div class="insight-item warn" style="margin-bottom:14px;">No income transactions have been recorded in the system yet, so cash-flow analysis is incomplete — figures below reflect expenses only. Add income transactions (Add / Upload → Manual Entry → Type: Income) to see net cash flow.</div>` : ''}
-    ${(State.settings.openingCashBalance===null||State.settings.openingCashBalance===undefined) ? `<div class="insight-item" style="margin-bottom:14px;">No opening cash balance is set, so this page shows net movement only, not a cash position. Add one in Settings to see a running cash position.</div>` : ''}
+    ${!hasAnyIncome ? `<div class="insight-item warn stack-section">No income transactions have been recorded in the system yet, so cash-flow analysis is incomplete — figures below reflect expenses only. Add income transactions (Add / Upload → Manual Entry → Type: Income) to see net cash flow.</div>` : ''}
+    ${(State.settings.openingCashBalance===null||State.settings.openingCashBalance===undefined) ? `<div class="insight-item stack-section">No opening cash balance is set, so this page shows net movement only, not a cash position. Add one in Settings to see a running cash position.</div>` : ''}
     <div class="card">
       <h3>Monthly Cash Flow</h3>
       <div class="table-wrap"><table>
@@ -5723,7 +5727,7 @@ function renderCashFlow(main){
         </tr>`).join('')}</tbody>
       </table></div>
     </div>
-    <div class="card" style="margin-top:14px;">
+    <div class="card" style="margin-top:var(--space-4);">
       <h3>Net Cash Flow Trend</h3>
       <div class="chart-wrap" id="cashFlowChart"></div>
     </div>
@@ -5783,25 +5787,25 @@ function renderBudgetCenter(main){
       <div><h1>Budget Center</h1><p class="desc">Annual and monthly budget utilization for ${escapeHtml(State.settings.companyName||COMPANY_NAME_DEFAULT)}.</p></div>
       <div class="head-controls"><select id="budgetYear" class="input">${years.map(y=>`<option value="${y}" ${y===State.budgetYear?'selected':''}>${y}</option>`).join('')}</select></div>
     </div>
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       <div class="card stat-card"><div class="stat-label">Annual Planned Budget</div><div class="stat-value">${fmtIDRShort(annualPlanned)}</div></div>
       <div class="card stat-card"><div class="stat-label">Annual Actual Spend</div><div class="stat-value">${fmtIDRShort(annualActual)}</div><div class="stat-sub dim">${knownActualRows.length} of ${yearMonths.length} months recorded</div></div>
       <div class="card stat-card"><div class="stat-label">Remaining Budget</div><div class="stat-value" style="color:${remaining>=0?'var(--green)':'var(--brick)'}">${fmtIDRShort(remaining)}</div></div>
       <div class="card stat-card"><div class="stat-label">Budget Utilization</div><div class="stat-value">${utilization.toFixed(0)}%</div></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Monthly Planned vs. Actual — ${State.budgetYear}</h3>
       <p class="hint">Click a point to open that month's Finance Overview.</p>
       <div class="chart-wrap" id="budgetMonthlyChart"></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Category Utilization</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Category</th><th class="num">Planned</th><th class="num">Actual</th><th class="num">% Used</th></tr></thead>
         <tbody>${catUtil.map(c=>`<tr><td>${categoryPill(c.cat)}</td><td class="num">${fmtIDR(c.planned)}</td><td class="num">${c.hasAny?fmtIDR(c.actual):'<span class="faint">—</span>'}</td><td class="num">${c.hasAny?c.pctUsed.toFixed(0)+'%':'—'}</td></tr>`).join('')}</tbody>
       </table></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Months at Risk of Overspending<span class="tag">≥90% of plan used</span></h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Month</th><th class="num">Planned</th><th class="num">Actual</th><th class="num">% Used</th></tr></thead>
@@ -5816,7 +5820,7 @@ function renderBudgetCenter(main){
         <div class="field"><label>Payroll Increase %</label><input class="input" id="simPayroll" type="number" step="1" value="${sim.payrollPct}"></div>
         <div class="field"><label>Operational Cost Increase %</label><input class="input" id="simOps" type="number" step="1" value="${sim.opsPct}"></div>
       </div>
-      <div class="grid grid-2" style="margin-top:14px;">
+      <div class="grid grid-2" style="margin-top:var(--space-4);">
         <div class="card stat-card"><div class="stat-label">Projected Monthly Spending (Simulation)</div><div class="stat-value">${fmtIDRShort(projTotal)}</div></div>
         <div class="card stat-card"><div class="stat-label">Projected Variance vs. Current Average (Simulation)</div><div class="stat-value" style="color:${projVariance>=0?'var(--green)':'var(--brick)'}">${fmtIDRShort(projVariance)}</div></div>
       </div>
@@ -5907,7 +5911,7 @@ function renderSettings(main){
   const s = State.settings;
   main.innerHTML = `
     <div class="page-head"><div><h1>Settings</h1><p class="desc">Configuration for ${escapeHtml(APP_NAME)}.</p></div></div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>General</h3>
       <form id="settingsForm">
         <div class="form-grid" style="grid-template-columns:1fr 1fr;">
@@ -5986,7 +5990,7 @@ function renderSettings(main){
         </div>
       </form>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;border-color:var(--accent);">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);border-color:var(--accent);">
       <h3>Data Reset &amp; Onboarding</h3>
       <p class="hint" style="margin-bottom:12px;">Manage the data in this browser. Start Fresh downloads a full backup and requires typed confirmation before clearing — it never erases silently.</p>
       <div class="small-btn-row" style="flex-wrap:wrap;gap:8px;">
@@ -5998,18 +6002,18 @@ function renderSettings(main){
         <button class="btn" id="drShowOnb">Show Onboarding Checklist</button>
       </div>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>Storage Status</h3>
       <p class="dim" style="font-size:13px;line-height:2;">
         Storage Mode: <b>${escapeHtml(StorageAdapter.modeLabel())}</b><br>
-        Persistence Status: <b style="color:${StorageAdapter.status==='active'?'var(--green)':StorageAdapter.status==='error'?'var(--brick)':'var(--gold, #C9A15C)'};">${escapeHtml(StorageAdapter.statusLabel())}</b>
+        Persistence Status: <b style="color:${StorageAdapter.status==='active'?'var(--green)':StorageAdapter.status==='error'?'var(--brick)':'var(--accent)'};">${escapeHtml(StorageAdapter.statusLabel())}</b>
       </p>
       ${StorageAdapter.lastError?`<p class="hint">Last storage error: ${escapeHtml(StorageAdapter.lastError)}</p>`:''}
       <p class="hint">${StorageAdapter.mode==='claude'
         ? 'Data is persisted by the Claude Artifact environment.'
         : 'Data is persisted in this browser’s localStorage for this file location. Use Data Portability below to move data to another browser or device.'}</p>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>System Diagnostics</h3>
       <div id="diagnosticsBody">${buildDiagnosticsHTML()}</div>
       <div class="small-btn-row" style="margin-top:12px;">
@@ -6018,7 +6022,7 @@ function renderSettings(main){
       </div>
       <div id="integrityBody" style="margin-top:12px;">${State.lastIntegrity?buildIntegrityHTML(State.lastIntegrity):''}</div>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>Data Portability</h3>
       <p class="hint" style="margin-bottom:12px;">Export or restore your complete dataset — all transactions, settings, and backups — as a single JSON file. Use this to move between browsers, devices, or between the Claude Artifact and the standalone file. A safety backup of current data is created automatically before every restore.</p>
       <div class="small-btn-row">
@@ -6028,7 +6032,7 @@ function renderSettings(main){
       </div>
       <div id="portabilityPreview" style="margin-top:12px;"></div>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>Data Export</h3>
       <div class="small-btn-row" style="flex-wrap:wrap;gap:6px;">
         <button class="btn" id="exportAllTxns">Export All Transactions (CSV)</button>
@@ -6037,7 +6041,7 @@ function renderSettings(main){
         <button class="btn" id="exportCtCsv">Export Contracts (CSV)</button>
       </div>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>Backup Management</h3>
       <div id="settingsBackupPanel"></div>
     </div>
@@ -6270,7 +6274,7 @@ function renderBankAccounts(main){
   main.innerHTML = pageHeader('Bank Accounts',
       'Company bank accounts used across finance and payroll. Only Active accounts appear in transaction dropdowns. Account numbers are stored masked in lists — never a PIN, OTP, password, or token.',
       `<button class="btn btn-accent" id="caccNew">+ New Bank Account</button>`)
-    + `<div class="grid grid-4" style="margin-bottom:14px;">
+    + `<div class="grid grid-4 stack-section">
         <div class="card stat-card"><div class="stat-label">Accounts</div><div class="stat-value">${all.length}</div><div class="stat-sub dim">${activeN} active</div></div>
         <div class="card stat-card"><div class="stat-label">Shown</div><div class="stat-value" id="caccShown">${bankAccountsFiltered().length}</div></div>
       </div>
@@ -6353,9 +6357,9 @@ function renderAbout(main){
       <div class="divider"></div>
       <p class="dim" style="font-size:13px;line-height:2;">
         Storage Mode: <b>${escapeHtml(StorageAdapter.modeLabel())}</b><br>
-        Persistence Status: <b style="color:${StorageAdapter.status==='active'?'var(--green)':StorageAdapter.status==='error'?'var(--brick)':'var(--gold, #C9A15C)'};">${escapeHtml(StorageAdapter.statusLabel())}</b>
+        Persistence Status: <b style="color:${StorageAdapter.status==='active'?'var(--green)':StorageAdapter.status==='error'?'var(--brick)':'var(--accent)'};">${escapeHtml(StorageAdapter.statusLabel())}</b>
       </p>
-      <div class="insight-item" style="margin-top:14px;display:block;">Data is stored privately on this device (${escapeHtml(StorageAdapter.modeLabel())}). Use Settings → Data Portability to move your complete dataset to another browser or device. Cloud synchronization and multi-user access are not yet enabled.</div>
+      <div class="insight-item" style="margin-top:var(--space-4);display:block;">Data is stored privately on this device (${escapeHtml(StorageAdapter.modeLabel())}). Use Settings → Data Portability to move your complete dataset to another browser or device. Cloud synchronization and multi-user access are not yet enabled.</div>
     </div>
   `;
 }
@@ -6403,7 +6407,7 @@ function renderReleaseNotes(main){
   ];
   main.innerHTML = `
     <div class="page-head"><div><h1>Release Notes</h1></div></div>
-    ${notes.map(n=>`<div class="card" style="margin-bottom:14px;">
+    ${notes.map(n=>`<div class="card stack-section">
       <h3>Version ${n.v}</h3>
       <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.9;color:var(--text-dim);">${n.items.map(i=>`<li>${escapeHtml(i)}</li>`).join('')}</ul>
     </div>`).join('')}
@@ -6624,7 +6628,7 @@ function renderReports(main){
       <div class="head-controls">${monthSelectHTML('repMonth', key, false)}<button class="btn btn-accent" id="dlReport">Download Report (.md)</button></div>
     </div>
     <div class="card" id="reportBody"></div>
-    <div class="card" style="margin-top:14px;">
+    <div class="card" style="margin-top:var(--space-4);">
       <h3>People &amp; Contracts Reports</h3>
       <div class="head-controls" style="margin-bottom:12px;">
         <select class="input" id="hrRepSel">${hrReportDefs().map(d=>`<option value="${d.id}" ${State.hrReportSel===d.id?'selected':''}>${d.label}</option>`).join('')}</select>
@@ -6632,7 +6636,7 @@ function renderReports(main){
       </div>
       <div id="hrRepBody"></div>
     </div>
-    <div class="card" style="margin-top:14px;">
+    <div class="card" style="margin-top:var(--space-4);">
       <h3>Monthly Plan Summary — ${escapeHtml(monthLabel(m))}</h3>
       <div id="planSummaryBody"></div>
     </div>
@@ -7154,9 +7158,9 @@ function renderEmployees(main){
         <button class="btn" id="expEmp">Export CSV</button>
       </div>
     </div>
-    ${(function(){const g=findEmployeeDuplicateGroups();return g.length?`<div class="card" style="border-left:3px solid var(--brick);margin-bottom:14px;"><b style="color:var(--brick);">${g.length} duplicate employee group(s) detected</b> — the same person exists under multiple records. <button class="linklike" id="dedupEmp2">Open Employee Duplicate Review</button> to consolidate them safely (nothing is deleted, no amounts change).</div>`:'';})()}
+    ${(function(){const g=findEmployeeDuplicateGroups();return g.length?`<div class="card" style="border-left:3px solid var(--brick);margin-bottom:var(--space-4);"><b style="color:var(--brick);">${g.length} duplicate employee group(s) detected</b> — the same person exists under multiple records. <button class="linklike" id="dedupEmp2">Open Employee Duplicate Review</button> to consolidate them safely (nothing is deleted, no amounts change).</div>`:'';})()}
     <div class="card">
-      <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1fr 1fr;margin-bottom:14px;">
+      <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1fr 1fr;margin-bottom:var(--space-4);">
         <div class="field"><label>Search (name, ID, title, contact)</label><input class="input" id="eSearch" placeholder="Search…" value="${escapeHtml(f.search)}"></div>
         <div class="field"><label>Employment Status</label>
           <select class="input" id="eStatus"><option value="all">All statuses</option>${EMPLOYMENT_STATUSES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select>
@@ -7604,8 +7608,8 @@ function renderEmployeeDetail(main){
         <button class="btn btn-accent" id="newCtForEmp">+ New Contract</button>
       </div>
     </div>
-    ${alerts.length?`<div class="insight-list" style="margin-bottom:14px;">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
-    <div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
+    ${alerts.length?`<div class="insight-list stack-section">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
+    <div class="grid grid-2" style="margin-bottom:var(--space-4);align-items:start;">
       <div class="card">
         <h3>Profile</h3>
         <div style="font-size:13px;line-height:1.75;">
@@ -7632,7 +7636,7 @@ function renderEmployeeDetail(main){
           </div>`:'<div class="empty">No active contract for the current month.</div>'}
       </div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Contract History</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Contract #</th><th>Start</th><th>End</th><th>Progress</th><th class="num">Monthly</th><th>Status</th><th></th></tr></thead>
@@ -7645,7 +7649,7 @@ function renderEmployeeDetail(main){
         </tr>`; }).join('') || '<tr><td colspan="7" class="empty">No contracts yet.</td></tr>'}</tbody>
       </table></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Payroll History</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Period</th><th>Contract</th><th class="num">Base Payroll</th><th class="num">Payroll OT</th><th class="num">Supplemental</th><th class="num">Total Compensation</th><th>Stage</th></tr></thead>
@@ -7661,7 +7665,7 @@ function renderEmployeeDetail(main){
       </table></div>
       <p class="hint" style="margin-top:8px;">Total Compensation includes committed (Posted/Executed) Supplemental Payments. Base Payroll always remains immutable.</p>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Overtime History</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Period</th><th>Date</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th></tr></thead>
@@ -7868,9 +7872,9 @@ function renderContracts(main){
         <button class="btn" id="expCt">Export CSV</button>
       </div>
     </div>
-    ${alerts.length?`<div class="card" style="margin-bottom:14px;"><h3>Contract Alerts</h3><div class="insight-list">${alerts.slice(0,12).map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div></div>`:''}
+    ${alerts.length?`<div class="card stack-section"><h3>Contract Alerts</h3><div class="insight-list">${alerts.slice(0,12).map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div></div>`:''}
     <div class="card">
-      <div class="form-grid" style="grid-template-columns:1.6fr 1fr;margin-bottom:14px;">
+      <div class="form-grid" style="grid-template-columns:1.6fr 1fr;margin-bottom:var(--space-4);">
         <div class="field"><label>Search (contract #, employee)</label><input class="input" id="cSearch" placeholder="Search…" value="${escapeHtml(f.search)}"></div>
         <div class="field"><label>Status</label><select class="input" id="cStatus"><option value="all">All statuses</option>${CONTRACT_FILTER_STATES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
       </div>
@@ -8402,8 +8406,8 @@ function renderContractDetail(main){
         ${contractIsRenewable(c)?'<button class="btn btn-accent" id="renewCtD">Renew Contract</button>':''}
       </div>
     </div>
-    ${alerts.length?`<div class="insight-list" style="margin-bottom:14px;">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
-    <div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
+    ${alerts.length?`<div class="insight-list stack-section">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
+    <div class="grid grid-2" style="margin-bottom:var(--space-4);align-items:start;">
       <div class="card">
         <h3>Contract</h3>
         <div style="font-size:13px;line-height:1.75;">
@@ -8424,14 +8428,14 @@ function renderContractDetail(main){
         <div class="hint" style="margin-top:10px;">Calculated automatically from the start date and duration using calendar months. Before the start it reads 0/${cc.total}; after the end, ${cc.total}/${cc.total} and Expired.</div>
       </div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Linked Payroll Plans</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Month</th><th>Progress</th><th class="num">Planned Payroll</th><th>Status</th></tr></thead>
         <tbody>${plans.map(p=>`<tr><td class="dim">${escapeHtml(p.month)} ${p.year}</td><td>${escapeHtml(p.contractProgress||'')}</td><td class="num">${fmtIDR(p.plannedAmount)}</td><td>${isPayrollCommitted(p)?'<span class="pill pill-status-completed">Committed</span>':'<span class="pill pill-status-planned">Draft</span>'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">No payroll plans yet.</td></tr>'}</tbody>
       </table></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Linked Financial Transactions</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Month</th><th>Description</th><th class="num">Planned</th><th class="num">Actual</th><th>Status</th></tr></thead>
@@ -8716,18 +8720,18 @@ function renderMonthlyPlanGenerator(main){
         <button class="btn btn-accent" id="buildPreview">Build Preview</button>
       </div>
     </div>
-    <div class="grid grid-3" style="margin-bottom:14px;">
+    <div class="grid grid-3 stack-section">
       <div class="card stat-card"><div class="stat-label">Plan Status</div><div class="stat-value" style="font-size:16px;">${plan?hrStatusBadge(plan.status,PLAN_STATUS_META):'<span class="faint">Not started</span>'}</div><div class="stat-sub dim">${escapeHtml(mo.month)} ${mo.year}</div></div>
       <div class="card stat-card"><div class="stat-label">Committed Rows</div><div class="stat-value">${plan?plan.committedTxnIds.length:0}</div><div class="stat-sub dim">planned transactions in this month's plan</div></div>
       <div class="card stat-card"><div class="stat-label">Workflow</div><div class="stat-sub dim" style="margin-top:2px;line-height:1.8;">Draft → Reviewed → Committed<br><span class="faint">Approved &amp; Closed are future-ready</span></div></div>
     </div>
     ${(()=>{ const cyc=payrollCycleStatus(monthKey); const committed=State.payrollPlans.filter(p=>p.monthKey===monthKey&&isPayrollCommitted(p)).length; const sect = cyc==='Not Generated'?'Missing':(committed?(State.payrollPlans.some(p=>p.monthKey===monthKey&&p.otChanged)?'Changed':'Committed'):(cyc==='In Review'?'Reviewed':'Generated'));
-      return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+      return `<div class="card" style="margin-bottom:var(--space-4);border-left:3px solid var(--accent);">
       <h3>Payroll Source <span class="tag">${escapeHtml(sect)}</span></h3>
       <p class="hint" style="margin:-6px 0 10px;">The Monthly Plan consumes payroll committed in Payroll Planning — it does not generate payroll here. ${committed?`${committed} committed payroll transaction(s) for ${escapeHtml(mo.month)}.`:'<b>Payroll has not been committed for this month.</b>'}</p>
       <button class="btn btn-accent" id="openPay">Open Payroll Planning</button>
     </div>`; })()}
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <div class="small-btn-row" style="flex-wrap:wrap;gap:8px;">
         <button class="btn" id="copyPrev">Copy Previous Month (manual items)</button>
         <button class="btn" id="addManual">+ Add Manual Item</button>
@@ -8784,7 +8788,7 @@ function renderPlanPreview(area, preview, main){
   const typeLabel = {payroll:'Payroll', recurring:'Recurring', manual:'Manual'};
   const warnPills = r=> (r.dup==='duplicate'?'<span class="pill pill-status-cancelled">duplicate</span> ':'') + (r.warn?`<span class="pill pill-status-partial">${r.warn}</span>`:'');
   area.innerHTML = `
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Plan Preview — ${escapeHtml(keyToMonthObj(preview.monthKey).month)} ${keyToMonthObj(preview.monthKey).year}</h3>
       <div class="grid grid-4" style="margin-bottom:12px;">
         <div class="chart-mini-stat"><div class="lbl">Payroll</div><div class="val">${fmtIDRShort(t.payroll)}</div></div>
@@ -8815,7 +8819,7 @@ function renderPlanPreview(area, preview, main){
           </tr>`).join('') || '<tr><td colspan="7" class="empty">Nothing to plan for this month.</td></tr>'}</tbody>
         </table>
       </div>
-      <div class="modal-actions" style="justify-content:flex-start;margin-top:14px;">
+      <div class="modal-actions" style="justify-content:flex-start;margin-top:var(--space-4);">
         <button class="btn btn-accent" id="commitPlan">Commit Selected Rows</button>
         <span class="hint" style="align-self:center;">Creates planned transactions (status: Planned). Existing rows are never duplicated; historical transactions are never deleted.</span>
       </div>
@@ -8878,7 +8882,7 @@ function renderLegacyPayrollMapping(main){
       <div><h1>Legacy Payroll Mapping</h1><p class="desc">Link historical Gaji transactions to employee and contract master data. Matching is conservative — review every suggestion before applying. Descriptions are preserved.</p></div>
       <div class="head-controls"><button class="btn" id="backPay">← Payroll Planning</button></div>
     </div>
-    ${!State.employees.length?`<div class="insight-item warn" style="margin-bottom:14px;">No employees exist yet. Add employees first (People &amp; Contracts → Employees), then return here to map historical payroll to them.</div>`:''}
+    ${!State.employees.length?`<div class="insight-item warn stack-section">No employees exist yet. Add employees first (People &amp; Contracts → Employees), then return here to map historical payroll to them.</div>`:''}
     <div class="card">
       <h3>Unmapped Historical Payroll <span class="tag">${unlinked.length} transaction(s) · ${rows.length} distinct name(s)</span></h3>
       ${rows.length?`
@@ -8894,7 +8898,7 @@ function renderLegacyPayrollMapping(main){
           </tr>`).join('')}</tbody>
         </table>
       </div>
-      <div class="modal-actions" style="justify-content:flex-start;margin-top:14px;">
+      <div class="modal-actions" style="justify-content:flex-start;margin-top:var(--space-4);">
         <button class="btn btn-accent" id="applyMap">Apply Mappings</button>
         <span class="hint" style="align-self:center;">Only rows with an employee selected are linked. Contracts are linked only where one already covers that transaction's month — none are created.</span>
       </div>`:'<div class="empty">All Gaji transactions are already linked to employees, or there is no historical payroll to map.</div>'}
@@ -9912,16 +9916,16 @@ function renderOvertime(main){
       `${State.overtimeRecords.length} record(s) · ${pending} pending review. ${escapeHtml(State.settings.overtimeMethodLabel||'TAM Internal Overtime Calculation Method')}.`,
       `<button class="btn btn-accent" id="addOt">+ Add Overtime</button><button class="btn" id="otSheet">Monthly Worksheet</button><button class="btn" id="otCsv">Export CSV</button>`)
     + `
-    <div class="insight-item" style="margin-bottom:14px;display:block;">This calculation follows the internal method configured in TAM OS. Verify separately when statutory payroll compliance calculations are required.</div>
+    <div class="insight-item" style="margin-bottom:var(--space-4);display:block;">This calculation follows the internal method configured in TAM OS. Verify separately when statutory payroll compliance calculations are required.</div>
     ${payrollDriftBannerHTML(State.payrollPlans)}
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       <div class="card stat-card"><div class="stat-label">Records Shown</div><div class="stat-value" id="otStatShown">${rows.length}</div></div>
       <div class="card stat-card"><div class="stat-label">Total Overtime Hours</div><div class="stat-value" id="otStatHours">${totalHours.toLocaleString('id-ID',{maximumFractionDigits:2})}</div></div>
       <div class="card stat-card"><div class="stat-label">Total Overtime Amount</div><div class="stat-value" id="otStatAmount">${fmtIDRShort(totalAmount)}</div></div>
       <div class="card stat-card"><div class="stat-label">Pending Review</div><div class="stat-value">${pending}</div></div>
     </div>
     <div class="card">
-      <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1fr;margin-bottom:14px;">
+      <div class="form-grid" style="grid-template-columns:1.6fr 1fr 1fr;margin-bottom:var(--space-4);">
         <div class="field"><label>Search (employee, description, contract)</label><input class="input" id="otSearch" placeholder="Search…" value="${escapeHtml(f.search)}"></div>
         <div class="field"><label>Status</label><select class="input" id="otStatus"><option value="all">All statuses</option>${OVERTIME_STATUSES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
         <div class="field"><label>Month</label><select class="input" id="otMonth"><option value="all">All months</option>${months.map(k=>{const o=keyToMonthObj(k);return `<option value="${k}" ${f.month===k?'selected':''}>${o.month} ${o.year}</option>`;}).join('')}</select></div>
@@ -9958,7 +9962,7 @@ function openOvertimeModal(id){
         <div class="field"><label>Work Description</label><input class="input" name="workDescription" value="${escapeHtml(v.workDescription||'')}"></div>
         <div class="field" style="grid-column:span 2;"><label>Notes</label><textarea class="input" name="notes">${escapeHtml(v.notes||'')}</textarea></div>
       </div>
-      <div class="card" id="otPreview" style="margin-top:14px;padding:14px 16px;background:var(--surface-2);"></div>
+      <div class="card" id="otPreview" style="margin-top:var(--space-4);padding:14px 16px;background:var(--surface-2);"></div>
       <div class="modal-actions"><button type="button" class="btn" id="otCancel">Cancel</button><button type="submit" class="btn btn-accent">${isNew?'Create (Draft)':'Save Changes'}</button></div>
     </form>`, {width:600, onMount:(root)=>{
       const form = root.querySelector('#otForm');
@@ -10090,7 +10094,7 @@ function renderOvertimeWorksheet(main){
           <td class="num" id="wsamt-${i}"><b>${fmtIDR(r._calc.amount)}</b></td>
         </tr>`).join('')}</tbody>
       </table></div>
-      <div class="modal-actions" style="justify-content:flex-start;margin-top:14px;flex-wrap:wrap;gap:8px;">
+      <div class="modal-actions" style="justify-content:flex-start;margin-top:var(--space-4);flex-wrap:wrap;gap:8px;">
         <button class="btn btn-accent" id="wsSaveDraft">Save all as Draft</button>
         <button class="btn" id="wsApprove">Approve all with hours</button>
         <button class="btn" id="wsCommitInfo" disabled title="Commit happens from Payroll Planning">Commit via Payroll →</button>
@@ -10128,7 +10132,7 @@ function actionEmptyState(title, sub, btnLabel, targetView){
   return `<div class="card" style="max-width:640px;"><div class="empty">
     <div class="big">▢</div>
     <div style="color:var(--text);font-weight:600;margin-bottom:6px;">${escapeHtml(title)}</div>
-    <div style="margin-bottom:14px;">${escapeHtml(sub)}</div>
+    <div class="stack-section">${escapeHtml(sub)}</div>
     ${btnLabel?`<button class="btn btn-accent" data-empty-nav="${targetView}">${escapeHtml(btnLabel)}</button>`:''}
   </div></div>`;
 }
@@ -10179,7 +10183,7 @@ function onboardingChecklistHTML(){
   if(State.settings.onboardingDismissed) return '';
   const steps = onboardingSteps(); const done = steps.filter(s=>s.done).length;
   if(done===steps.length) return '';
-  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+  return `<div class="card" style="margin-bottom:var(--space-4);border-left:3px solid var(--accent);">
     <h3>Getting Started <span class="tag">${done}/${steps.length} complete</span><button class="btn btn-sm" id="dismissOnb" style="float:right;">Dismiss</button></h3>
     <p class="hint" style="margin:-6px 0 12px;">Set up TAM OS with your real data. Click any step to jump there. This checklist never blocks navigation.</p>
     <div class="insight-list">${steps.map((s,i)=>`<div class="insight-item ${s.done?'good':''}" style="cursor:pointer;" data-onb="${s.view}"><b style="min-width:18px;display:inline-block;">${s.done?'✓':(i+1)+'.'}</b> ${escapeHtml(s.label)}</div>`).join('')}</div>
@@ -10226,7 +10230,7 @@ async function maybeShowFirstRunChoice(){
   openModalHTML(`
     <h3>Existing data detected</h3>
     <p class="dim" style="font-size:13px;line-height:1.7;">TAM OS v${APP_VERSION} ships clean, but this browser already holds data from an earlier version — ${list}. Your data has <b>not</b> been changed. Choose how to proceed:</p>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:var(--space-4);">
       <button class="btn btn-accent" id="frKeep">Keep Existing Data</button>
       <button class="btn" id="frFresh">Export Backup &amp; Start Fresh…</button>
       <button class="btn" id="frCancel">Cancel (decide later)</button>
@@ -10925,7 +10929,7 @@ function renderEmployeeDedup(main){
         }).filter(Boolean);
         const conflictHTML = conflicts.length ? `<div class="hint" style="margin:10px 0 6px;"><b>Profile differences</b> — choose which value the canonical record keeps (non-empty values are never overwritten silently):</div>
           <div class="grid grid-3" style="gap:8px;">${conflicts.map(cf=>`<div class="field"><label>${escapeHtml(cf.f)}</label><select class="input" data-prof="${escapeHtml(g.key)}|${cf.f}">${cf.vals.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')}</select></div>`).join('')}</div>` : '';
-        return `<div class="card" style="margin-bottom:14px;">
+        return `<div class="card stack-section">
           <h3 style="margin-top:0;">${escapeHtml(g.name)} <span class="tag">${g.employees.length} records</span></h3>
           <div class="table-wrap"><table><thead><tr><th style="width:34px;">Keep</th><th>Employee ID</th><th>Name</th><th class="num">Contracts</th><th class="num">Payroll</th><th class="num">Txns</th><th class="num">OT</th><th class="num">Adj</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
           ${conflictHTML}
@@ -11011,7 +11015,7 @@ function renderColumnMappingCard(model){
       + rows.slice(0,200).map((r,idx)=>`<tr><td class="dim">${idx+1}</td><td>${escapeHtml(r.employeeName||'—')}</td><td>${escapeHtml(r.contractNumber||'—')}</td><td>${r.progressCurrent!=null?escapeHtml((''+r.progressCurrent).replace('.',',')+'/'+r.progressTotal):'—'}</td><td class="num">${fmtIDR(r.salary||0)}</td><td class="dim">${escapeHtml(r.month||'')} ${r.year||''}</td><td class="faint" style="font-size:10.5px;">${escapeHtml(((r.subLines||[]).join(' · '))||'')}</td></tr>`).join('')
       + `</tbody></table></div><p class="hint">Exactly what Smart Import extracted from each payroll row — verify before committing.</p>`;
   }
-  return `<div class="card" style="margin-bottom:14px;">
+  return `<div class="card stack-section">
     <div class="small-btn-row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
       <div><b>Column Mapping</b> <span class="faint" style="font-size:11px;">· ${escapeHtml(srcLabel)}</span></div>
       <div class="small-btn-row" style="gap:8px;">
@@ -11083,8 +11087,8 @@ function renderSmartImport(main){
 
   main.innerHTML = pageHeader('Smart Import', `${escapeHtml(model.fileName)} · ${c.rows} payroll row(s) across ${c.months} month(s)`,
       `<button class="btn" id="siCancel">Cancel</button>`)
-    + `<div class="card" style="margin-bottom:14px;"><div class="chart-range-chips">${SMART_STEPS.map((s,i)=>`<span class="btn btn-sm ${i+1<=step?'btn-accent':''}" style="cursor:default;">${i+1}. ${escapeHtml(s)}</span>`).join('')}</div></div>
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    + `<div class="card stack-section"><div class="chart-range-chips">${SMART_STEPS.map((s,i)=>`<span class="btn btn-sm ${i+1<=step?'btn-accent':''}" style="cursor:default;">${i+1}. ${escapeHtml(s)}</span>`).join('')}</div></div>
+    <div class="grid grid-4 stack-section">
       <div class="card stat-card"><div class="stat-label">Payroll Rows</div><div class="stat-value">${c.rows}</div><div class="stat-sub dim">across ${c.months} month(s)</div></div>
       <div class="card stat-card"><div class="stat-label">Unique Employees</div><div class="stat-value">${c.uniqueEmployees}</div><div class="stat-sub dim">${c.existingMatched} matched · ${c.newEmployees} new${c.possibleDuplicates?' · '+c.possibleDuplicates+' possible dup':''}</div></div>
       <div class="card stat-card"><div class="stat-label">Contracts</div><div class="stat-value">${c.contracts}</div><div class="stat-sub dim">${c.matchedCt} matched · ${c.newCt} new</div></div>
@@ -11201,7 +11205,7 @@ function renderImportResults(main){
   if(!a){ State.view='add'; render(); return; }
   main.innerHTML = pageHeader('Import Results', `${escapeHtml(a.fileName)} · committed ${escapeHtml(new Date(a.ts).toLocaleString('id-ID'))}`,
       `<button class="btn btn-accent" id="irPayroll">Continue to Payroll Planning</button><button class="btn" id="irBack">Back to Add / Upload</button><button class="btn btn-danger" id="irUndo">Undo Last Smart Import</button>`)
-    + `<div class="grid grid-4" style="margin-bottom:14px;">
+    + `<div class="grid grid-4 stack-section">
       <div class="card stat-card"><div class="stat-label">Employees Created</div><div class="stat-value">${a.counts.employees}</div></div>
       <div class="card stat-card"><div class="stat-label">Contracts Created</div><div class="stat-value">${a.counts.contracts}</div></div>
       <div class="card stat-card"><div class="stat-label">Payroll Plans</div><div class="stat-value">${a.counts.payrollPlans}</div></div>
@@ -11430,7 +11434,7 @@ function payrollIntegrityNoticeHTML(pp){
   const s = payrollHistoricalSnapshot(pp);
   if(!s || !(s.integrityStatus==='mismatch' || s.integrityStatus==='no-transaction')) return '';
   const rows = (s.differences||[]).map(d=>`<div>${escapeHtml(d.label)}: <b class="mono">${fmtIDR(d.a)}</b>${d.b!=null?` vs <b class="mono">${fmtIDR(d.b)}</b> <span class="faint">(difference ${fmtIDR(Math.abs(num(d.a)-num(d.b)))})</span>`:''}</div>`).join('');
-  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--brick);">
+  return `<div class="card" style="margin-bottom:var(--space-4);border-left:3px solid var(--brick);">
     <h3 style="color:var(--brick);">Payroll snapshot mismatch</h3>
     <div style="font-size:13px;line-height:1.8;">${rows}</div>
     <p class="hint" style="margin-top:8px;">The posted transaction is the committed record and remains unchanged. The historical figures shown above are read from the strongest available committed evidence (${escapeHtml(s.sourceLabel)}); the payroll plan's current figures differ. Nothing was altered.</p>
@@ -11980,7 +11984,7 @@ function payrollDriftBannerHTML(plans){
   const item = x=>`<div class="insight-item warn"><b>${escapeHtml(x.pp.employeeName||'—')}</b> — ${escapeHtml(x.pp.month)} ${x.pp.year}${x.drift.addedAmount?`: +${fmtIDR(x.drift.addedAmount)} approved overtime`:''} <span class="faint">(${escapeHtml(payrollStage(x.pp))})</span></div>`;
   let html='';
   if(uncommitted.length){
-    html += `<div class="card ot-drift-banner" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+    html += `<div class="card ot-drift-banner" style="margin-bottom:var(--space-4);border-left:3px solid var(--accent);">
       <h3>Overtime approved — payroll not yet updated <span class="tag">${uncommitted.length}</span></h3>
       <p style="margin:4px 0 8px;">${OT_DRIFT_MSG_UNCOMMITTED}</p>
       <div class="insight-list">${uncommitted.map(item).join('')}</div>
@@ -12001,7 +12005,7 @@ function payrollDriftBannerHTML(plans){
           : `<button class="btn btn-sm btn-accent" data-supp-gen="${x.pp.id}">Generate Supplemental (${fmtIDR(amt)})</button>`;
         return `<div class="insight-item warn"><b>${escapeHtml(x.pp.employeeName||'—')}</b> — ${escapeHtml(x.pp.month)} ${x.pp.year}: +${fmtIDR(amt)} unpaid overtime <span style="margin-left:8px;">${action}</span></div>`;
       }).join('');
-      html += `<div class="card ot-drift-banner" style="margin-bottom:14px;border-left:3px solid var(--brick);">
+      html += `<div class="card ot-drift-banner" style="margin-bottom:var(--space-4);border-left:3px solid var(--brick);">
         <h3>Approved overtime added after payroll was posted <span class="tag">${actionable.length}</span></h3>
         <p style="margin:4px 0 2px;">Approved overtime was added after payroll was posted. The original payroll remains unchanged.</p>
         <p style="margin:0 0 8px;"><b>Settle it with a supplemental payment — the base payroll is never modified.</b></p>
@@ -12057,7 +12061,7 @@ function renderPayrollWorkspace(main){
       + `<div class="card"><div class="empty">
         <div class="big">৳</div>
         <div style="color:var(--text);font-weight:600;margin-bottom:6px;">No employees and contracts are available yet</div>
-        <div style="margin-bottom:14px;">Add employees and active contracts, then generate payroll — payroll is Base Salary + Approved Overtime.</div>
+        <div class="stack-section">Add employees and active contracts, then generate payroll — payroll is Base Salary + Approved Overtime.</div>
         <div class="small-btn-row" style="justify-content:center;flex-wrap:wrap;">
           <button class="btn btn-accent" data-empty-nav="employees">Add Employee</button>
           <button class="btn" data-empty-nav="contracts">Create Contract</button>
@@ -12100,7 +12104,7 @@ function renderPayrollWorkspace(main){
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:3px solid ${locked?'var(--brick)':'var(--accent)'};">
+    <div class="card" style="margin-bottom:var(--space-4);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:3px solid ${locked?'var(--brick)':'var(--accent)'};">
       <div>
         <div class="stat-label">Current Payroll Period</div>
         <div style="font-family:var(--serif);font-size:22px;font-weight:600;">${escapeHtml(mo.month)} ${mo.year} ${locked?'<span class="pill pill-status-cancelled">LOCKED</span>':''}</div>
@@ -12119,21 +12123,21 @@ function renderPayrollWorkspace(main){
       ${kpi('Review', counts.Review, 'in review')}
       ${kpi('Approved', counts.Approved, 'ready to post')}
     </div>
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       ${kpi('Posted', counts.Posted, 'planned in finance')}
       ${kpi('Executed', counts.Executed, 'paid via Execution Center')}
       ${kpi('Total Payroll', fmtIDRShort(summary.total), 'base + approved overtime')}
       ${kpi('Total Overtime', fmtIDRShort(summary.overtime), `${otHours} hrs`)}
     </div>
 
-    ${health.length?`<div class="card" style="margin-bottom:14px;">
+    ${health.length?`<div class="card stack-section">
       <h3>Payroll Health <span class="tag">${health.length}</span></h3>
       <div class="insight-list">${health.slice(0,24).map(h=>`<div class="insight-item ${h.sev==='warn'?'warn':''}"><b>${escapeHtml(h.title)}</b> — ${escapeHtml(h.detail)}</div>`).join('')}</div>
     </div>`:''}
 
     ${payrollDriftBannerHTML(plans)}
 
-    ${hasRows?`<div class="grid grid-4" style="margin-bottom:14px;">
+    ${hasRows?`<div class="grid grid-4 stack-section">
       <div class="chart-mini-stat"><div class="lbl">Employees</div><div class="val">${summary.count}</div></div>
       <div class="chart-mini-stat"><div class="lbl">Average Payroll</div><div class="val">${fmtIDRShort(summary.average)}</div></div>
       <div class="chart-mini-stat"><div class="lbl">Highest</div><div class="val">${fmtIDRShort(summary.highest)}</div></div>
@@ -12142,11 +12146,11 @@ function renderPayrollWorkspace(main){
 
     <div id="payArea"></div>
 
-    ${periodEvents.length?`<div class="card" style="margin-top:14px;"><h3>Period Activity <span class="tag">${periodEvents.length}</span></h3>
+    ${periodEvents.length?`<div class="card" style="margin-top:var(--space-4);"><h3>Period Activity <span class="tag">${periodEvents.length}</span></h3>
       <p class="hint" style="margin-top:-2px;margin-bottom:10px;">Recorded generate / post / lock / unlock events for ${escapeHtml(mo.month)} ${mo.year} — newest first. See the full cross-module trail in Management → Activity Log.</p>
       ${payrollTimelineHTML(periodEvents)}</div>`:''}
 
-    ${excludedNow.length?`<div class="card" style="margin-top:14px;"><h3>Excluded Employees <span class="tag">${excludedNow.length}</span></h3><div class="insight-list">${excludedNow.map(x=>`<div class="insight-item warn"><b>${escapeHtml(x.e.fullName)}</b> — ${escapeHtml(x.reason)}</div>`).join('')}</div></div>`:''}`;
+    ${excludedNow.length?`<div class="card" style="margin-top:var(--space-4);"><h3>Excluded Employees <span class="tag">${excludedNow.length}</span></h3><div class="insight-list">${excludedNow.map(x=>`<div class="insight-item warn"><b>${escapeHtml(x.e.fullName)}</b> — ${escapeHtml(x.reason)}</div>`).join('')}</div></div>`:''}`;
 
   document.getElementById('payMonth').addEventListener('change', e=>{ State.payrollMonth=e.target.value; renderPayrollWorkspace(main); });
   document.getElementById('lockBtn').addEventListener('click', async ()=>{
@@ -12450,7 +12454,7 @@ function renderPayrollDetail(main){
       `<button class="btn" id="pdBack">← Payroll Workspace</button>${emp?`<button class="btn" id="pdEmp">Employee</button>`:''}${ct?`<button class="btn" id="pdCt">Contract</button>`:''}${txn?`<button class="btn" id="pdTxn">Transaction</button>`:''}`)
     + payrollDriftBannerHTML([p])
     + payrollIntegrityNoticeHTML(p)                          // v2.7.1 mismatch notice (between/above the panels)
-    + `<div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
+    + `<div class="grid grid-2" style="margin-bottom:var(--space-4);align-items:start;">
       <div class="card"><h3>Base Payroll Snapshot <span class="tag">${committedStage?'committed':'read-only'}</span> ${payrollIntegrityBadge(p)}</h3><div style="font-size:13px;line-height:1.75;">
         <div>Employee: <b>${escapeHtml(p.employeeName||'—')}</b></div>
         <div>Contract: <b>${escapeHtml(p.contractNumber||'—')}</b></div>
@@ -12473,7 +12477,7 @@ function renderPayrollDetail(main){
       </div>`:'<div class="empty">Not posted to finance yet. Approve then Post to Finance to create a Planned transaction.</div>'}</div>
     </div>
     ${(typeof supplementalPlanSectionHTML==='function')?supplementalPlanSectionHTML(p):''}
-    <div class="card" style="margin-bottom:14px;"><h3>Payroll Timeline</h3>
+    <div class="card stack-section"><h3>Payroll Timeline</h3>
       <p class="hint" style="margin-top:-2px;margin-bottom:10px;">Generated → Reviewed → Approved → Posted → Executed, plus period lock/unlock. Only events that actually occurred are shown (real timestamps — nothing is fabricated).</p>
       ${payrollTimelineHTML(buildPayrollTimeline(p))}</div>
     <div class="card"><h3>Payroll History</h3><div class="hist-list">${(p.history||[]).map(h=>`<div class="hist-row"><span class="hist-event">${escapeHtml((h.event||'').charAt(0).toUpperCase()+(h.event||'').slice(1))}</span><span class="hist-note">${escapeHtml(h.note||'')}</span><span class="hist-ts faint">${h.ts?new Date(h.ts).toLocaleString('id-ID'):'—'}</span></div>`).join('')||'<div class="empty">No history.</div>'}</div></div>`;
@@ -12929,7 +12933,7 @@ function renderSupplementalPayments(main){
   main.innerHTML = pageHeader('Supplemental Payments',
       'Separate payroll documents that settle overtime approved after the base payroll became immutable. The base payroll is never modified. Source (v2.7.0): overtime only.',
       '', `Supplemental Payment is planned to expand to other adjustment types in a later release; v2.7.0 settles overtime drift only.`)
-    + `<div class="grid grid-4" style="margin-bottom:14px;">
+    + `<div class="grid grid-4 stack-section">
         <div class="card stat-card"><div class="stat-label">Total</div><div class="stat-value">${all.length}</div></div>
         <div class="card stat-card"><div class="stat-label">Open (Draft/Review)</div><div class="stat-value">${totalOpen}</div></div>
         <div class="card stat-card"><div class="stat-label">Posted — awaiting execution</div><div class="stat-value">${totalPosted}</div></div>
@@ -12966,7 +12970,7 @@ function renderSupplementalDetail(main){
   const acctDisplay = s.companyAccountSnapshotLabel ? `${escapeHtml(s.companyAccountSnapshotLabel)}${s.companyAccountSnapshotBank?' — '+escapeHtml(s.companyAccountSnapshotBank):''}` : '<span class="dim">not selected</span>';
   main.innerHTML = pageHeader(`Supplemental — ${escapeHtml(s.employeeName||'')}`, `${escapeHtml(s.periodLabel||'')} · ${escapeHtml(supplementalSourceLabel(s.sourceType))}`,
       `<button class="btn" id="spBack">← Supplemental Payments</button>${emp?`<button class="btn" id="spEmp">Employee</button>`:''}${pp?`<button class="btn" id="spPay">Base Payroll</button>`:''}${txn?`<button class="btn" id="spTxn">Transaction</button>`:''}`)
-    + `<div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
+    + `<div class="grid grid-2" style="margin-bottom:var(--space-4);align-items:start;">
       <div class="card"><h3>Supplemental ${supplementalStatusPill(s)}</h3><div style="font-size:13px;line-height:1.8;">
         <div>ID: <span class="mono faint">${escapeHtml(s.id)}</span></div>
         <div>Employee: <b>${escapeHtml(s.employeeName||'—')}</b></div>
@@ -12986,12 +12990,12 @@ function renderSupplementalDetail(main){
         <div style="margin-top:8px;"><button class="btn btn-sm" id="spExec">Open in Execution Center</button></div>
       </div>`:'<div class="empty">Not posted to finance yet. Approve, then Post to Finance to create a Planned transaction.</div>'}</div>
     </div>
-    <div class="card" style="margin-bottom:14px;"><h3>Source Overtime <span class="tag">${recs.length}</span>${frozenSnap?' <span class="pill pill-status-completed" title="Frozen at Approved — does not change if source overtime is later edited or deleted">frozen</span>':''}</h3>
+    <div class="card stack-section"><h3>Source Overtime <span class="tag">${recs.length}</span>${frozenSnap?' <span class="pill pill-status-completed" title="Frozen at Approved — does not change if source overtime is later edited or deleted">frozen</span>':''}</h3>
       ${frozenSnap?'<p class="hint" style="margin-top:-2px;margin-bottom:8px;">Frozen source snapshot — captured when this supplemental was approved.</p>':''}
       <div class="table-wrap"><table><thead><tr><th>Date</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th></tr></thead>
       <tbody>${recs.map(o=>`<tr><td class="dim">${escapeHtml(o.overtimeDate||'—')}</td><td class="num">${num(o.overtimeHours)}</td><td class="num">${fmtIDR(o.approvedAmount!=null?o.approvedAmount:o.calculatedAmount)}</td><td>${frozenSnap?escapeHtml(o.statusAtCommit||'—'):hrStatusBadge(o.status,OVERTIME_STATUS_META)}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">No linked overtime.</td></tr>'}</tbody></table></div></div>
     <div class="card"><h3>History</h3><div class="hist-list">${(s.history||[]).map(h=>`<div class="hist-row"><span class="hist-event">${escapeHtml((h.event||'').replace(/_/g,' '))}</span><span class="hist-note">${escapeHtml(h.note||'')}</span><span class="hist-ts faint">${h.ts?new Date(h.ts).toLocaleString('id-ID'):'—'}</span></div>`).join('')||'<div class="empty">No history.</div>'}</div></div>
-    <div class="small-btn-row" style="margin-top:14px;flex-wrap:wrap;gap:8px;">${supplementalDetailActionsHTML(s)}</div>`;
+    <div class="small-btn-row" style="margin-top:var(--space-4);flex-wrap:wrap;gap:8px;">${supplementalDetailActionsHTML(s)}</div>`;
   const on=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', fn); };
   on('spBack', ()=>hrNavTo('supplementals'));
   on('spEmp', ()=>hrNavTo('employeeDetail',{detailEmpId:emp.id}));
@@ -13102,7 +13106,7 @@ function supplementalPlanSectionHTML(pp){
   const subtotal = recs.reduce((s,x)=>s+num(x.amount),0);
   const rows = recs.map(s=>`<div class="hist-row"><span class="hist-event">${supplementalStatusPill(s)}</span><span class="hist-note"><button class="linklike" data-supp-open="${s.id}">${fmtIDR(s.amount)}</button> · ${escapeHtml(supplementalSourceLabel(s.sourceType))}</span><span class="hist-ts faint">${s.updatedAt?new Date(s.updatedAt).toLocaleDateString('id-ID'):''}</span></div>`).join('');
   const genBtn = st.needsGeneration ? `<button class="btn btn-sm btn-accent" data-supp-gen="${pp.id}" style="margin-top:8px;">Generate Supplemental (${fmtIDR(st.elig.amount)})</button>` : '';
-  return `<div class="card" style="margin-bottom:14px;"><h3>Supplemental Payments <span class="tag">${recs.length}</span></h3>
+  return `<div class="card stack-section"><h3>Supplemental Payments <span class="tag">${recs.length}</span></h3>
     <p class="hint" style="margin-top:-2px;margin-bottom:8px;">Separate documents for overtime approved after this payroll was posted. They do <b>not</b> change the base payroll total above.</p>
     ${recs.length?`<div class="hist-list">${rows}</div><div style="margin-top:8px;font-size:13px;">Supplemental subtotal: <b class="mono">${fmtIDR(subtotal)}</b> <span class="faint">(separate from base payroll)</span></div>`:'<div class="empty">None yet.</div>'}
     ${genBtn}</div>`;
@@ -13111,7 +13115,7 @@ function supplementalEmployeeSectionHTML(empId){
   const recs = supplementalsForEmployee(empId).filter(s=>s.status!=='Cancelled');
   if(!recs.length) return '';
   const rows = recs.map(s=>`<div class="hist-row"><span class="hist-event">${supplementalStatusPill(s)}</span><span class="hist-note"><button class="linklike" data-supp-open="${s.id}">${fmtIDR(s.amount)}</button> · ${escapeHtml(s.periodLabel||'')}</span><span class="hist-ts faint">${escapeHtml(supplementalSourceLabel(s.sourceType))}</span></div>`).join('');
-  return `<div class="card" style="margin-bottom:14px;"><h3>Supplemental Payments <span class="tag">${recs.length}</span></h3><div class="hist-list">${rows}</div></div>`;
+  return `<div class="card stack-section"><h3>Supplemental Payments <span class="tag">${recs.length}</span></h3><div class="hist-list">${rows}</div></div>`;
 }
 
 /* ============================================================

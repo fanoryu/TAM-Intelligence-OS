@@ -113,7 +113,7 @@ function renderTrends(main){
   main.innerHTML = `
     <div class="page-head"><div><h1>Monthly Trends</h1><p class="desc">Chronological view from ${escapeHtml(monthLabel(allMonths[0]))} to ${escapeHtml(monthLabel(allMonths[allMonths.length-1]))}.</p></div></div>
 
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr 1fr;align-items:end;">
         <div class="field"><label>Date Range</label>
           <select class="input" id="trRange">
@@ -135,25 +135,25 @@ function renderTrends(main){
       </div>
     </div>
 
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="grid grid-4 stack-section">
       <div class="card stat-card"><div class="stat-label">Avg Monthly Planned</div><div class="stat-value">${fmtIDRShort(avgPlanned)}</div></div>
       <div class="card stat-card"><div class="stat-label">Avg Monthly Actual</div><div class="stat-value">${avgActual!==null?fmtIDRShort(avgActual):'<span class="faint">no data</span>'}</div></div>
       <div class="card stat-card"><div class="stat-label">Highest-Spending Month</div><div class="stat-value" style="font-size:15px;">${highest?escapeHtml(monthLabel(highest.m)):'—'}</div><div class="stat-sub dim">${highest?fmtIDR(highest.tot.actual):''}</div></div>
       <div class="card stat-card"><div class="stat-label">Lowest-Spending Month</div><div class="stat-value" style="font-size:15px;">${lowest?escapeHtml(monthLabel(lowest.m)):'—'}</div><div class="stat-sub dim">${lowest?fmtIDR(lowest.tot.actual):''}</div></div>
     </div>
-    <div class="grid grid-3" style="margin-bottom:14px;">
+    <div class="grid grid-3 stack-section">
       <div class="card stat-card"><div class="stat-label">Largest Over-Budget Month</div><div class="stat-value" style="font-size:15px;color:var(--brick);">${largestOver&&largestOver.tot.variance<0?escapeHtml(monthLabel(largestOver.m)):'—'}</div><div class="stat-sub dim">${largestOver&&largestOver.tot.variance<0?fmtIDR(largestOver.tot.variance):'none over budget'}</div></div>
       <div class="card stat-card"><div class="stat-label">Largest Saving Month</div><div class="stat-value" style="font-size:15px;color:var(--green);">${largestSaving&&largestSaving.tot.variance>0?escapeHtml(monthLabel(largestSaving.m)):'—'}</div><div class="stat-sub dim">${largestSaving&&largestSaving.tot.variance>0?fmtIDR(largestSaving.tot.variance):'none under budget'}</div></div>
       <div class="card stat-card"><div class="stat-label">Total Actual Spending (recorded)</div><div class="stat-value">${fmtIDRShort(totalSpending)}</div><div class="stat-sub dim">${withData.length} of ${months.length} months have recorded actuals</div></div>
     </div>
 
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">Planned vs. Actual Trend</h3><button class="btn btn-sm" id="exportTrendCsv">Export Summary CSV</button></div>
       <p class="hint">Gaps in the actual line mean no actual data was recorded for that month — not zero spending. Click a point to open that month in Finance Overview.</p>
       <div class="chart-wrap tall" id="trPlanActual"></div>
     </div>
 
-    <div class="grid grid-2" style="margin-bottom:14px;">
+    <div class="grid grid-2 stack-section">
       <div class="card">
         <h3>Budget Variance Trend</h3>
         <p class="hint">Positive = under budget. Negative = over budget.</p>
@@ -174,7 +174,7 @@ function renderTrends(main){
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">Category Trend — ${escapeHtml(f.category)}</h3><button class="btn btn-sm" id="exportCatCsv">Export Category CSV</button></div>
       <div class="chart-wrap" id="trCategoryChart"></div>
       <div id="catTrendStats"></div>
@@ -294,7 +294,7 @@ function renderTrends(main){
           <div class="chart-mini-stat"><div class="lbl">Latest Change</div><div class="val" style="color:${latestChange==null?'inherit':latestChange>0?'var(--brick)':'var(--green)'}">${latestChange==null?'—':(latestChange>0?'+':'')+fmtIDRShort(latestChange)}</div></div>
         </div>`;
       } else {
-        catStatsEl.innerHTML = `<div class="empty" style="padding:14px 0;">No recorded actuals for ${escapeHtml(f.category)} in this range.</div>`;
+        catStatsEl.innerHTML = `<div class="empty" style="padding:var(--space-4) 0;">No recorded actuals for ${escapeHtml(f.category)} in this range.</div>`;
       }
     }
   }

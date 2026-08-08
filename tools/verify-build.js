@@ -77,17 +77,27 @@ const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
 //     Navigation-simplification + rebrand presentation only (css/shell.css).
 //   UX-005A              fff716cb0c32719530ef2dc397064d4299d45de308101ad754d0dac11ce5c793
 //     Executive Dashboard consolidation: Action Center navigable row (.action-item).
-//   UX-005B (current) — AUTHORIZED golden-master revision. Data Grid Foundation,
-//     presentation only (css/components.css): sortable-header control (.grid-sort),
-//     pager (.grid-pager/.grid-page-ind/.grid-page-size) and result count
-//     (.grid-count), added additively. Every value resolves from an existing token;
-//     no color/radius/type scale changed and no layout outside these surfaces touched.
-const CSS_GOLDEN_SHA256 = '1b0452532108c8b35b8aaee8c6eb33f4d5680939b57dad952adfd2dd5453d3d6';
+//   UX-005B              1b0452532108c8b35b8aaee8c6eb33f4d5680939b57dad952adfd2dd5453d3d6
+//     Data Grid Foundation controls (.grid-sort/.grid-pager/.grid-count).
+//   UX-005C (current) — AUTHORIZED golden-master revision. Design-system consistency,
+//     presentation only (css/components.css): one additive canonical section-rhythm
+//     helper (.stack-section = margin-bottom:var(--space-4)) that replaces the off-grid
+//     inline `margin-bottom:14px` drift. Every value resolves from an existing token;
+//     tokens.css is byte-unchanged (pinned below); no color/radius/type scale changed.
+const CSS_GOLDEN_SHA256 = '539328bf4f3ab26c1bc3ea42b660b7324152b0dc6829129e51b3b19544090752';
+// UX-005C — tokens.css anti-drift pin. The design tokens are the single source of truth
+// for spacing/type/radius/color; this pin fails loudly if any token VALUE is changed,
+// so a "consistency" edit can never silently move the scale it normalizes onto.
+const TOKENS_CSS_SHA256 = '60dde600fce5ebe389160efdaf8c3ded5dca32c0882d7fb8079b2cde7d91a7d1';
 console.log('== CSS GOLDEN MASTER (pinned digest of concat(css/*.css)) ==');
 const cssDigest = crypto.createHash('sha256').update(trimLF(srcCss), 'utf8').digest('hex');
 check(cssDigest === CSS_GOLDEN_SHA256,
   'concat(css/*.css) matches the pinned CSS golden master'
   + (cssDigest === CSS_GOLDEN_SHA256 ? '' : ' >> VIOLATION: expected ' + CSS_GOLDEN_SHA256 + ', got ' + cssDigest + ' — an unapproved style change, or an approved revision whose pin was not updated'));
+const tokensDigest = crypto.createHash('sha256').update(trimLF(read(path.join(root,'css','tokens.css'))), 'utf8').digest('hex');
+check(tokensDigest === TOKENS_CSS_SHA256,
+  'UX-005C: css/tokens.css matches its pinned digest (token values never drift silently)'
+  + (tokensDigest === TOKENS_CSS_SHA256 ? '' : ' >> VIOLATION: expected ' + TOKENS_CSS_SHA256 + ', got ' + tokensDigest));
 
 console.log('== BUILD FIDELITY (source -> dist) ==');
 check(trimLF(srcCss) === distCss, 'concat(css/*.css) == dist CSS payload');
@@ -3513,6 +3523,63 @@ check(!/PersonalWorkspace|role-based|requireAuth/i.test(ux5bDG+ux5bTxn+ux5bEmp),
 // 27. deterministic runtime harness present
 check(fs.existsSync(path.join(root,'tools','verify-data-grid-runtime.js')),
   'UX-005B: deterministic runtime harness tools/verify-data-grid-runtime.js exists');
+
+// ============================================================
+// UX-005C — DESIGN SYSTEM CONSISTENCY & TOKEN DRIFT CLEANUP
+// Presentation-only consistency pass. Guards: the off-grid 14px rhythm drift is gone,
+// the canonical section-rhythm helper exists, tokens are unchanged, numeric typography
+// and table density are preserved, no arbitrary brand color / icon library, nav
+// ids/labels/routes unchanged, and no schema/UX-005D/UX-006 creep.
+// ============================================================
+console.log('== UX-005C: Design System Consistency ==');
+const ux5cJsAll = require(path.join(root,'tools','module-order.js'))
+  .map(f=>read(path.join(root,'js',f))).join('\n');
+const ux5cComponents = read(path.join(root,'css','components.css'));
+const ux5cShell = read(path.join(root,'js','ui','shell-render.js'));
+const ux5cSettings = read(path.join(root,'js','ui','settings-about.js'));
+// 1. canonical section-rhythm helper exists
+check(/\.stack-section\{margin-bottom:var\(--space-4\);\}/.test(ux5cComponents),
+  'UX-005C: .stack-section canonical rhythm helper is defined (margin-bottom:var(--space-4))');
+// 2. the off-grid 14px rhythm drift is gone (only card padding "14px 16px" may remain)
+const ux5cFourteen = (ux5cJsAll.match(/:14px/g)||[]).length;
+const ux5cCardPad = (ux5cJsAll.match(/14px 16px/g)||[]).length;
+check(ux5cFourteen === ux5cCardPad,
+  'UX-005C: no off-grid 14px rhythm literals remain in js/ (only documented card padding "14px 16px")');
+check(!/margin-bottom:14px|margin-top:14px|margin:0 0 14px/.test(ux5cJsAll),
+  'UX-005C: no margin rhythm uses the off-grid 14px literal');
+// 3. undefined --gold fallback removed
+check(!/--gold/.test(ux5cJsAll),
+  'UX-005C: the undefined var(--gold,...) fallback is removed (uses a real token)');
+// 4. numeric typography (UX-004D) preserved
+check(/font-variant-numeric:tabular-nums/.test(ux5cComponents),
+  'UX-005C: Numeric Typography Standard preserved (tabular-nums present)');
+// 5. table density preserved (frozen td/th padding)
+check(/td\{padding:9px 10px;/.test(ux5cComponents) && /padding:8px 10px;/.test(ux5cComponents),
+  'UX-005C: table density invariant preserved (td/th padding unchanged)');
+// Symbol scans run on COMMENT-STRIPPED code — module doc comments legitimately name
+// tokens like "currentUser" to state what a module must NOT do.
+const ux5cCode = ux5cJsAll.replace(/\/\*[\s\S]*?\*\//g,'').replace(/(^|[^:])\/\/[^\n]*/g,'$1');
+// 6. no new icon library / external icon assets; nav still uses inline glyph strings
+check(!/icon-font|fontawesome|font-awesome|material-icons|feather|<svg[^>]*sprite|iconify/i.test(ux5cCode+ux5cComponents),
+  'UX-005C: no icon library / SVG sprite architecture introduced');
+// nav ids/labels/routes unchanged; the three formerly-duplicate glyphs are now distinct
+check(/id:'reports', label:'Reports'/.test(ux5cShell) && /id:'activity', label:'Activity Log'/.test(ux5cShell) && /id:'releasenotes', label:'Release Notes'/.test(ux5cShell),
+  'UX-005C: nav ids/labels for Reports/Activity Log/Release Notes are unchanged');
+const ux5cGlyphs = [ (ux5cShell.match(/id:'reports', label:'Reports', ic:'([^']+)'/)||[])[1],
+                     (ux5cShell.match(/id:'activity', label:'Activity Log', ic:'([^']+)'/)||[])[1],
+                     (ux5cShell.match(/id:'releasenotes', label:'Release Notes', ic:'([^']+)'/)||[])[1] ];
+check(ux5cGlyphs.every(Boolean) && new Set(ux5cGlyphs).size === 3,
+  'UX-005C: Reports / Activity Log / Release Notes now use three DISTINCT glyphs');
+// 7. sidebar geometry unchanged
+check(/\.sidebar\{[^}]*width:258px/.test(read(path.join(root,'css','shell.css'))),
+  'UX-005C: sidebar width (258px) unchanged');
+// 8. invariants: schema, no UX-005D/UX-006 creep
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))),
+  'UX-005C: SCHEMA_VERSION remains 6');
+check(!/commandPalette|globalSearch|Ctrl\+K|Cmd\+K/i.test(ux5cCode),
+  'UX-005C: no UX-005D Global Search / command palette introduced');
+check(!/PersonalWorkspace|isEmployee|userRole|requireAuth|currentUser/.test(ux5cCode),
+  'UX-005C: no UX-006 role/auth/Personal-Workspace symbols introduced');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

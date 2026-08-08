@@ -30,7 +30,7 @@ function renderLegacyPayrollMapping(main){
       <div><h1>Legacy Payroll Mapping</h1><p class="desc">Link historical Gaji transactions to employee and contract master data. Matching is conservative — review every suggestion before applying. Descriptions are preserved.</p></div>
       <div class="head-controls"><button class="btn" id="backPay">← Payroll Planning</button></div>
     </div>
-    ${!State.employees.length?`<div class="insight-item warn" style="margin-bottom:14px;">No employees exist yet. Add employees first (People &amp; Contracts → Employees), then return here to map historical payroll to them.</div>`:''}
+    ${!State.employees.length?`<div class="insight-item warn stack-section">No employees exist yet. Add employees first (People &amp; Contracts → Employees), then return here to map historical payroll to them.</div>`:''}
     <div class="card">
       <h3>Unmapped Historical Payroll <span class="tag">${unlinked.length} transaction(s) · ${rows.length} distinct name(s)</span></h3>
       ${rows.length?`
@@ -46,7 +46,7 @@ function renderLegacyPayrollMapping(main){
           </tr>`).join('')}</tbody>
         </table>
       </div>
-      <div class="modal-actions" style="justify-content:flex-start;margin-top:14px;">
+      <div class="modal-actions" style="justify-content:flex-start;margin-top:var(--space-4);">
         <button class="btn btn-accent" id="applyMap">Apply Mappings</button>
         <span class="hint" style="align-self:center;">Only rows with an employee selected are linked. Contracts are linked only where one already covers that transaction's month — none are created.</span>
       </div>`:'<div class="empty">All Gaji transactions are already linked to employees, or there is no historical payroll to map.</div>'}

@@ -7,7 +7,7 @@ function actionEmptyState(title, sub, btnLabel, targetView){
   return `<div class="card" style="max-width:640px;"><div class="empty">
     <div class="big">▢</div>
     <div style="color:var(--text);font-weight:600;margin-bottom:6px;">${escapeHtml(title)}</div>
-    <div style="margin-bottom:14px;">${escapeHtml(sub)}</div>
+    <div class="stack-section">${escapeHtml(sub)}</div>
     ${btnLabel?`<button class="btn btn-accent" data-empty-nav="${targetView}">${escapeHtml(btnLabel)}</button>`:''}
   </div></div>`;
 }
@@ -58,7 +58,7 @@ function onboardingChecklistHTML(){
   if(State.settings.onboardingDismissed) return '';
   const steps = onboardingSteps(); const done = steps.filter(s=>s.done).length;
   if(done===steps.length) return '';
-  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--accent);">
+  return `<div class="card" style="margin-bottom:var(--space-4);border-left:3px solid var(--accent);">
     <h3>Getting Started <span class="tag">${done}/${steps.length} complete</span><button class="btn btn-sm" id="dismissOnb" style="float:right;">Dismiss</button></h3>
     <p class="hint" style="margin:-6px 0 12px;">Set up TAM OS with your real data. Click any step to jump there. This checklist never blocks navigation.</p>
     <div class="insight-list">${steps.map((s,i)=>`<div class="insight-item ${s.done?'good':''}" style="cursor:pointer;" data-onb="${s.view}"><b style="min-width:18px;display:inline-block;">${s.done?'✓':(i+1)+'.'}</b> ${escapeHtml(s.label)}</div>`).join('')}</div>
@@ -105,7 +105,7 @@ async function maybeShowFirstRunChoice(){
   openModalHTML(`
     <h3>Existing data detected</h3>
     <p class="dim" style="font-size:13px;line-height:1.7;">TAM OS v${APP_VERSION} ships clean, but this browser already holds data from an earlier version — ${list}. Your data has <b>not</b> been changed. Choose how to proceed:</p>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:var(--space-4);">
       <button class="btn btn-accent" id="frKeep">Keep Existing Data</button>
       <button class="btn" id="frFresh">Export Backup &amp; Start Fresh…</button>
       <button class="btn" id="frCancel">Cancel (decide later)</button>

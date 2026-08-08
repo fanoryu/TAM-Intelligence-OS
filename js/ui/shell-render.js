@@ -131,9 +131,9 @@ const NAV_GROUPS = [
   ]},
   {id:'system', label:'System', items:[
     {id:'settings', label:'Settings', ic:'⚙'},
-    {id:'activity', label:'Activity Log', ic:'▤'},
+    {id:'activity', label:'Activity Log', ic:'☰'},
     {id:'about', label:'About', ic:'ℹ'},
-    {id:'releasenotes', label:'Release Notes', ic:'▤'},
+    {id:'releasenotes', label:'Release Notes', ic:'✎'},
   ]},
 ];
 const PAGE_TITLES = Object.fromEntries(NAV_GROUPS.flatMap(g=>g.items).map(i=>[i.id,i.label]));

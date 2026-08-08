@@ -10,13 +10,13 @@ function renderCompare(main){
 
   main.innerHTML = `
     <div class="page-head"><div><h1>Compare Months</h1><p class="desc">Select months to compare totals, categories, and trend.</p></div></div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Select Months</h3>
       <div class="month-strip">
         ${months.map(m=>`<div class="month-chip ${State.compareMonths.includes(m.key)?'active':''}" data-m="${m.key}">${monthLabel(m)}</div>`).join('')}
       </div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
         <h3 style="margin:0;">Total Spend Trend</h3>
         <div class="chart-range-chips" style="margin-bottom:0;" role="group" aria-label="Trend date range">

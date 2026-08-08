@@ -25,8 +25,8 @@ function renderCashFlow(main){
   });
   main.innerHTML = `
     <div class="page-head"><div><h1>Cash Flow</h1><p class="desc">Recorded income versus actual expenses, month by month.</p></div></div>
-    ${!hasAnyIncome ? `<div class="insight-item warn" style="margin-bottom:14px;">No income transactions have been recorded in the system yet, so cash-flow analysis is incomplete — figures below reflect expenses only. Add income transactions (Add / Upload → Manual Entry → Type: Income) to see net cash flow.</div>` : ''}
-    ${(State.settings.openingCashBalance===null||State.settings.openingCashBalance===undefined) ? `<div class="insight-item" style="margin-bottom:14px;">No opening cash balance is set, so this page shows net movement only, not a cash position. Add one in Settings to see a running cash position.</div>` : ''}
+    ${!hasAnyIncome ? `<div class="insight-item warn stack-section">No income transactions have been recorded in the system yet, so cash-flow analysis is incomplete — figures below reflect expenses only. Add income transactions (Add / Upload → Manual Entry → Type: Income) to see net cash flow.</div>` : ''}
+    ${(State.settings.openingCashBalance===null||State.settings.openingCashBalance===undefined) ? `<div class="insight-item stack-section">No opening cash balance is set, so this page shows net movement only, not a cash position. Add one in Settings to see a running cash position.</div>` : ''}
     <div class="card">
       <h3>Monthly Cash Flow</h3>
       <div class="table-wrap"><table>
@@ -40,7 +40,7 @@ function renderCashFlow(main){
         </tr>`).join('')}</tbody>
       </table></div>
     </div>
-    <div class="card" style="margin-top:14px;">
+    <div class="card" style="margin-top:var(--space-4);">
       <h3>Net Cash Flow Trend</h3>
       <div class="chart-wrap" id="cashFlowChart"></div>
     </div>

@@ -327,12 +327,20 @@ present.
 
 | Phase | Title | Focus |
 |---|---|---|
-| **UX-005A** *(implementation candidate — unmerged, branch `feature/ux-005a-executive-dashboard`)* | Executive Dashboard & Information Architecture | Canonical home; resolve Exec↔Finance overlap per §12; KPI ownership; hierarchy; drill-through; Action Center (resolver-based navigation, Option A); removal of duplicate Finance Overview Net Cash Flow tile; **all computations preserved** |
-| **UX-005B** *(implementation candidate — unmerged, branch `feature/ux-005b-data-grid-foundation`)* | Data Grid Foundation | Reusable `js/core/data-grid.js` (R1–R9): column-definition contract, comparator registry, centralized `State.grid`, default-sort registry, data-source/role/storage-agnostic helpers, deterministic fixtures, page sizes 20/50/100 (default 20), declarative feature flags. Rolled out to Transactions + Employees only; single-column sort, debounced search, result count, filtered-empty; pagination over virtualization. Presentation/query-state only |
-| **UX-005C** | Workspace Productivity | Global search / `Cmd+K` (read-oriented), recent/pinned, Action Center integration |
-| **UX-005D** | Workspace Memory & Personalization | Classify session/preference/business state; governed persistence only |
-| **UX-005E** | Design System Consolidation | Token drift, inline styling, duplicate icons, spacing, button hierarchy — **after** structures stable; golden-master pin process |
-| **UX-005F** | Responsive & Accessibility Polish | Skip-link, `aria-sort`, live counts, mobile restack, touch targets, keyboard |
+> **Sequence correction (authoritative).** The C–F phases were resequenced after this freeze
+> was written. Design System Consistency is now **UX-005C** (moved earlier, since later phases
+> benefit from a consistent base), and Global Search / Cross-Module Discoverability is now
+> **UX-005D**. The detailed contracts in §14 (Global Search) and §17 (Workspace Productivity)
+> describe the **UX-005D** work; §18 (Workspace Memory) folds into the later phases.
+
+| Phase | Title | Focus |
+|---|---|---|
+| **UX-005A** *(merged to `main`)* | Executive Dashboard & Information Architecture | Canonical home; Exec↔Finance overlap resolved; KPI ownership; drill-through; Action Center; duplicate Net Cash Flow tile removed; all computations preserved |
+| **UX-005B** *(merged to `main`)* | Data Grid Foundation | Reusable `js/core/data-grid.js` (R1–R9): column definitions, comparator registry, `State.grid`, default-sort registry, source/role/storage-agnostic helpers, fixtures, page sizes 20/50/100 (default 20), feature flags. Transactions + Employees; presentation/query-state only |
+| **UX-005C** *(implementation candidate — unmerged, branch `feature/ux-005c-design-system-consistency`)* | Design System Consistency & Token Drift Cleanup | Normalize off-grid `margin-bottom:14px` rhythm → `var(--space-4)` via one additive `.stack-section` helper; fix undefined `var(--gold,…)` → `var(--accent)`; disambiguate the three duplicate `▤` sidebar glyphs. Presentation only; tokens/type/density preserved; golden-master pin revised once |
+| **UX-005D** | Cross-Module Discoverability / Global Search | Global search / `Cmd+K` (read-oriented), recent/pinned destinations (see §14, §17). Not begun |
+| **UX-005E** | Responsive & Density Polish | Mobile restack, density options, viewport polish. Not begun |
+| **UX-005F** | Accessibility / final UX hardening | Skip-link, `aria-sort`, live counts, touch targets, keyboard. Not begun |
 
 UX-005F completes the Executive Workspace before UX-006 begins, unless a later explicit product decision
 resequences.

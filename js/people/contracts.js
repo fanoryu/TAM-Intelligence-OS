@@ -80,9 +80,9 @@ function renderContracts(main){
         <button class="btn" id="expCt">Export CSV</button>
       </div>
     </div>
-    ${alerts.length?`<div class="card" style="margin-bottom:14px;"><h3>Contract Alerts</h3><div class="insight-list">${alerts.slice(0,12).map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div></div>`:''}
+    ${alerts.length?`<div class="card stack-section"><h3>Contract Alerts</h3><div class="insight-list">${alerts.slice(0,12).map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div></div>`:''}
     <div class="card">
-      <div class="form-grid" style="grid-template-columns:1.6fr 1fr;margin-bottom:14px;">
+      <div class="form-grid" style="grid-template-columns:1.6fr 1fr;margin-bottom:var(--space-4);">
         <div class="field"><label>Search (contract #, employee)</label><input class="input" id="cSearch" placeholder="Search…" value="${escapeHtml(f.search)}"></div>
         <div class="field"><label>Status</label><select class="input" id="cStatus"><option value="all">All statuses</option>${CONTRACT_FILTER_STATES.map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
       </div>
@@ -614,8 +614,8 @@ function renderContractDetail(main){
         ${contractIsRenewable(c)?'<button class="btn btn-accent" id="renewCtD">Renew Contract</button>':''}
       </div>
     </div>
-    ${alerts.length?`<div class="insight-list" style="margin-bottom:14px;">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
-    <div class="grid grid-2" style="margin-bottom:14px;align-items:start;">
+    ${alerts.length?`<div class="insight-list stack-section">${alerts.map(a=>`<div class="insight-item ${a.type}">${a.text}</div>`).join('')}</div>`:''}
+    <div class="grid grid-2" style="margin-bottom:var(--space-4);align-items:start;">
       <div class="card">
         <h3>Contract</h3>
         <div style="font-size:13px;line-height:1.75;">
@@ -636,14 +636,14 @@ function renderContractDetail(main){
         <div class="hint" style="margin-top:10px;">Calculated automatically from the start date and duration using calendar months. Before the start it reads 0/${cc.total}; after the end, ${cc.total}/${cc.total} and Expired.</div>
       </div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Linked Payroll Plans</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Month</th><th>Progress</th><th class="num">Planned Payroll</th><th>Status</th></tr></thead>
         <tbody>${plans.map(p=>`<tr><td class="dim">${escapeHtml(p.month)} ${p.year}</td><td>${escapeHtml(p.contractProgress||'')}</td><td class="num">${fmtIDR(p.plannedAmount)}</td><td>${isPayrollCommitted(p)?'<span class="pill pill-status-completed">Committed</span>':'<span class="pill pill-status-planned">Draft</span>'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">No payroll plans yet.</td></tr>'}</tbody>
       </table></div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card stack-section">
       <h3>Linked Financial Transactions</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>Month</th><th>Description</th><th class="num">Planned</th><th class="num">Actual</th><th>Status</th></tr></thead>

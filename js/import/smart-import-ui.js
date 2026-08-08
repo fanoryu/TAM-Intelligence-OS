@@ -43,7 +43,7 @@ function renderColumnMappingCard(model){
       + rows.slice(0,200).map((r,idx)=>`<tr><td class="dim">${idx+1}</td><td>${escapeHtml(r.employeeName||'—')}</td><td>${escapeHtml(r.contractNumber||'—')}</td><td>${r.progressCurrent!=null?escapeHtml((''+r.progressCurrent).replace('.',',')+'/'+r.progressTotal):'—'}</td><td class="num">${fmtIDR(r.salary||0)}</td><td class="dim">${escapeHtml(r.month||'')} ${r.year||''}</td><td class="faint" style="font-size:10.5px;">${escapeHtml(((r.subLines||[]).join(' · '))||'')}</td></tr>`).join('')
       + `</tbody></table></div><p class="hint">Exactly what Smart Import extracted from each payroll row — verify before committing.</p>`;
   }
-  return `<div class="card" style="margin-bottom:14px;">
+  return `<div class="card stack-section">
     <div class="small-btn-row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
       <div><b>Column Mapping</b> <span class="faint" style="font-size:11px;">· ${escapeHtml(srcLabel)}</span></div>
       <div class="small-btn-row" style="gap:8px;">
@@ -115,8 +115,8 @@ function renderSmartImport(main){
 
   main.innerHTML = pageHeader('Smart Import', `${escapeHtml(model.fileName)} · ${c.rows} payroll row(s) across ${c.months} month(s)`,
       `<button class="btn" id="siCancel">Cancel</button>`)
-    + `<div class="card" style="margin-bottom:14px;"><div class="chart-range-chips">${SMART_STEPS.map((s,i)=>`<span class="btn btn-sm ${i+1<=step?'btn-accent':''}" style="cursor:default;">${i+1}. ${escapeHtml(s)}</span>`).join('')}</div></div>
-    <div class="grid grid-4" style="margin-bottom:14px;">
+    + `<div class="card stack-section"><div class="chart-range-chips">${SMART_STEPS.map((s,i)=>`<span class="btn btn-sm ${i+1<=step?'btn-accent':''}" style="cursor:default;">${i+1}. ${escapeHtml(s)}</span>`).join('')}</div></div>
+    <div class="grid grid-4 stack-section">
       <div class="card stat-card"><div class="stat-label">Payroll Rows</div><div class="stat-value">${c.rows}</div><div class="stat-sub dim">across ${c.months} month(s)</div></div>
       <div class="card stat-card"><div class="stat-label">Unique Employees</div><div class="stat-value">${c.uniqueEmployees}</div><div class="stat-sub dim">${c.existingMatched} matched · ${c.newEmployees} new${c.possibleDuplicates?' · '+c.possibleDuplicates+' possible dup':''}</div></div>
       <div class="card stat-card"><div class="stat-label">Contracts</div><div class="stat-value">${c.contracts}</div><div class="stat-sub dim">${c.matchedCt} matched · ${c.newCt} new</div></div>
@@ -233,7 +233,7 @@ function renderImportResults(main){
   if(!a){ State.view='add'; render(); return; }
   main.innerHTML = pageHeader('Import Results', `${escapeHtml(a.fileName)} · committed ${escapeHtml(new Date(a.ts).toLocaleString('id-ID'))}`,
       `<button class="btn btn-accent" id="irPayroll">Continue to Payroll Planning</button><button class="btn" id="irBack">Back to Add / Upload</button><button class="btn btn-danger" id="irUndo">Undo Last Smart Import</button>`)
-    + `<div class="grid grid-4" style="margin-bottom:14px;">
+    + `<div class="grid grid-4 stack-section">
       <div class="card stat-card"><div class="stat-label">Employees Created</div><div class="stat-value">${a.counts.employees}</div></div>
       <div class="card stat-card"><div class="stat-label">Contracts Created</div><div class="stat-value">${a.counts.contracts}</div></div>
       <div class="card stat-card"><div class="stat-label">Payroll Plans</div><div class="stat-value">${a.counts.payrollPlans}</div></div>

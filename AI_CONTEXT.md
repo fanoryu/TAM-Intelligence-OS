@@ -9,21 +9,23 @@ there rather than duplicating it.
 **As of the current source state:** v2.8.6 — "Navigation Experience & TAM OS Rebrand"; `SCHEMA_VERSION` 6.
 **v2.8.6 is tagged and published, and is the latest published release** — annotated tag `v2.8.6` peels to
 the release commit `7ac0092d8f60a00118c86e26a7dce429660017c9` on `main`, and the GitHub Release is published
-(not draft, not prerelease) and marked Latest. UX-004 is complete. **UX-005A (Executive Dashboard &
-Information Architecture) is merged to `main`** (Executive Dashboard as canonical home, Action Center
-recast of the executive alerts, KPI drill-through, and removal of the duplicate Finance Overview Net
-Cash Flow tile — presentation/navigation only). **UX-005B (Data Grid Foundation) is an unmerged
-implementation candidate** on branch `feature/ux-005b-data-grid-foundation`: a reusable, data-source/
-role/storage-agnostic grid layer (`js/core/data-grid.js`) with single-column sort, pagination
-(20/50/100, default 20), debounced search, result count, filtered-empty states, and declarative feature
-flags, rolled out to Transactions and Employees only — presentation/query-state only, no
-calculation/schema/storage change. Later UX-005 phases (C–F) have not begun. v2.8.5 remains
+(not draft, not prerelease) and marked Latest. UX-004 is complete. **UX-005A (Executive Dashboard),
+UX-005B (Data Grid Foundation), and MAINT-001 (repository maintenance & official branding adoption,
+plus its follow-up backlog) are all merged to `main`.** **UX-005C (Design System Consistency & Token
+Drift Cleanup) is an unmerged implementation candidate** on branch
+`feature/ux-005c-design-system-consistency`: it normalizes the off-grid inline `margin-bottom:14px`
+rhythm drift onto `var(--space-4)` via one additive `.stack-section` helper, fixes two undefined
+`var(--gold,…)` fallbacks to `var(--accent)`, and disambiguates the three duplicate `▤` sidebar glyphs
+(Reports `▤`, Activity Log `☰`, Release Notes `✎`) — presentation only, no business/schema/storage
+change. Later UX-005 phases (D–F) and UX-006 have not begun. v2.8.5 remains
 published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
 only — it changed no source commit, runtime behavior, schema, or storage key.
 
-**`main` is at the published v2.8.6 release commit**, so the repository artifact **equals** the published
-v2.8.6 Release asset (they are byte-identical). UX-004B–UX-004F, the UX-004 sidebar interaction hotfix,
-and the TAM OS rebrand are all shipped in v2.8.6:
+**The published v2.8.6 Release asset is immutable** at release commit `7ac0092d`; `main` has since
+advanced with the merged UX-005A/UX-005B/MAINT-001 work, so the current repository development artifact
+(`dist/tam-os-v2.8.6.html`) intentionally **diverges** from the published asset under the post-release
+development convention (the published Release is never rewritten). UX-004B–UX-004F, the UX-004 sidebar
+interaction hotfix, and the TAM OS rebrand are all shipped in v2.8.6:
 
 | | Repository `main` (published v2.8.6) | Published v2.8.6 Release asset |
 |---|---|---|
@@ -304,7 +306,7 @@ labels so exported terminology matches the screen.
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1931** on the UX-005B
+  the portable single file, and a verifier runs a suite of invariant checks (**1945** on the UX-005C
   branch; 1889 on `main`), joined by **seventeen** runtime harnesses (**1526** checks).
   PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
@@ -452,8 +454,8 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1931** checks on the
-  UX-005B branch; 1889 on `main`) plus **seventeen**
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1945** checks on the
+  UX-005C branch; 1931 on `main`) plus **seventeen**
   Node runtime harnesses (**1526** checks total: contract timeline 349, integrity warning rules 146,
   integrity payroll rules 144, Contract Core 129, monthly plan 118, payroll posting 106,
   contract persistence 74, payroll committed state 72, contract renewal 67, integrity rules 67,

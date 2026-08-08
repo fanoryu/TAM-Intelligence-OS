@@ -17,6 +17,10 @@
    the track already blew out. Letting grid children shrink restores containment
    and hands scrolling back to the inner .table-wrap where it belongs. */
 .grid > *, .two-col > *{min-width:0;}
+/* UX-005C — canonical vertical section rhythm. Replaces the off-grid inline
+   `margin-bottom:14px` drift (was between --space-3 and --space-4) with one tokened
+   separator for stacked sections/cards/blocks. Presentation only. */
+.stack-section{margin-bottom:var(--space-4);}
 
 .card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:var(--space-4);}
 .card h3{font-family:var(--sans);font-weight:650;font-size:var(--fs-4);letter-spacing:-.1px;margin:0 0 var(--space-3) 0;color:var(--text);}

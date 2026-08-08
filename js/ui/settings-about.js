@@ -3,7 +3,7 @@ function renderSettings(main){
   const s = State.settings;
   main.innerHTML = `
     <div class="page-head"><div><h1>Settings</h1><p class="desc">Configuration for ${escapeHtml(APP_NAME)}.</p></div></div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>General</h3>
       <form id="settingsForm">
         <div class="form-grid" style="grid-template-columns:1fr 1fr;">
@@ -82,7 +82,7 @@ function renderSettings(main){
         </div>
       </form>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;border-color:var(--accent);">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);border-color:var(--accent);">
       <h3>Data Reset &amp; Onboarding</h3>
       <p class="hint" style="margin-bottom:12px;">Manage the data in this browser. Start Fresh downloads a full backup and requires typed confirmation before clearing — it never erases silently.</p>
       <div class="small-btn-row" style="flex-wrap:wrap;gap:8px;">
@@ -94,18 +94,18 @@ function renderSettings(main){
         <button class="btn" id="drShowOnb">Show Onboarding Checklist</button>
       </div>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>Storage Status</h3>
       <p class="dim" style="font-size:13px;line-height:2;">
         Storage Mode: <b>${escapeHtml(StorageAdapter.modeLabel())}</b><br>
-        Persistence Status: <b style="color:${StorageAdapter.status==='active'?'var(--green)':StorageAdapter.status==='error'?'var(--brick)':'var(--gold, #C9A15C)'};">${escapeHtml(StorageAdapter.statusLabel())}</b>
+        Persistence Status: <b style="color:${StorageAdapter.status==='active'?'var(--green)':StorageAdapter.status==='error'?'var(--brick)':'var(--accent)'};">${escapeHtml(StorageAdapter.statusLabel())}</b>
       </p>
       ${StorageAdapter.lastError?`<p class="hint">Last storage error: ${escapeHtml(StorageAdapter.lastError)}</p>`:''}
       <p class="hint">${StorageAdapter.mode==='claude'
         ? 'Data is persisted by the Claude Artifact environment.'
         : 'Data is persisted in this browser’s localStorage for this file location. Use Data Portability below to move data to another browser or device.'}</p>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>System Diagnostics</h3>
       <div id="diagnosticsBody">${buildDiagnosticsHTML()}</div>
       <div class="small-btn-row" style="margin-top:12px;">
@@ -114,7 +114,7 @@ function renderSettings(main){
       </div>
       <div id="integrityBody" style="margin-top:12px;">${State.lastIntegrity?buildIntegrityHTML(State.lastIntegrity):''}</div>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>Data Portability</h3>
       <p class="hint" style="margin-bottom:12px;">Export or restore your complete dataset — all transactions, settings, and backups — as a single JSON file. Use this to move between browsers, devices, or between the Claude Artifact and the standalone file. A safety backup of current data is created automatically before every restore.</p>
       <div class="small-btn-row">
@@ -124,7 +124,7 @@ function renderSettings(main){
       </div>
       <div id="portabilityPreview" style="margin-top:12px;"></div>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>Data Export</h3>
       <div class="small-btn-row" style="flex-wrap:wrap;gap:6px;">
         <button class="btn" id="exportAllTxns">Export All Transactions (CSV)</button>
@@ -133,7 +133,7 @@ function renderSettings(main){
         <button class="btn" id="exportCtCsv">Export Contracts (CSV)</button>
       </div>
     </div>
-    <div class="card" style="max-width:760px;margin-bottom:14px;">
+    <div class="card" style="max-width:760px;margin-bottom:var(--space-4);">
       <h3>Backup Management</h3>
       <div id="settingsBackupPanel"></div>
     </div>
@@ -366,7 +366,7 @@ function renderBankAccounts(main){
   main.innerHTML = pageHeader('Bank Accounts',
       'Company bank accounts used across finance and payroll. Only Active accounts appear in transaction dropdowns. Account numbers are stored masked in lists — never a PIN, OTP, password, or token.',
       `<button class="btn btn-accent" id="caccNew">+ New Bank Account</button>`)
-    + `<div class="grid grid-4" style="margin-bottom:14px;">
+    + `<div class="grid grid-4 stack-section">
         <div class="card stat-card"><div class="stat-label">Accounts</div><div class="stat-value">${all.length}</div><div class="stat-sub dim">${activeN} active</div></div>
         <div class="card stat-card"><div class="stat-label">Shown</div><div class="stat-value" id="caccShown">${bankAccountsFiltered().length}</div></div>
       </div>
@@ -449,9 +449,9 @@ function renderAbout(main){
       <div class="divider"></div>
       <p class="dim" style="font-size:13px;line-height:2;">
         Storage Mode: <b>${escapeHtml(StorageAdapter.modeLabel())}</b><br>
-        Persistence Status: <b style="color:${StorageAdapter.status==='active'?'var(--green)':StorageAdapter.status==='error'?'var(--brick)':'var(--gold, #C9A15C)'};">${escapeHtml(StorageAdapter.statusLabel())}</b>
+        Persistence Status: <b style="color:${StorageAdapter.status==='active'?'var(--green)':StorageAdapter.status==='error'?'var(--brick)':'var(--accent)'};">${escapeHtml(StorageAdapter.statusLabel())}</b>
       </p>
-      <div class="insight-item" style="margin-top:14px;display:block;">Data is stored privately on this device (${escapeHtml(StorageAdapter.modeLabel())}). Use Settings → Data Portability to move your complete dataset to another browser or device. Cloud synchronization and multi-user access are not yet enabled.</div>
+      <div class="insight-item" style="margin-top:var(--space-4);display:block;">Data is stored privately on this device (${escapeHtml(StorageAdapter.modeLabel())}). Use Settings → Data Portability to move your complete dataset to another browser or device. Cloud synchronization and multi-user access are not yet enabled.</div>
     </div>
   `;
 }
@@ -499,7 +499,7 @@ function renderReleaseNotes(main){
   ];
   main.innerHTML = `
     <div class="page-head"><div><h1>Release Notes</h1></div></div>
-    ${notes.map(n=>`<div class="card" style="margin-bottom:14px;">
+    ${notes.map(n=>`<div class="card stack-section">
       <h3>Version ${n.v}</h3>
       <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.9;color:var(--text-dim);">${n.items.map(i=>`<li>${escapeHtml(i)}</li>`).join('')}</ul>
     </div>`).join('')}
