@@ -12,15 +12,20 @@ the release commit `7ac0092d8f60a00118c86e26a7dce429660017c9` on `main`, and the
 (not draft, not prerelease) and marked Latest. UX-004 is complete. **UX-005A (Executive Dashboard),
 UX-005B (Data Grid Foundation), UX-005C (Design System Consistency), and MAINT-001 (repository
 maintenance & official branding adoption, plus its follow-up backlog) are all merged to `main`.**
-**UX-005D (Global Search) is an unmerged implementation candidate** on branch
-`feature/ux-005d-global-search`: a navigation-only `Ctrl/Cmd+K` command palette over a pure,
+**UX-005D (Global Search) is merged to `main`**: a navigation-only `Ctrl/Cmd+K` command palette over a pure,
 source-agnostic engine (`js/core/global-search.js`) plus an application adapter/palette
 (`js/ui/global-search-ui.js`). It searches Employees, Contracts, Payroll, and navigable views (from the
 canonical manifest, placeholders excluded) and activates results solely via `hrNavTo` — no execute/
 approve/post/delete/persist, no storage/schema change. **Scope-safety (frozen for UX-006):** the engine
 only ranks the document set it is handed, so a future Personal Workspace supplies a self-scoped set with
-zero engine changes. Transaction entity results are deferred (no non-mutating focus route). Later UX-005
-phases (E–F) and UX-006 have not begun. v2.8.5 remains
+zero engine changes. Transaction entity results are deferred (no non-mutating focus route).
+**UX-005E (Responsive & Density Polish) is an unmerged implementation candidate** on branch
+`feature/ux-005e-responsive-density-polish`: a deliberately minimal, presentation-only sprint whose sole
+change gives the shared `.modal` primitive viewport containment (`max-height:88vh; overflow-y:auto` in
+`css/components.css`), so the finance Transaction Execute / Edit / Detail dialogs stay inside short/mobile
+viewports and scroll internally. No JS, token, schema, storage, breakpoint, or density-preference change;
+the table density invariant (td 9px/10px, th 8px/10px) and all UX-005B/UX-005D architecture stay frozen.
+Later UX-005 phase F and UX-006 have not begun. v2.8.5 remains
 published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
 only — it changed no source commit, runtime behavior, schema, or storage key.
 
@@ -309,8 +314,8 @@ labels so exported terminology matches the screen.
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1966** on the UX-005D
-  branch; 1945 on `main`), joined by **eighteen** runtime harnesses (**1552** checks).
+  the portable single file, and a verifier runs a suite of invariant checks (**1979** on the UX-005E
+  branch; 1966 on `main`), joined by **eighteen** runtime harnesses (**1552** checks).
   PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
@@ -457,8 +462,8 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1966** checks on the
-  UX-005D branch; 1945 on `main`) plus **eighteen**
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1979** checks on the
+  UX-005E branch; 1966 on `main`) plus **eighteen**
   Node runtime harnesses (**1552** checks total: contract timeline 349, integrity warning rules 146,
   integrity payroll rules 144, Contract Core 129, monthly plan 118, payroll posting 106,
   contract persistence 74, payroll committed state 72, contract renewal 67, integrity rules 67,
@@ -562,7 +567,7 @@ The canonical roadmap lives in [`README.md`](README.md#roadmap).
 
 ## 18. Technical Debt
 
-- No general automated regression suite; coverage is the invariant verifier plus fifteen targeted runtime
+- No general automated regression suite; coverage is the invariant verifier plus eighteen targeted runtime
   harnesses, with the remaining behavioural coverage manual.
 - Heavy use of direct DOM string rendering — safe today because user data is escaped, but a
   standing reason to keep escaping disciplined.
