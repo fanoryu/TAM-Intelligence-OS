@@ -4,11 +4,13 @@
 released from annotated tag `v2.8.5`, which peels to the published baseline commit
 `96a8d178987142fedd43372646abf9d597b8bac2` on `main`
 **Previous release:** v2.8.5 — Workspace & Contract Timeline Integrity (still published and unchanged; no longer Latest)
-**Current distributable:** `dist/tam-os-v2.9.0.html` — the **v2.9.0 "Workspace Experience" release
-candidate** (prepared, **not yet tagged or published**), packaging the UX-005 line and MAINT-001. It
-intentionally diverges from the published v2.8.6 asset under the post-release development convention. The
-**last published release remains v2.8.6 (Latest)** from annotated tag `v2.8.6` on commit `7ac0092d`; its
-published asset (`tam-os-v2.8.6.html`, **998,413 bytes**, SHA-256
+**Current distributable:** `dist/tam-os-v2.9.0.html` — **TAM OS v2.9.0 "Workspace Experience", published
+and marked Latest** from annotated tag `v2.9.0` on commit `598edef0`. Its published asset
+(`tam-os-v2.9.0.html`, **1,049,018 bytes**, SHA-256
+`e7470ff5261896b8d7d1f8645294d2abd6a72e9820df94b799973627ddcaf3ea`) is byte-identical to the repository
+artifact and packages the UX-005 line and MAINT-001. The prior **v2.8.6** release remains published and
+immutable (no longer Latest) — annotated tag `v2.8.6` on commit `7ac0092d`; its published asset
+(`tam-os-v2.8.6.html`, **998,413 bytes**, SHA-256
 `8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`) is immutable. The **published v2.8.5 tag, Release, and 965,767-byte asset
 (`tam-intelligence-os-v2.8.5.html`, SHA-256 `32e624a262ef1da47bd4ec849471ff98e428402c33722db1715cf1c23a7db8cb`)
 remain immutable and unchanged**; older tags/Releases and their assets are likewise untouched.

@@ -6,10 +6,12 @@ AI assistants get productive quickly. It is descriptive (what *is*), whereas
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
 there rather than duplicating it.
 
-**As of the current source state:** v2.9.0 — "Workspace Experience"; `SCHEMA_VERSION` 6. **v2.9.0 is a
-prepared release candidate — not yet tagged or published** (source `APP_VERSION` `2.9.0`, artifact
-`dist/tam-os-v2.9.0.html`); publication is a separate controlled step. **v2.8.6 remains the last published
-release, marked Latest** — annotated tag `v2.8.6` peels to
+**As of the current source state:** v2.9.0 — "Workspace Experience"; `SCHEMA_VERSION` 6. **v2.9.0 is
+published and marked Latest** — annotated tag `v2.9.0` peels to the publication commit `598edef0`; the
+GitHub Release is published (not draft, not prerelease) and marked Latest, and its asset
+`tam-os-v2.9.0.html` (1,049,018 bytes, SHA-256 `e7470ff5…ddcaf3ea`) is byte-identical to
+`dist/tam-os-v2.9.0.html`. **v2.8.6 remains published and immutable** (no longer Latest) — annotated tag
+`v2.8.6` peels to
 the release commit `7ac0092d8f60a00118c86e26a7dce429660017c9` on `main`, and the GitHub Release is published
 (not draft, not prerelease) and marked Latest. UX-004 is complete. **UX-005A (Executive Dashboard),
 UX-005B (Data Grid Foundation), UX-005C (Design System Consistency), and MAINT-001 (repository
@@ -47,29 +49,28 @@ screenshots under `assets/screenshots/` in a README **Product Preview** section,
 `assets/social/tam-os-social.png` (the GitHub social-preview **Settings upload remains a manual step**).
 Repository/presentation only — no application CSS/JS change; `css/*` golden master and `tokens.css`
 byte-identical.
-**v2.9.0 Release Preparation is merged to `main` (PR #93) and verified — approved and ready for controlled
-publication.** It carried the version identity forward (`APP_VERSION` `2.8.6` → `2.9.0`, `APP_RELEASE_NAME`
-"Workspace Experience", `<title>`, in-app release notes, and the release-identity verifier guardrails
-reconciled to the v2.9.0 candidate state), authored the v2.9.0 `CHANGELOG`/`RELEASE_NOTES` entries, and
-swapped the dev artifact to `dist/tam-os-v2.9.0.html` (deterministic, SHA `e7470ff5…`, 1,049,018 bytes; the
-superseded `tam-os-v2.8.6.html` dev artifact was removed per the release dist-swap). `SCHEMA_VERSION` stays
-**6** (no migration); no application CSS/JS/business change (`css/*` and `tokens.css` byte-identical);
-verifier 2014 → 2013. **The `v2.9.0` tag and GitHub Release are NOT yet published** (a separate controlled
-publication step) — until then v2.8.6 stays the immutable last-published release marked Latest.
+**v2.9.0 Release Preparation is merged (PR #93) and v2.9.0 is published (PR #94 reconciled current-state
+docs; the controlled publication then tagged and released it).** It carried the version identity forward
+(`APP_VERSION` `2.8.6` → `2.9.0`, `APP_RELEASE_NAME` "Workspace Experience", `<title>`, in-app release
+notes, and the release-identity verifier guardrails), authored the v2.9.0 `CHANGELOG`/`RELEASE_NOTES`
+entries, and swapped the dev artifact to `dist/tam-os-v2.9.0.html` (deterministic, SHA `e7470ff5…`,
+1,049,018 bytes; the superseded `tam-os-v2.8.6.html` dev artifact was removed per the release dist-swap).
+`SCHEMA_VERSION` stays **6** (no migration); no application CSS/JS/business change (`css/*` and `tokens.css`
+byte-identical); verifier 2014 → 2013. **The annotated `v2.9.0` tag (peeling to publication commit
+`598edef0`) and its GitHub Release are published and marked Latest; the published asset is byte-identical
+to the candidate.**
 **UX-006 has not begun.** v2.8.5 remains
 published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
 only — it changed no source commit, runtime behavior, schema, or storage key.
 
-**The published v2.8.6 Release asset is immutable** at release commit `7ac0092d`; `main` has since
-advanced through the UX-005 line and MAINT-001, and is now on the **v2.9.0 release candidate**, so the
-current repository development artifact (`dist/tam-os-v2.9.0.html`) intentionally **diverges** from the
-published v2.8.6 asset under the post-release development convention (the published Release is never
-rewritten). The v2.9.0 tag/Release/asset do not exist yet:
+**v2.9.0 is published (Latest); the published v2.8.6 Release asset remains immutable** at release commit
+`7ac0092d`. The current repository artifact (`dist/tam-os-v2.9.0.html`) is byte-identical to the published
+v2.9.0 asset and differs from the prior published v2.8.6 asset (each release asset stays immutable):
 
-| | Repository `main` (v2.9.0 candidate) | Published v2.8.6 Release asset (immutable) |
+| | Published v2.9.0 Release asset (Latest) | Published v2.8.6 Release asset (immutable) |
 |---|---|---|
-| Artifact | `dist/tam-os-v2.9.0.html` — **1,049,018 bytes** | `tam-os-v2.8.6.html` — **998,413 bytes** |
-| SHA-256 | `e7470ff5…ddcaf3ea` (candidate) | `8481523c…c91d3f62` (published, unchanged) |
+| Artifact | `tam-os-v2.9.0.html` — **1,049,018 bytes** | `tam-os-v2.8.6.html` — **998,413 bytes** |
+| SHA-256 | `e7470ff5…ddcaf3ea` (published, Latest) | `8481523c…c91d3f62` (published, unchanged) |
 
 The prior published asset `tam-intelligence-os-v2.8.5.html` (965,767 bytes, `32e624a262…1c23a7db8cb`) and
 its v2.8.5 tag/Release remain immutable and unchanged.

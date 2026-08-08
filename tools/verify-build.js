@@ -358,14 +358,15 @@ check(/version-2\.9\.0/.test(readmeSrc) && /v2\.9\.0 — Workspace Experience/.t
 // Current-state repository slug is TAM-OS in the current-state docs (historical audit/ files exempt).
 check(!/fanoryu\/TAM-Intelligence-OS/.test(readmeSrc + securitySrc + issueCfg) && /fanoryu\/TAM-OS/.test(readmeSrc),
   'current-state docs (README/SECURITY/issue-template) use the canonical fanoryu/TAM-OS slug');
-// PRE-PUBLICATION: v2.9.0 is a prepared release candidate — not yet tagged/published; v2.8.6
-// remains the last published release. The paperwork must state this honestly.
-check(/release candidate/i.test(relNotes) && /not yet published/i.test(relNotes),
-  'RELEASE_NOTES.md records v2.9.0 as a prepared release candidate, not yet published');
-check(/v2\.8\.6[^\n]*last published|last published[^\n]*v2\.8\.6/i.test(relNotes),
-  'RELEASE_NOTES.md records v2.8.6 as the last published release');
-check(/release candidate/i.test(readmeSrc) && /not yet published/i.test(readmeSrc),
-  'README.md states v2.9.0 is a prepared release candidate, not yet published');
+// POST-PUBLICATION: v2.9.0 is published and marked Latest; the paperwork must reflect the
+// published state and carry no stale "not yet published" pre-publication wording.
+check(/v2\.9\.0 is \*\*published/i.test(relNotes) && /marked Latest/i.test(relNotes),
+  'RELEASE_NOTES.md records v2.9.0 as published and marked Latest');
+check(!/not yet published/i.test(relNotes) && !/not yet tagged/i.test(relNotes),
+  'RELEASE_NOTES.md carries no stale pre-publication "not yet published/tagged" wording');
+check(/v2\.9\.0[\s\S]{0,80}\*\*published/i.test(readmeSrc) && /marked Latest/i.test(readmeSrc)
+  && !/not yet published/i.test(readmeSrc) && !/release candidate — prepared/i.test(readmeSrc),
+  'README.md records v2.9.0 as published and marked Latest (no stale candidate wording)');
 // v2.9.0 SHIPS the UX-005 line — the paperwork records it as delivered, not future.
 check(/UX-005/.test(relNotes) && /UX-005/.test(changelog) && /## 2\.9\.0 — Workspace Experience/.test(changelog),
   'CHANGELOG/RELEASE_NOTES record the UX-005 line as delivered in v2.9.0');
