@@ -320,6 +320,14 @@ select:focus, .input:focus{border-color:var(--interactive);}
 }
 .btn:hover{border-color:var(--text-faint);}
 .btn:focus-visible, .nav-item:focus-visible, .tab:focus-visible, .linklike:focus-visible, .actions-item:focus-visible, .month-chip:focus-visible{outline:2px solid var(--interactive);outline-offset:2px;}
+/* UX-005F (A5) — extend the single focus treatment to borderless/custom controls
+   that reset border+background and so had no visible keyboard focus indicator. Same
+   outline as every other control; no new visual language, no token change. */
+.grid-sort:focus-visible, .nav-group-head:focus-visible, .sidebar-collapse-btn:focus-visible, .nav-hamburger:focus-visible{outline:2px solid var(--interactive);outline-offset:2px;}
+/* UX-005F (A1) — skip-to-content link. Kept in the a11y/focusable tree but visually
+   off-canvas until focused; the first Tab reveals it at the top-left. Token-driven. */
+.skip-link{position:fixed;top:var(--space-2);left:var(--space-2);z-index:1000;background:var(--interactive);color:var(--interactive-ink);padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);font-size:var(--fs-3);font-weight:600;text-decoration:none;transform:translateY(-200%);transition:transform .15s ease;}
+.skip-link:focus{transform:translateY(0);outline:2px solid var(--interactive);outline-offset:2px;}
 .btn-accent{background:var(--interactive);border-color:var(--interactive);color:var(--interactive-ink);font-weight:600;}
 .btn-accent:hover{filter:brightness(1.08);}
 .btn-danger{color:var(--brick);}
@@ -1035,8 +1043,9 @@ function gridCycleSort(current, colId, columnDefs, gridKey){
 }
 
 /* ---- shared HTML builders (presentation only) ---- */
-// One <thead><tr> of <th>s from column defs. Sortable columns render an accessible
-// button carrying aria-sort and a direction glyph; non-sortable columns are plain.
+// One <thead><tr> of <th>s from column defs. Sortable columns render a <th> that
+// carries aria-sort, wrapping an accessible button with a direction glyph; non-sortable
+// columns are plain.
 function gridTheadHTML(columnDefs, state){
   const cells = (columnDefs || []).map(c => {
     const cls = c.align === 'num' ? ' class="num"' : '';
@@ -1044,7 +1053,10 @@ function gridTheadHTML(columnDefs, state){
     const active = state && state.col === c.id;
     const ariaSort = active ? (state.dir === 'asc' ? 'ascending' : 'descending') : 'none';
     const glyph = active ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '';
-    return `<th${cls}><button type="button" class="grid-sort${active ? ' active' : ''}" data-grid-sort="${escapeHtml(c.id)}" aria-sort="${ariaSort}" aria-label="Sort by ${escapeHtml(c.label || c.id)}">${escapeHtml(c.label || '')}<span class="grid-sort-ind" aria-hidden="true">${glyph}</span></button></th>`;
+    // UX-005F (A6) — aria-sort belongs on the column header cell (implicit columnheader),
+    // not on the button (role=button, where aria-sort is not a valid state). The button
+    // keeps its accessible name + click/keyboard behavior; only the ARIA state moves.
+    return `<th${cls} aria-sort="${ariaSort}"><button type="button" class="grid-sort${active ? ' active' : ''}" data-grid-sort="${escapeHtml(c.id)}" aria-label="Sort by ${escapeHtml(c.label || c.id)}">${escapeHtml(c.label || '')}<span class="grid-sort-ind" aria-hidden="true">${glyph}</span></button></th>`;
   }).join('');
   return `<thead><tr>${cells}</tr></thead>`;
 }
@@ -2686,7 +2698,7 @@ function shellIsMounted(){
 function navItemHTML(n, activeItem){
   const on = n.id===activeItem;
   return `<button class="nav-item ${on?'active':''}" data-nav="${n.id}"${on?' aria-current="page"':''} title="${escapeHtml(n.label)}">
-                <span class="ic">${n.ic}</span><span class="nav-label">${escapeHtml(n.label)}</span>${featureBadgeHTML(n.id)}
+                <span class="ic" aria-hidden="true">${n.ic}</span><span class="nav-label">${escapeHtml(n.label)}</span>${featureBadgeHTML(n.id)}
               </button>`;
 }
 // UX-004F — the "More" disclosure is open when the user opened it OR the active view
@@ -2709,14 +2721,14 @@ function navGroupHTML(g){
   const moreOpen = navMoreOpen(g, active.item);
   const moreHTML = moreItems.length ? `
               <button class="nav-item nav-more-head" data-more="${g.id}" aria-expanded="${moreOpen}" title="More">
-                <span class="ic">⋯</span><span class="nav-label">More</span><span class="chev">${moreOpen?'▾':'▸'}</span>
+                <span class="ic" aria-hidden="true">⋯</span><span class="nav-label">More</span><span class="chev" aria-hidden="true">${moreOpen?'▾':'▸'}</span>
               </button>
               <div class="nav-more-items" style="${moreOpen?'':'display:none;'}">
                 ${moreItems.map(n=>navItemHTML(n, active.item)).join('')}
               </div>` : '';
   return `<div class="nav-group">
             <button class="nav-group-head" data-group="${g.id}" aria-expanded="${!collapsed}">
-              <span>${escapeHtml(g.label)}</span><span class="chev">${collapsed?'▸':'▾'}</span>
+              <span>${escapeHtml(g.label)}</span><span class="chev" aria-hidden="true">${collapsed?'▸':'▾'}</span>
             </button>
             <div class="nav-group-items" style="${collapsed?'display:none;':''}">
               ${primary.map(n=>navItemHTML(n, active.item)).join('')}${moreHTML}
@@ -2728,6 +2740,7 @@ function navGroupHTML(g){
 function renderShell(){
   const app = document.getElementById('app');
   app.innerHTML = `
+    <a class="skip-link" href="#main" id="skipLink">Skip to main content</a>
     <button class="nav-hamburger" id="navHamburger" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span class="hbars" aria-hidden="true">☰</span></button>
     <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
     <div class="sidebar" id="sidebar">
@@ -2741,13 +2754,24 @@ function renderShell(){
       </nav>
       <div class="sidebar-foot">${escapeHtml(APP_NAME)} v${APP_VERSION}<br>${escapeHtml(APP_TAGLINE)}<br>Data stored privately in your browser.</div>
     </div>
-    <div class="main" id="main"></div>
+    <main class="main" id="main" tabindex="-1"></main>
   `;
   bindShell(app);
   sidebarApplyState(); // apply session collapse/drawer state to the freshly mounted shell
 }
 // Shell listeners are bound once, against nodes that now outlive navigation.
 function bindShell(app){
+  // UX-005F (A1) — skip-to-content. The link is the first focusable shell node; on
+  // activation it moves keyboard focus into the <main> landmark (tabindex="-1"), so
+  // keyboard users bypass the persistent nav. The shell is never remounted.
+  const skip = app.querySelector('#skipLink');
+  if(skip){
+    skip.addEventListener('click', (e)=>{
+      e.preventDefault();
+      const main = document.getElementById('main');
+      if(main && typeof main.focus === 'function'){ try{ main.focus(); }catch(err){} }
+    });
+  }
   app.querySelectorAll('[data-nav]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{
       e.preventDefault();
@@ -3842,8 +3866,8 @@ function renderExecuteModal(){
   const today = new Date().toISOString().slice(0,10);
   root.innerHTML = `
     <div class="modal-overlay" id="execOverlay">
-      <div class="modal" style="max-width:540px;">
-        <h3>Execute Transaction</h3>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="execModalTitle" style="max-width:540px;">
+        <h3 id="execModalTitle">Execute Transaction</h3>
         <p class="dim" style="font-size:12.5px;margin:0 0 var(--space-4);">${escapeHtml(t.uraian)} · ${escapeHtml(t.category)} · planned ${fmtIDR(t.planned)}</p>
         <form id="execForm">
           <div class="form-grid" style="grid-template-columns:1fr 1fr;">
@@ -3892,8 +3916,8 @@ function openEditModal(id){
   State._modalOpener = document.activeElement;
   root.innerHTML = `
     <div class="modal-overlay" id="editOverlay">
-      <div class="modal" style="max-width:520px;">
-        <h3>Edit Transaction</h3>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" style="max-width:520px;">
+        <h3 id="editModalTitle">Edit Transaction</h3>
         <form id="editForm">
           <div class="form-grid" style="grid-template-columns:1fr 1fr;">
             <div class="field" style="grid-column:span 2;"><label>Description</label><input class="input" name="uraian" value="${escapeHtml(t.uraian)}"></div>
@@ -3937,9 +3961,9 @@ function openDetailModal(id){
   const ex = t.execution;
   root.innerHTML = `
     <div class="modal-overlay" id="detailOverlay">
-      <div class="modal" style="max-width:560px;">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle" style="max-width:560px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
-          <h3 style="margin:0;">${escapeHtml(t.uraian)}</h3>
+          <h3 id="detailModalTitle" style="margin:0;">${escapeHtml(t.uraian)}</h3>
           ${statusBadge(st)}
         </div>
         <p class="dim" style="font-size:12.5px;margin:6px 0 16px;">${escapeHtml(t.category)} · ${escapeHtml(t.month)} ${t.year} · planned ${fmtIDR(t.planned)}${t.actual!=null?' · actual '+fmtIDR(t.actual):''}</p>
@@ -9978,10 +10002,25 @@ function installGlobalUIHandlers(){
   if(__installedGlobalUI) return; __installedGlobalUI = true;
   // Escape closes any open modal (finance or HR) — installed exactly once so it
   // never accumulates across re-renders.
+  // UX-005F (A2) — Tab / Shift+Tab focus containment for the open dialog, added on the
+  // same single-install seam so no handler ever accumulates. Escape, overlay-click,
+  // initial focus and opener focus-restoration are unchanged; this only wraps Tab at
+  // the dialog boundary (drawer trap and Global Search keep their own handling). Mirrors
+  // the proven drawer focusable-selector concept; zero focusables is handled safely.
   document.addEventListener('keydown', e=>{
-    if(e.key==='Escape'){
-      const root = document.getElementById('modal-root');
-      if(root && root.innerHTML.trim()){ e.preventDefault(); closeModal(); }
+    const root = document.getElementById('modal-root');
+    const open = root && root.innerHTML.trim();
+    if(!open) return;
+    if(e.key==='Escape'){ e.preventDefault(); closeModal(); return; }
+    if(e.key==='Tab'){
+      const dialog = root.querySelector('.modal') || root;
+      const f = Array.from(dialog.querySelectorAll('button, [href], input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"])'))
+        .filter(el=>!el.disabled && el.offsetParent !== null);
+      if(!f.length){ e.preventDefault(); return; }
+      const first=f[0], last=f[f.length-1];
+      const active=document.activeElement;
+      if(e.shiftKey && (active===first || !dialog.contains(active))){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && (active===last || !dialog.contains(active))){ e.preventDefault(); first.focus(); }
     }
   });
   bindSystemThemeListener();

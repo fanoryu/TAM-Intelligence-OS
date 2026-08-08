@@ -19,13 +19,21 @@ canonical manifest, placeholders excluded) and activates results solely via `hrN
 approve/post/delete/persist, no storage/schema change. **Scope-safety (frozen for UX-006):** the engine
 only ranks the document set it is handed, so a future Personal Workspace supplies a self-scoped set with
 zero engine changes. Transaction entity results are deferred (no non-mutating focus route).
-**UX-005E (Responsive & Density Polish) is an unmerged implementation candidate** on branch
-`feature/ux-005e-responsive-density-polish`: a deliberately minimal, presentation-only sprint whose sole
-change gives the shared `.modal` primitive viewport containment (`max-height:88vh; overflow-y:auto` in
-`css/components.css`), so the finance Transaction Execute / Edit / Detail dialogs stay inside short/mobile
-viewports and scroll internally. No JS, token, schema, storage, breakpoint, or density-preference change;
-the table density invariant (td 9px/10px, th 8px/10px) and all UX-005B/UX-005D architecture stay frozen.
-Later UX-005 phase F and UX-006 have not begun. v2.8.5 remains
+**UX-005E (Responsive & Density Polish) is merged to `main`**: a deliberately minimal, presentation-only
+sprint whose sole change gives the shared `.modal` primitive viewport containment (`max-height:88vh;
+overflow-y:auto` in `css/components.css`), so the finance Transaction Execute / Edit / Detail dialogs stay
+inside short/mobile viewports and scroll internally. No JS, token, schema, storage, breakpoint, or
+density-preference change; the table density invariant (td 9px/10px, th 8px/10px) and all UX-005B/UX-005D
+architecture stay frozen. The three deferred responsive items (`.exec-timeline` reflow, `.form-grid`
+mobile 1-col, KPI stacking) were empirically re-tested in UX-005F and confirmed **non-defective** at 480px,
+so none were changed.
+**UX-005F (Final Workspace Polish & Accessibility Hardening) is an unmerged implementation candidate** on
+branch `feature/ux-005f-final-accessibility-hardening`: an accessibility-hardening sprint implementing
+A1 skip-to-content + a real `<main>` landmark, A2 modal Tab/Shift+Tab focus containment (on the existing
+single-install modal seam), A3 `role="dialog"`/`aria-modal`/`aria-labelledby` on the three finance
+transaction dialogs, A4 `aria-hidden` on decorative nav glyphs, A5 focus-visible coverage for borderless
+controls, and A6 relocating Data Grid `aria-sort` onto the `<th>`. Presentation/semantics only — no
+business logic, no token/schema/storage change, no new breakpoint, no UX-006. UX-006 has not begun. v2.8.5 remains
 published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
 only — it changed no source commit, runtime behavior, schema, or storage key.
 
@@ -314,8 +322,8 @@ labels so exported terminology matches the screen.
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1979** on the UX-005E
-  branch; 1966 on `main`), joined by **eighteen** runtime harnesses (**1552** checks).
+  the portable single file, and a verifier runs a suite of invariant checks (**2001** on the UX-005F
+  branch; 1979 on `main`), joined by **eighteen** runtime harnesses (**1552** checks).
   PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
@@ -462,8 +470,8 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1979** checks on the
-  UX-005E branch; 1966 on `main`) plus **eighteen**
+- **No automated browser/unit test suite** — QA is the invariant verifier (**2001** checks on the
+  UX-005F branch; 1979 on `main`) plus **eighteen**
   Node runtime harnesses (**1552** checks total: contract timeline 349, integrity warning rules 146,
   integrity payroll rules 144, Contract Core 129, monthly plan 118, payroll posting 106,
   contract persistence 74, payroll committed state 72, contract renewal 67, integrity rules 67,

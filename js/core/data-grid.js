@@ -136,8 +136,9 @@ function gridCycleSort(current, colId, columnDefs, gridKey){
 }
 
 /* ---- shared HTML builders (presentation only) ---- */
-// One <thead><tr> of <th>s from column defs. Sortable columns render an accessible
-// button carrying aria-sort and a direction glyph; non-sortable columns are plain.
+// One <thead><tr> of <th>s from column defs. Sortable columns render a <th> that
+// carries aria-sort, wrapping an accessible button with a direction glyph; non-sortable
+// columns are plain.
 function gridTheadHTML(columnDefs, state){
   const cells = (columnDefs || []).map(c => {
     const cls = c.align === 'num' ? ' class="num"' : '';
@@ -145,7 +146,10 @@ function gridTheadHTML(columnDefs, state){
     const active = state && state.col === c.id;
     const ariaSort = active ? (state.dir === 'asc' ? 'ascending' : 'descending') : 'none';
     const glyph = active ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '';
-    return `<th${cls}><button type="button" class="grid-sort${active ? ' active' : ''}" data-grid-sort="${escapeHtml(c.id)}" aria-sort="${ariaSort}" aria-label="Sort by ${escapeHtml(c.label || c.id)}">${escapeHtml(c.label || '')}<span class="grid-sort-ind" aria-hidden="true">${glyph}</span></button></th>`;
+    // UX-005F (A6) — aria-sort belongs on the column header cell (implicit columnheader),
+    // not on the button (role=button, where aria-sort is not a valid state). The button
+    // keeps its accessible name + click/keyboard behavior; only the ARIA state moves.
+    return `<th${cls} aria-sort="${ariaSort}"><button type="button" class="grid-sort${active ? ' active' : ''}" data-grid-sort="${escapeHtml(c.id)}" aria-label="Sort by ${escapeHtml(c.label || c.id)}">${escapeHtml(c.label || '')}<span class="grid-sort-ind" aria-hidden="true">${glyph}</span></button></th>`;
   }).join('');
   return `<thead><tr>${cells}</tr></thead>`;
 }

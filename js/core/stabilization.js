@@ -526,10 +526,25 @@ function installGlobalUIHandlers(){
   if(__installedGlobalUI) return; __installedGlobalUI = true;
   // Escape closes any open modal (finance or HR) — installed exactly once so it
   // never accumulates across re-renders.
+  // UX-005F (A2) — Tab / Shift+Tab focus containment for the open dialog, added on the
+  // same single-install seam so no handler ever accumulates. Escape, overlay-click,
+  // initial focus and opener focus-restoration are unchanged; this only wraps Tab at
+  // the dialog boundary (drawer trap and Global Search keep their own handling). Mirrors
+  // the proven drawer focusable-selector concept; zero focusables is handled safely.
   document.addEventListener('keydown', e=>{
-    if(e.key==='Escape'){
-      const root = document.getElementById('modal-root');
-      if(root && root.innerHTML.trim()){ e.preventDefault(); closeModal(); }
+    const root = document.getElementById('modal-root');
+    const open = root && root.innerHTML.trim();
+    if(!open) return;
+    if(e.key==='Escape'){ e.preventDefault(); closeModal(); return; }
+    if(e.key==='Tab'){
+      const dialog = root.querySelector('.modal') || root;
+      const f = Array.from(dialog.querySelectorAll('button, [href], input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"])'))
+        .filter(el=>!el.disabled && el.offsetParent !== null);
+      if(!f.length){ e.preventDefault(); return; }
+      const first=f[0], last=f[f.length-1];
+      const active=document.activeElement;
+      if(e.shiftKey && (active===first || !dialog.contains(active))){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && (active===last || !dialog.contains(active))){ e.preventDefault(); first.focus(); }
     }
   });
   bindSystemThemeListener();
