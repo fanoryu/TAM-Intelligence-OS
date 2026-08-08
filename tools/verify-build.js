@@ -79,12 +79,14 @@ const srcJs = jsFiles.map((f)=>read(path.join(root,'js',f))).join(LF);
 //     Executive Dashboard consolidation: Action Center navigable row (.action-item).
 //   UX-005B              1b0452532108c8b35b8aaee8c6eb33f4d5680939b57dad952adfd2dd5453d3d6
 //     Data Grid Foundation controls (.grid-sort/.grid-pager/.grid-count).
-//   UX-005C (current) — AUTHORIZED golden-master revision. Design-system consistency,
-//     presentation only (css/components.css): one additive canonical section-rhythm
-//     helper (.stack-section = margin-bottom:var(--space-4)) that replaces the off-grid
-//     inline `margin-bottom:14px` drift. Every value resolves from an existing token;
-//     tokens.css is byte-unchanged (pinned below); no color/radius/type scale changed.
-const CSS_GOLDEN_SHA256 = '539328bf4f3ab26c1bc3ea42b660b7324152b0dc6829129e51b3b19544090752';
+//   UX-005C              539328bf4f3ab26c1bc3ea42b660b7324152b0dc6829129e51b3b19544090752
+//     Design-system consistency: additive .stack-section rhythm helper.
+//   UX-005D (current) — AUTHORIZED golden-master revision. Global Search palette,
+//     presentation only (css/components.css): additive .gsearch-* classes for the
+//     Ctrl/Cmd+K dialog (overlay/box/input/results/group/item/empty). Every value
+//     resolves from an existing token; tokens.css byte-unchanged (pinned below); no
+//     color/radius/type scale changed and no layout outside the palette touched.
+const CSS_GOLDEN_SHA256 = '6a5a31987ad546c5afc16b5cf30dae093017ecdfa03294e5d8bebf57ab1679ad';
 // UX-005C — tokens.css anti-drift pin. The design tokens are the single source of truth
 // for spacing/type/radius/color; this pin fails loudly if any token VALUE is changed,
 // so a "consistency" edit can never silently move the scale it normalizes onto.
@@ -3576,10 +3578,80 @@ check(/\.sidebar\{[^}]*width:258px/.test(read(path.join(root,'css','shell.css'))
 // 8. invariants: schema, no UX-005D/UX-006 creep
 check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))),
   'UX-005C: SCHEMA_VERSION remains 6');
-check(!/commandPalette|globalSearch|Ctrl\+K|Cmd\+K/i.test(ux5cCode),
-  'UX-005C: no UX-005D Global Search / command palette introduced');
+// (UX-005C's "no UX-005D global-search" phase-scoping guard was retired when UX-005D
+//  was authorized and landed global search; the UX-006 guard below remains in force.)
 check(!/PersonalWorkspace|isEmployee|userRole|requireAuth|currentUser/.test(ux5cCode),
   'UX-005C: no UX-006 role/auth/Personal-Workspace symbols introduced');
+
+// ============================================================
+// UX-005D — GLOBAL SEARCH (navigation-only, source-agnostic)
+// Guards: the engine is a pure primitive (no State/DOM/nav/persistence/network),
+// the palette activates only via hrNavTo, results carry stable keys and existing
+// routes, navigation docs derive from the canonical manifest (no second route map),
+// and no schema/storage/UX-006/dependency/Data-Grid/Action-Center changes.
+// ============================================================
+console.log('== UX-005D: Global Search ==');
+const ux5dEngine = read(path.join(root,'js','core','global-search.js'));
+const ux5dUi = read(path.join(root,'js','ui','global-search-ui.js'));
+const ux5dEngineCode = ux5dEngine.replace(/\/\*[\s\S]*?\*\//g,'').replace(/(^|[^:])\/\/[^\n]*/g,'$1');
+const ux5dUiCode = ux5dUi.replace(/\/\*[\s\S]*?\*\//g,'').replace(/(^|[^:])\/\/[^\n]*/g,'$1');
+// 1. one canonical pure engine
+check(/function searchGlobal\(query, documents, options\)/.test(ux5dEngine),
+  'UX-005D: canonical pure engine searchGlobal(query, documents, options) exists');
+check(require(path.join(root,'tools','module-order.js')).includes('core/global-search.js')
+   && require(path.join(root,'tools','module-order.js')).includes('ui/global-search-ui.js'),
+  'UX-005D: engine and palette modules are registered in the load-order manifest');
+// 2-4. engine purity — no State-array reads, no DOM/nav, no persistence/network/auth
+check(!/State\.(employees|contracts|txns|payrollPlans|settings)|NAV_GROUPS|PAGE_TITLES/.test(ux5dEngineCode),
+  'UX-005D: engine reads no application State arrays or nav manifest (source-agnostic)');
+check(!/document\.|hrNavTo|querySelector|addEventListener/.test(ux5dEngineCode),
+  'UX-005D: engine performs no DOM access or navigation');
+check(!/StorageAdapter|localStorage|uiExecute|fetch\s*\(|XMLHttpRequest|WebSocket|currentUser|userRole|requireAuth|PersonalWorkspace/.test(ux5dEngineCode),
+  'UX-005D: engine has no persistence/network/auth/workspace coupling');
+// 5. stable result key contract (type:id), never array index
+check(/'employee:' \+ e\.id/.test(ux5dUi) && /'contract:' \+ c\.id/.test(ux5dUi) && /'payroll:' \+ p\.id/.test(ux5dUi) && /'view:' \+ it\.id/.test(ux5dUi),
+  'UX-005D: search documents use stable type:id keys (no array-index identity)');
+// 6. deterministic ranking implementation present
+check(/function globalSearchScore\(/.test(ux5dEngine) && /return 100;/.test(ux5dEngine) && /return 80;/.test(ux5dEngine) && /return 60;/.test(ux5dEngine) && /return 40;/.test(ux5dEngine) && /return 20;/.test(ux5dEngine),
+  'UX-005D: deterministic 5-tier ranking (exact/prefix/word-prefix/substring/meta)');
+// 7-8. nav docs derive from the canonical manifest; no second hardcoded route map
+check(/globalSearchViewDocs\(sources\.navGroups/.test(ux5dUi) && /it\.placeholder/.test(ux5dUi),
+  'UX-005D: navigation docs derive from the supplied canonical manifest, placeholders excluded');
+check(!/const .*ROUTES *=|routeMap|\bVIEWS *= *\[/.test(ux5dUiCode),
+  'UX-005D: no second hardcoded route/view inventory');
+// 10. result destinations resolve to existing routed views
+const ux5dShell = read(path.join(root,'js','ui','shell-render.js'));
+const ux5dRoutedViews = new Set([...ux5dShell.matchAll(/State\.view==='([a-zA-Z]+)'/g)].map(m=>m[1]));
+['employeeDetail','contractDetail','payrollDetail'].forEach(v=>{
+  check(ux5dRoutedViews.has(v), 'UX-005D: result destination "'+v+'" is an existing routed view');
+});
+// 11-12. activation navigation-only; no mutation paths anywhere in the palette
+check(/hrNavTo\(doc\.to, doc\.context/.test(ux5dUi),
+  'UX-005D: result activation is navigation-only (hrNavTo)');
+check(!/persist|StorageAdapter|executePayment|postPayroll|commitReadyPayroll|\.save\(|deleteEmployee|generatePayroll|setOvertimeStatus/.test(ux5dUiCode),
+  'UX-005D: palette contains no execute/approve/post/delete/generate/persist path');
+// 13-14. no storage / schema change
+check(!/localStorage|tam_[a-z_]+_v[0-9]/.test(ux5dEngineCode+ux5dUiCode),
+  'UX-005D: Global Search introduces no storage key / persistence');
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root,'js','core','constants.js'))),
+  'UX-005D: SCHEMA_VERSION remains 6');
+// 15. no external fuzzy/search dependency
+check(!/require\(|import .*from|fuse|lunr|flexsearch|elasticlunr/i.test(ux5dEngineCode+ux5dUiCode),
+  'UX-005D: no external search/fuzzy dependency');
+// 16-17. Data Grid + Action Center untouched (no coupling introduced)
+check(!/gridApply|gridSort|gridPage|State\.grid/.test(ux5dEngineCode+ux5dUiCode),
+  'UX-005D: Global Search is not coupled to the Data Grid');
+check(!/actionCenter|computeExecutiveAlerts/.test(ux5dEngineCode+ux5dUiCode),
+  'UX-005D: Global Search is not coupled to the Action Center engine');
+// 18. no UX-006 auth/role/workspace in either module
+check(!/currentUser|userRole|isEmployee|requireAuth|PersonalWorkspace|ExecutiveWorkspace/.test(ux5dEngineCode+ux5dUiCode),
+  'UX-005D: no UX-006 role/auth/workspace implementation introduced');
+// 19. tokens.css unchanged (shared anti-drift pin, asserted near the golden check too)
+check(crypto.createHash('sha256').update(trimLF(read(path.join(root,'css','tokens.css'))),'utf8').digest('hex') === TOKENS_CSS_SHA256,
+  'UX-005D: css/tokens.css remains byte-identical (no token drift)');
+// 20. deterministic runtime harness present
+check(fs.existsSync(path.join(root,'tools','verify-global-search-runtime.js')),
+  'UX-005D: deterministic runtime harness tools/verify-global-search-runtime.js exists');
 
 console.log('');
 if (fails.length === 0) { console.log('VERIFICATION PASSED -- ' + passes + ' checks OK.'); process.exit(0); }

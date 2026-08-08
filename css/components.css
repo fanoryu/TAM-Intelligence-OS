@@ -150,6 +150,23 @@ td.num, th.num{text-align:right;font-family:var(--sans);font-variant-numeric:tab
 .grid-page-size{width:auto;}
 .grid-count{font-variant-numeric:tabular-nums;}
 
+/* UX-005D — Global Search palette (Ctrl/Cmd+K). Reuses existing overlay/surface/
+   type/spacing tokens; navigation-only. Additive; no new colors or tokens. */
+.gsearch-overlay{position:fixed;inset:0;background:rgba(6,9,16,.6);display:flex;align-items:flex-start;justify-content:center;z-index:1000;padding:var(--space-6) var(--space-4);}
+.gsearch-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);width:100%;max-width:600px;margin-top:6vh;box-shadow:0 12px 40px rgba(0,0,0,.5);overflow:hidden;display:flex;flex-direction:column;max-height:70vh;}
+.gsearch-input{border:none;border-bottom:1px solid var(--border-soft);border-radius:0;font-size:var(--fs-4);padding:var(--space-4);width:100%;background:var(--surface);}
+.gsearch-input:focus{border-color:var(--interactive);}
+.gsearch-count{font-size:var(--fs-1);color:var(--text-faint);padding:var(--space-1) var(--space-4);}
+.gsearch-results{overflow-y:auto;padding:var(--space-2);}
+.gsearch-group{font-size:var(--fs-1);text-transform:uppercase;letter-spacing:.5px;color:var(--text-faint);font-weight:700;padding:var(--space-2) var(--space-2) var(--space-1);}
+.gsearch-item{display:flex;align-items:baseline;gap:var(--space-2);padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);cursor:pointer;}
+.gsearch-item:hover{background:var(--surface-2);}
+.gsearch-item.active{background:var(--interactive-soft);}
+.gsearch-item-label{color:var(--text);font-size:var(--fs-3);font-weight:500;}
+.gsearch-item-meta{color:var(--text-dim);font-size:var(--fs-2);}
+.gsearch-item-type{margin-left:auto;color:var(--text-faint);font-size:var(--fs-1);text-transform:uppercase;letter-spacing:.4px;}
+.gsearch-empty{padding:var(--space-5) var(--space-4);text-align:center;color:var(--text-faint);font-size:var(--fs-3);}
+
 .badge-count{background:var(--brick);color:#fff;font-size:var(--fs-1);font-weight:700;border-radius:var(--radius-full);padding:1px var(--space-1);margin-left:auto;}
 
 .empty{padding:var(--space-6) var(--space-5);text-align:center;color:var(--text-faint);font-size:var(--fs-3);}

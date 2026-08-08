@@ -10,14 +10,17 @@ there rather than duplicating it.
 **v2.8.6 is tagged and published, and is the latest published release** — annotated tag `v2.8.6` peels to
 the release commit `7ac0092d8f60a00118c86e26a7dce429660017c9` on `main`, and the GitHub Release is published
 (not draft, not prerelease) and marked Latest. UX-004 is complete. **UX-005A (Executive Dashboard),
-UX-005B (Data Grid Foundation), and MAINT-001 (repository maintenance & official branding adoption,
-plus its follow-up backlog) are all merged to `main`.** **UX-005C (Design System Consistency & Token
-Drift Cleanup) is an unmerged implementation candidate** on branch
-`feature/ux-005c-design-system-consistency`: it normalizes the off-grid inline `margin-bottom:14px`
-rhythm drift onto `var(--space-4)` via one additive `.stack-section` helper, fixes two undefined
-`var(--gold,…)` fallbacks to `var(--accent)`, and disambiguates the three duplicate `▤` sidebar glyphs
-(Reports `▤`, Activity Log `☰`, Release Notes `✎`) — presentation only, no business/schema/storage
-change. Later UX-005 phases (D–F) and UX-006 have not begun. v2.8.5 remains
+UX-005B (Data Grid Foundation), UX-005C (Design System Consistency), and MAINT-001 (repository
+maintenance & official branding adoption, plus its follow-up backlog) are all merged to `main`.**
+**UX-005D (Global Search) is an unmerged implementation candidate** on branch
+`feature/ux-005d-global-search`: a navigation-only `Ctrl/Cmd+K` command palette over a pure,
+source-agnostic engine (`js/core/global-search.js`) plus an application adapter/palette
+(`js/ui/global-search-ui.js`). It searches Employees, Contracts, Payroll, and navigable views (from the
+canonical manifest, placeholders excluded) and activates results solely via `hrNavTo` — no execute/
+approve/post/delete/persist, no storage/schema change. **Scope-safety (frozen for UX-006):** the engine
+only ranks the document set it is handed, so a future Personal Workspace supplies a self-scoped set with
+zero engine changes. Transaction entity results are deferred (no non-mutating focus route). Later UX-005
+phases (E–F) and UX-006 have not begun. v2.8.5 remains
 published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
 only — it changed no source commit, runtime behavior, schema, or storage key.
 
@@ -306,8 +309,8 @@ labels so exported terminology matches the screen.
 ## 6. Build System
 
 - **Node tooling only** (no `npm install`): a build script inlines CSS + JS in manifest order into
-  the portable single file, and a verifier runs a suite of invariant checks (**1945** on the UX-005C
-  branch; 1889 on `main`), joined by **seventeen** runtime harnesses (**1526** checks).
+  the portable single file, and a verifier runs a suite of invariant checks (**1966** on the UX-005D
+  branch; 1945 on `main`), joined by **eighteen** runtime harnesses (**1552** checks).
   PowerShell fallbacks exist for machines without Node.
 - The portable build is **reproducible**: the same source produces a byte-identical artifact, so the
   published SHA-256 verifies any downloaded copy.
@@ -454,13 +457,14 @@ summary: [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
   client-only by [`CLAUDE.md`](CLAUDE.md) §4.3, so cross-key atomicity cannot be delegated to a server.
 - **Supplemental Payments** (v2.7.0) settle overtime drift only; other adjustment sources (bonuses,
   reimbursements) are not yet implemented (the engine is designed to extend).
-- **No automated browser/unit test suite** — QA is the invariant verifier (**1945** checks on the
-  UX-005C branch; 1931 on `main`) plus **seventeen**
-  Node runtime harnesses (**1526** checks total: contract timeline 349, integrity warning rules 146,
+- **No automated browser/unit test suite** — QA is the invariant verifier (**1966** checks on the
+  UX-005D branch; 1945 on `main`) plus **eighteen**
+  Node runtime harnesses (**1552** checks total: contract timeline 349, integrity warning rules 146,
   integrity payroll rules 144, Contract Core 129, monthly plan 118, payroll posting 106,
   contract persistence 74, payroll committed state 72, contract renewal 67, integrity rules 67,
   breadcrumb & quick actions 64, `saveAllData` 61, data grid foundation 36, sidebar interaction 34,
-  nav simplification 25, executive dashboard & Action Center 23, sidebar click regression 11) plus
+  global search 26, nav simplification 25, executive dashboard & Action Center 23,
+  sidebar click regression 11) plus
   manual browser validation. The runtime harnesses drive real
   behaviour against the live engine and UI seams, but they are not a general test suite.
 - **One theme-blind colour path remains.** UX-002B tokenized every chart series colour, but the shared
