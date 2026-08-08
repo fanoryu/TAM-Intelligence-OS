@@ -322,14 +322,14 @@ if (fs.existsSync(prevDist)) {
 const distHtml = fs.readdirSync(path.join(root, 'dist')).filter((f)=>/\.html$/.test(f));
 check(distHtml.length === 1 && distHtml[0] === 'tam-os-v' + meta.version + '.html', 'dist/ holds exactly one release artifact — the current v' + meta.version + ' under the TAM OS naming (dist/tam-os-v' + meta.version + '.html)');
 check(!distHtml.some((f)=>/^tam-intelligence-os-v/.test(f)), 'no legacy tam-intelligence-os-v* artifact remains tracked in dist/ (historical filenames live only in Git history + published Releases)');
-check(meta.version === '2.8.6', 'APP_VERSION is 2.8.6 (this development release)');
+check(meta.version === '2.9.0', 'APP_VERSION is 2.9.0 (this development release)');
 
-// == RELEASE IDENTITY GUARDRAILS (v2.8.6) ==
+// == RELEASE IDENTITY GUARDRAILS (v2.9.0) ==
 // The version and release name live ONCE in js/core/constants.js; these checks prove every
 // authoritative surface agrees with that single source and that the release paperwork exists.
 // They are derived from meta wherever possible so they do not need editing next release.
 const distArtifacts = distHtml; // alias retained for downstream references
-check(meta.releaseName === 'Navigation Experience & TAM OS Rebrand', 'APP_RELEASE_NAME is the approved v2.8.6 release name');
+check(meta.releaseName === 'Workspace Experience', 'APP_RELEASE_NAME is the approved v2.9.0 release name');
 check(!/tam-intelligence-os-v2\.8\.[456]\.html/.test(distArtifacts.join('|')), 'no tracked current artifact remains under a superseded tam-intelligence-os filename');
 check(read(path.join(root, 'index.html')).includes('<title>TAM OS v' + meta.version + '</title>'), 'index.html <title> agrees with APP_VERSION');
 const relNotes = read(path.join(root, 'RELEASE_NOTES.md'));
@@ -339,38 +339,39 @@ check(relNotes.includes(meta.releaseName), 'RELEASE_NOTES.md names the release "
 check(changelog.includes('## ' + meta.version + ' — ' + meta.releaseName), 'CHANGELOG.md has the v' + meta.version + ' entry with the release name');
 check(changelog.includes('## 2.8.4 — Monthly Plan Result Integrity'), 'CHANGELOG.md retains the historical v2.8.4 entry (history is never rewritten)');
 check(changelog.includes('## 2.8.5 — Workspace & Contract Timeline Integrity'), 'CHANGELOG.md retains the historical v2.8.5 entry (history is never rewritten)');
-check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root, 'js', 'core', 'constants.js'))), 'SCHEMA_VERSION remains 6 — v2.8.6 carries no data migration');
+check(changelog.includes('## 2.8.6 — Navigation Experience & TAM OS Rebrand'), 'CHANGELOG.md retains the historical v2.8.6 entry (history is never rewritten)');
+check(/const SCHEMA_VERSION = 6;/.test(read(path.join(root, 'js', 'core', 'constants.js'))), 'SCHEMA_VERSION remains 6 — v2.9.0 carries no data migration');
 check(dist.includes('const SCHEMA_VERSION = 6;'), 'the portable artifact carries SCHEMA_VERSION 6');
 check(relNotes.includes('SCHEMA_VERSION') && /remains \*{0,2}6\*{0,2}|unchanged \(6\)/.test(relNotes), 'RELEASE_NOTES.md states SCHEMA_VERSION remains 6');
-check(/OQ-2[\s\S]{0,120}OPEN|OQ-2 and OQ-3 remain \*\*OPEN\*\*|OQ-2 and OQ-3 remain OPEN/.test(relNotes), 'RELEASE_NOTES.md records that OQ-2 and OQ-3 remain OPEN');
-check(/UX-004/.test(relNotes) && /UX-005/.test(relNotes), 'RELEASE_NOTES.md names UX-004 and UX-005 as future work (not shipped)');
-// == v2.8.6 RELEASE-PREPARATION GUARDRAILS ==
-// Current-state product/repository identity, and honest release status. These are text
-// guards over the release paperwork and current-state docs (not over historical evidence).
+// == v2.9.0 RELEASE-CANDIDATE GUARDRAILS ==
+// Current-state product/repository identity and honest release status for the prepared-but-
+// unpublished v2.9.0 candidate. Text guards over the release paperwork and current-state docs
+// (never over historical evidence). Reconciled from the v2.8.6 post-publication guardrails: the
+// v2.8.6-era "OQ-2/OQ-3 OPEN" and "UX-004/UX-005 are future work" checks are retired because
+// v2.9.0 ships the UX-005 line — the durable release-identity/honesty invariants are preserved.
 const readmeSrc = read(path.join(root, 'README.md'));
 const securitySrc = read(path.join(root, 'SECURITY.md'));
 const issueCfg = read(path.join(root, '.github', 'ISSUE_TEMPLATE', 'config.yml'));
 check(dist.includes("const APP_NAME = 'TAM OS';"), 'APP_NAME is TAM OS (current product identity)');
-check(/version-2\.8\.6/.test(readmeSrc) && /v2\.8\.6 — Navigation Experience & TAM OS Rebrand/.test(readmeSrc),
-  'README.md current-state identity is v2.8.6 / TAM OS');
+check(/version-2\.9\.0/.test(readmeSrc) && /v2\.9\.0 — Workspace Experience/.test(readmeSrc),
+  'README.md current-state identity is v2.9.0 / TAM OS');
 // Current-state repository slug is TAM-OS in the current-state docs (historical audit/ files exempt).
 check(!/fanoryu\/TAM-Intelligence-OS/.test(readmeSrc + securitySrc + issueCfg) && /fanoryu\/TAM-OS/.test(readmeSrc),
   'current-state docs (README/SECURITY/issue-template) use the canonical fanoryu/TAM-OS slug');
-// POST-PUBLICATION: v2.8.6 is published; the release paperwork must reflect the
-// published state and carry no stale "not yet tagged or published" current-state wording.
-check(/v2\.8\.6 is \*\*published/i.test(relNotes) && /marked Latest/i.test(relNotes),
-  'RELEASE_NOTES.md records v2.8.6 as published and marked Latest');
-check(!/not yet tagged or published/i.test(relNotes),
-  'RELEASE_NOTES.md carries no stale "not yet tagged or published" wording (v2.8.6 is published)');
-check(!/not yet tagged or published/i.test(readmeSrc) && !/release candidate — prepared/i.test(readmeSrc),
-  'README.md carries no stale pre-publication release-candidate wording');
-// UX-005 must not be claimed as shipped/included in this release.
-check(!/UX-005[^\n]*\b(shipped|included|delivered|released)\b/i.test(relNotes)
-  && /UX-005 has not begun/i.test(relNotes),
-  'RELEASE_NOTES.md does not claim UX-005 shipped (records UX-005 has not begun)');
-// The historical published asset filename is never rewritten to the new convention.
-check(/tam-intelligence-os-v2\.8\.5\.html/.test(relNotes) && /tam-os-v2\.8\.6\.html/.test(relNotes),
-  'RELEASE_NOTES.md keeps the historical v2.8.5 asset filename and names the new tam-os-v2.8.6 artifact');
+// PRE-PUBLICATION: v2.9.0 is a prepared release candidate — not yet tagged/published; v2.8.6
+// remains the last published release. The paperwork must state this honestly.
+check(/release candidate/i.test(relNotes) && /not yet published/i.test(relNotes),
+  'RELEASE_NOTES.md records v2.9.0 as a prepared release candidate, not yet published');
+check(/v2\.8\.6[^\n]*last published|last published[^\n]*v2\.8\.6/i.test(relNotes),
+  'RELEASE_NOTES.md records v2.8.6 as the last published release');
+check(/release candidate/i.test(readmeSrc) && /not yet published/i.test(readmeSrc),
+  'README.md states v2.9.0 is a prepared release candidate, not yet published');
+// v2.9.0 SHIPS the UX-005 line — the paperwork records it as delivered, not future.
+check(/UX-005/.test(relNotes) && /UX-005/.test(changelog) && /## 2\.9\.0 — Workspace Experience/.test(changelog),
+  'CHANGELOG/RELEASE_NOTES record the UX-005 line as delivered in v2.9.0');
+// Historical published asset filenames are never rewritten; the new candidate artifact is named.
+check(/tam-intelligence-os-v2\.8\.5\.html/.test(relNotes) && /tam-os-v2\.8\.6\.html/.test(relNotes) && /tam-os-v2\.9\.0\.html/.test(relNotes),
+  'RELEASE_NOTES.md keeps historical v2.8.5/v2.8.6 asset filenames and names the new tam-os-v2.9.0 artifact');
 // The Release workflow publishes future Releases under the current product name (TAM OS).
 const releaseYml = read(path.join(root, '.github', 'workflows', 'release.yml'));
 check(/--title "TAM OS \$TAG"/.test(releaseYml) && !/--title "TAM Intelligence OS \$TAG"/.test(releaseYml),
@@ -2771,10 +2772,9 @@ check(/\.nav-preview-tag\{[^}]*background:transparent/.test(ux4fCss) && /\.nav-p
 
 // ---- invariants unchanged ----
 check(/const SCHEMA_VERSION = 6;/.test(ux4fConstants), 'UX-004F: SCHEMA_VERSION remains 6');
-// v2.8.6 release: the UX-004F rebrand shipped without a version bump; this release now
-// carries the version forward. Constants match the single-source release identity.
-check(/const APP_VERSION = '2\.8\.6';/.test(ux4fConstants) && /const APP_RELEASE_NAME = 'Navigation Experience & TAM OS Rebrand';/.test(ux4fConstants),
-  'UX-004F/release: APP_VERSION 2.8.6 and APP_RELEASE_NAME match the v2.8.6 release identity');
+// v2.9.0 release: constants carry the single-source release identity forward.
+check(/const APP_VERSION = '2\.9\.0';/.test(ux4fConstants) && /const APP_RELEASE_NAME = 'Workspace Experience';/.test(ux4fConstants),
+  'release: APP_VERSION 2.9.0 and APP_RELEASE_NAME match the v2.9.0 release identity');
 check(fs.existsSync(path.join(root,'tools','verify-nav-simplification-runtime.js')),
   'UX-004F runtime harness present: tools/verify-nav-simplification-runtime.js');
 
@@ -3801,8 +3801,8 @@ check(/<link rel="icon"[^>]*href="data:image\/png;base64,/.test(dist),
 check(!/<link rel="icon"[^>]*href="https?:\/\//.test(dist),
   'MAINT-001: portable artifact has no external favicon URL');
 // 4. APP_VERSION / SCHEMA_VERSION unchanged by branding work
-check(indexHtml.includes('<title>TAM OS v' + meta.version + '</title>') && meta.version === '2.8.6',
-  'MAINT-001: APP_VERSION/title unchanged (v2.8.6)');
+check(indexHtml.includes('<title>TAM OS v' + meta.version + '</title>') && meta.version === '2.9.0',
+  'MAINT-001: APP_VERSION/title consistent (v2.9.0)');
 // 5. repository asset paths referenced by README actually resolve
 ['assets/branding/tam-os-logo-full-color.png',
  'assets/screenshots/dashboard-dark.png',

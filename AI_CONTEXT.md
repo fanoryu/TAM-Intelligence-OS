@@ -6,8 +6,10 @@ AI assistants get productive quickly. It is descriptive (what *is*), whereas
 authoritative module map, see [`ARCHITECTURE.md`](ARCHITECTURE.md) — this file summarizes and points
 there rather than duplicating it.
 
-**As of the current source state:** v2.8.6 — "Navigation Experience & TAM OS Rebrand"; `SCHEMA_VERSION` 6.
-**v2.8.6 is tagged and published, and is the latest published release** — annotated tag `v2.8.6` peels to
+**As of the current source state:** v2.9.0 — "Workspace Experience"; `SCHEMA_VERSION` 6. **v2.9.0 is a
+prepared release candidate — not yet tagged or published** (source `APP_VERSION` `2.9.0`, artifact
+`dist/tam-os-v2.9.0.html`); publication is a separate controlled step. **v2.8.6 remains the last published
+release, marked Latest** — annotated tag `v2.8.6` peels to
 the release commit `7ac0092d8f60a00118c86e26a7dce429660017c9` on `main`, and the GitHub Release is published
 (not draft, not prerelease) and marked Latest. UX-004 is complete. **UX-005A (Executive Dashboard),
 UX-005B (Data Grid Foundation), UX-005C (Design System Consistency), and MAINT-001 (repository
@@ -39,29 +41,34 @@ change, no new breakpoint, no UX-006.
 `5528908b…`; tokens `60dde600…`). The review found the platform coherent and stable — no freeze-blocking
 defect — with residual work (MAINT-001 follow-up, the four pre-existing CodeQL alerts, and UX-006 scope)
 correctly deferred.
-**MAINT-001 Follow-Up (branding integration) is an unmerged implementation candidate** on branch
-`chore/maint-001-branding-integration`: a browser-tab favicon (inline PNG `data:` URI derived by resize
-from the official `assets/branding/tam-os-logo-secondary.png`, keeping the portable artifact
-self-contained), four true 1920×1080 dark-theme UI screenshots under `assets/screenshots/` wired into a
-README **Product Preview** section, and a 1280×640 `assets/social/tam-os-social.png` for the GitHub
-repository social preview (Settings upload is a separate manual post-merge step). Repository/presentation
-only — no `APP_VERSION` bump (stays 2.8.6), no `SCHEMA_VERSION`/storage change, no application CSS/JS
-change (favicon is an `index.html` `<link>` only; `css/*` golden master and `tokens.css` byte-identical);
-verifier 2001 → 2014 (additive branding checks). The dev artifact regenerates to embed the favicon
-(SHA `2f07c84e…`, 1,047,057 bytes); published v2.8.6 asset stays immutable. **UX-006 has not begun.** v2.8.5 remains
+**MAINT-001 Follow-Up (branding integration) is merged** (`main`): a self-contained inline-PNG favicon
+(resized from the official `assets/branding/tam-os-logo-secondary.png`), four true 1920×1080 dark-theme UI
+screenshots under `assets/screenshots/` in a README **Product Preview** section, and a 1280×640
+`assets/social/tam-os-social.png` (the GitHub social-preview **Settings upload remains a manual step**).
+Repository/presentation only — no application CSS/JS change; `css/*` golden master and `tokens.css`
+byte-identical.
+**v2.9.0 Release Preparation is an unmerged implementation candidate** on branch
+`release/v2.9.0-preparation`: it carries the version identity forward (`APP_VERSION` `2.8.6` → `2.9.0`,
+`APP_RELEASE_NAME` "Workspace Experience", `<title>`, in-app release notes, and the release-identity
+verifier guardrails reconciled to the v2.9.0 candidate state), authors the v2.9.0 `CHANGELOG`/`RELEASE_NOTES`
+entries, and swaps the dev artifact to `dist/tam-os-v2.9.0.html` (deterministic; the superseded
+`tam-os-v2.8.6.html` dev artifact is removed per the release dist-swap). `SCHEMA_VERSION` stays **6** (no
+migration); no application CSS/JS/business change (`css/*` and `tokens.css` byte-identical); verifier
+2014 → 2013. **No tag/Release is published — v2.8.6 stays the immutable last-published release.**
+**UX-006 has not begun.** v2.8.5 remains
 published and unchanged; it is no longer marked Latest. Publication created a tag and a GitHub Release
 only — it changed no source commit, runtime behavior, schema, or storage key.
 
 **The published v2.8.6 Release asset is immutable** at release commit `7ac0092d`; `main` has since
-advanced with the merged UX-005A/UX-005B/MAINT-001 work, so the current repository development artifact
-(`dist/tam-os-v2.8.6.html`) intentionally **diverges** from the published asset under the post-release
-development convention (the published Release is never rewritten). UX-004B–UX-004F, the UX-004 sidebar
-interaction hotfix, and the TAM OS rebrand are all shipped in v2.8.6:
+advanced through the UX-005 line and MAINT-001, and is now on the **v2.9.0 release candidate**, so the
+current repository development artifact (`dist/tam-os-v2.9.0.html`) intentionally **diverges** from the
+published v2.8.6 asset under the post-release development convention (the published Release is never
+rewritten). The v2.9.0 tag/Release/asset do not exist yet:
 
-| | Repository `main` (published v2.8.6) | Published v2.8.6 Release asset |
+| | Repository `main` (v2.9.0 candidate) | Published v2.8.6 Release asset (immutable) |
 |---|---|---|
-| Artifact | `dist/tam-os-v2.8.6.html` — **998,413 bytes** | `tam-os-v2.8.6.html` — **998,413 bytes** |
-| SHA-256 | `8481523c…c91d3f62` | `8481523c…c91d3f62` (byte-identical) |
+| Artifact | `dist/tam-os-v2.9.0.html` — **1,049,018 bytes** | `tam-os-v2.8.6.html` — **998,413 bytes** |
+| SHA-256 | `e7470ff5…ddcaf3ea` (candidate) | `8481523c…c91d3f62` (published, unchanged) |
 
 The prior published asset `tam-intelligence-os-v2.8.5.html` (965,767 bytes, `32e624a262…1c23a7db8cb`) and
 its v2.8.5 tag/Release remain immutable and unchanged.

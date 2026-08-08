@@ -1,7 +1,45 @@
+# TAM OS v2.9.0 — Workspace Experience
+
+**Release Name:** Workspace Experience
+**Status:** **Release candidate — prepared, not yet published.** `SCHEMA_VERSION` 6. Publication (tag
+`v2.9.0` + GitHub Release + asset `tam-os-v2.9.0.html`) is a separate controlled step. Until then,
+**v2.8.6 remains the last published release** (its tag/Release/asset stay immutable).
+
+## Summary
+A feature/minor release completing the **UX-005** workspace line and the **MAINT-001** repository/branding
+follow-up. It is presentation, navigation, query-state and repository-surface work only — the way TAM OS
+looks and is navigated, not how it calculates or stores anything.
+
+## Highlights
+- **A clearer Executive workspace** — a consolidated Executive Dashboard with a navigation-only Action
+  Center that surfaces what needs attention; the Finance Overview is the operational finance workspace.
+- **Scalable Data Grids** — Transactions and Employees run on a shared grid with sorting, pagination
+  (20/50/100), debounced search and live result counts; your records are never reordered or mutated.
+- **Global Search** — press `Ctrl/Cmd+K` to jump to any employee, contract, payroll record or page.
+  Results only navigate; nothing is executed, posted or changed.
+- **Responsive & accessibility hardening** — dialogs stay inside the viewport and scroll internally on
+  small screens; a Skip to main content link, a proper main landmark, modal keyboard focus containment,
+  clearer visible focus, and correct table sort semantics for assistive technology.
+- **Refreshed TAM OS branding** — official branding, a browser-tab favicon, README product screenshots,
+  and a repository social-preview image.
+
+## Not included (future roadmap)
+- **No authentication or role/permission system yet.**
+- **No Personal Workspace / employee self-service yet.**
+- **No backend migration.** TAM OS is **client-side today** — all data stays in your browser — while the
+  architecture remains compatible with a future, separately-approved backend roadmap.
+
+## Data safety
+No change to payroll, overtime, contract, finance, execution, approval, posting, import or export
+behaviour; no schema, storage-key or migration change (`SCHEMA_VERSION` 6); existing Complete Backups
+remain compatible.
+
+---
+
 # TAM OS v2.8.6 — Navigation Experience & TAM OS Rebrand
 
 **Release Name:** Navigation Experience & TAM OS Rebrand
-**Status:** **Published and marked Latest** — annotated tag `v2.8.6` on commit `7ac0092d`; asset `tam-os-v2.8.6.html` (998,413 bytes, SHA-256 `8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`).
+**Status:** **Published** — annotated tag `v2.8.6` on commit `7ac0092d`; asset `tam-os-v2.8.6.html` (998,413 bytes, SHA-256 `8481523c11f78c8959291912551ee3205781daf0ec466ff79cfc59c7c91d3f62`). Superseded as Latest by v2.9.0 once published.
 
 ## Product
 TAM OS is now the current product identity. The sidebar wordmark, the browser title
